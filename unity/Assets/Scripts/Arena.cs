@@ -2,64 +2,85 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // スタジアムの形（高さ関数）と見た目の組み立て。物理は H() だけを見る
+// 2026-11-25 本人「ステージ狭すぎるわ。3倍くらいにして」「ジャンプ台はどの角度からでも乗れるように」「ジャンプ台に加速板も追加」
+//   → 面積を約3倍（半径 13 → 22.5）。ジャンプ台は円い山（どの向きからでも登れて、頂上を越える時に跳ぶ）。
+//     山の裾を一周する加速板（どの向きから来ても踏む）
 public static class Arena
 {
-    public const float R = 13f;          // すり鉢の床の半径
-    public const float LipW = 1.3f;      // 縁の幅
+    public const float R = 22.5f;        // すり鉢の床の半径
+    public const float LipW = 1.6f;      // 縁の幅
     public const float Edge = R + LipW;  // ここより外は奈落
-    public const float BowlH = 2.6f;
-    public const float LipH = 2.0f, GapLipH = 0.5f, GapHalf = 0.17f;
-    public static readonly float[] GapDeg = { 30, 150, 270 };
-    public static readonly float[] RampDeg = { 90, 210, 330 };
-    public const float RampIn = 5.8f, RampOut = 10.6f, RampHalfW = 1.4f, RampH = 2.2f;
+    public const float BowlH = 3.6f;
+    public const float LipH = 2.0f, GapLipH = 0.5f, GapHalf = 0.1f;
+    public static readonly float[] GapDeg = { 0, 90, 180, 270 };
+    // ジャンプ台（円い山）と、その裾の加速板（輪）
+    public static readonly float[] MoundDeg = { 45, 135, 225, 315 };
+    public const float MoundR = 13f, MoundBase = 3.6f, MoundH = 2.4f;
+    public const float BoostR0 = MoundBase + 0.25f, BoostR1 = MoundBase + 1.55f;
+    public static readonly Vector2[] Mounds = MakeRing(MoundDeg, MoundR);
+    // 中央の段差（弧の台）
     public static readonly float[] ArcDeg = { 30, 150, 270 };
-    public const float ArcHalf = 0.5f, ArcR0 = 2.3f, ArcR1 = 3.7f, ArcH = 0.75f;
-    public static readonly Vector2[] Pads = {
-        new Vector2(Mathf.Cos(0f), Mathf.Sin(0f)) * 6.6f,
-        new Vector2(Mathf.Cos(Mathf.PI), Mathf.Sin(Mathf.PI)) * 6.6f,
-    };
-    public const float PadR = 1.05f;
+    public const float ArcHalf = 0.45f, ArcR0 = 4.2f, ArcR1 = 6.0f, ArcH = 0.75f;
+    // 跳ね台
+    public static readonly Vector2[] Pads = MakeRing(new float[] { 90, 210, 330 }, 8.5f);
+    public const float PadR = 1.1f;
+
+    static Vector2[] MakeRing(float[] deg, float r)
+    {
+        var a = new Vector2[deg.Length];
+        for (int i = 0; i < deg.Length; i++) a[i] = new Vector2(Mathf.Cos(deg[i] * Mathf.Deg2Rad), Mathf.Sin(deg[i] * Mathf.Deg2Rad)) * r;
+        return a;
+    }
 
     public static float Bowl(float r) { float t = r / R; return BowlH * t * t; }
 
-    static float AngDist(float a, float deg)
-    {
-        float d = Mathf.DeltaAngle(a * Mathf.Rad2Deg, deg) * Mathf.Deg2Rad;
-        return Mathf.Abs(d);
-    }
+    static float AngDist(float a, float deg) => Mathf.Abs(Mathf.DeltaAngle(a * Mathf.Rad2Deg, deg) * Mathf.Deg2Rad);
 
     public static float GapFactor(float ang)
     {
         float g = 0;
-        foreach (var d in GapDeg) g = Mathf.Max(g, 1f - Mathf.SmoothStep(0, 1, (AngDist(ang, d) - GapHalf) / 0.06f));
+        foreach (var d in GapDeg) g = Mathf.Max(g, 1f - Mathf.SmoothStep(0, 1, (AngDist(ang, d) - GapHalf) / 0.04f));
         return g;
     }
 
     public static float LipHeight(float ang) => Mathf.Lerp(LipH, GapLipH, GapFactor(ang));
 
-    // すり鉢＋縁だけ（見た目の床の網に使う）
     public static float BaseH(float x, float z)
     {
         float r = Mathf.Sqrt(x * x + z * z);
         if (r > Edge) return -1000f;
         if (r <= R) return Bowl(r);
         float ang = Mathf.Atan2(z, x);
-        float t = Mathf.Clamp01((r - R) / 0.32f);
+        float t = Mathf.Clamp01((r - R) / 0.36f);
         return Bowl(R) + LipHeight(ang) * t * t * (3 - 2 * t);
     }
 
-    public static float RampTop(float u, float r) => Bowl(r) + RampH * (RampOut - u) / (RampOut - RampIn);
-
-    // どのジャンプ台の上か（-1 ならなし）
-    public static int RampAt(float x, float z, out float u)
+    // 山の上乗せの高さ。裾はなめらかに、頂上は少し丸める
+    public static float MoundAdd(float x, float z, out int idx)
     {
-        u = 0;
-        for (int i = 0; i < RampDeg.Length; i++)
+        idx = -1; float best = 0;
+        for (int i = 0; i < Mounds.Length; i++)
         {
-            float a = RampDeg[i] * Mathf.Deg2Rad;
-            float dx = Mathf.Cos(a), dz = Mathf.Sin(a);
-            float uu = x * dx + z * dz, v = -x * dz + z * dx;
-            if (uu >= RampIn && uu <= RampOut && Mathf.Abs(v) <= RampHalfW) { u = uu; return i; }
+            float d = (new Vector2(x, z) - Mounds[i]).magnitude;
+            if (d >= MoundBase) continue;
+            float k = 1f - d / MoundBase;
+            float s = k < 0.15f ? k * k / 0.3f : k - 0.075f;            // 裾
+            float top = 1f - 0.075f;
+            if (k > 0.9f) s = Mathf.Lerp(0.9f - 0.075f, top, (k - 0.9f) / 0.1f) - 0.04f * Mathf.Pow((k - 0.9f) / 0.1f, 2);   // 頂上を丸める
+            float h = MoundH * s / top;
+            if (h > best) { best = h; idx = i; }
+        }
+        return best;
+    }
+
+    public static int MoundAt(float x, float z) { MoundAdd(x, z, out int i); return i; }
+
+    public static int BoostAt(float x, float z)
+    {
+        for (int i = 0; i < Mounds.Length; i++)
+        {
+            float d = (new Vector2(x, z) - Mounds[i]).magnitude;
+            if (d >= BoostR0 && d <= BoostR1) return i;
         }
         return -1;
     }
@@ -79,22 +100,27 @@ public static class Arena
         return -1;
     }
 
-    public static float H(float x, float z)
+    public static float FloorH(float x, float z)
     {
         float h = BaseH(x, z);
         if (h < -100) return h;
-        float r = Mathf.Sqrt(x * x + z * z);
-        if (RampAt(x, z, out float u) >= 0) h = Mathf.Max(h, RampTop(u, r));
-        if (OnArc(x, z)) h = Mathf.Max(h, Bowl(r) + ArcH);
+        return h + MoundAdd(x, z, out _);
+    }
+
+    public static float H(float x, float z)
+    {
+        float h = FloorH(x, z);
+        if (h < -100) return h;
+        if (OnArc(x, z)) h = Mathf.Max(h, Bowl(Mathf.Sqrt(x * x + z * z)) + ArcH);
         return h;
     }
 
-    // 壁の判定用: 縁の上には見えない柵（切れ目以外からは場外に出ない。切れ目が危ない所だと一目で分かるように）
+    // 壁の判定用: 縁の上には見えない柵（切れ目以外からは場外に出ない）
     public static float WallH(float x, float z)
     {
         float h = H(x, z);
         float r = Mathf.Sqrt(x * x + z * z);
-        if (r > R + 0.25f && r <= Edge + 0.6f && GapFactor(Mathf.Atan2(z, x)) < 0.5f) return Mathf.Max(h, Bowl(R) + LipH + 6f);
+        if (r > R + 0.25f && r <= Edge + 0.6f && GapFactor(Mathf.Atan2(z, x)) < 0.5f) return Mathf.Max(h, Bowl(R) + LipH + 14f);
         return h;
     }
 
@@ -108,42 +134,73 @@ public static class Arena
     public static GameObject BuildVisual(Materials m)
     {
         var root = new GameObject("Arena");
-        // 床（すり鉢＋縁＋外側の壁）
         var floor = MeshKit.Obj("Floor", root.transform, FloorMesh(), m.Floor);
         floor.GetComponent<MeshRenderer>().receiveShadows = true;
-        // 台座（外側の大きな台）
-        var basePlate = MeshKit.Obj("Base", root.transform, MeshKit.Frustum(Edge + 3.5f, Edge + 2.0f, 3.2f, 96, true), m.Base);
-        basePlate.transform.localPosition = new Vector3(0, -6.2f, 0);
-        // ジャンプ台（坂）
-        for (int i = 0; i < RampDeg.Length; i++) MeshKit.Obj("Ramp" + i, root.transform, RampMesh(RampDeg[i]), m.Ramp);
-        // 段差（内側の弧の台）
+        var basePlate = MeshKit.Obj("Base", root.transform, MeshKit.Frustum(Edge + 4f, Edge + 2.2f, 3.4f, 128, true), m.Base);
+        basePlate.transform.localPosition = new Vector3(0, -6.4f, 0);
         foreach (var d in ArcDeg) MeshKit.Obj("Arc", root.transform, ArcMesh(d), m.Arc);
-        // 跳ね台（丸いパッド）
         foreach (var p in Pads)
         {
-            var pad = MeshKit.Obj("Pad", root.transform, MeshKit.Frustum(PadR, PadR * 0.92f, 0.12f, 40, true), m.Pad);
-            pad.transform.localPosition = new Vector3(p.x, BaseH(p.x, p.y) - 0.04f, p.y);
-            var ring = MeshKit.Obj("PadGlow", root.transform, MeshKit.Ring(PadR * 0.55f, PadR * 0.85f, 40), m.AddGlow(new Color(0.2f, 1f, 0.85f, 0.9f)));
-            ring.transform.localPosition = new Vector3(p.x, BaseH(p.x, p.y) + 0.1f, p.y);
-            var beam = MeshKit.Obj("PadBeam", root.transform, MeshKit.Frustum(PadR * 0.8f, PadR * 0.5f, 3.2f, 32, false), m.AddGlow(new Color(0.15f, 0.9f, 0.8f, 0.18f)));
-            beam.transform.localPosition = new Vector3(p.x, BaseH(p.x, p.y) + 0.1f, p.y);
+            float y = BaseH(p.x, p.y);
+            var pad = MeshKit.Obj("Pad", root.transform, MeshKit.Frustum(PadR, PadR * 0.94f, 0.1f, 40, true), m.Pad);
+            pad.transform.localPosition = new Vector3(p.x, y - 0.03f, p.y);
+            foreach (var rr in new[] { 0.66f, 0.33f })
+            {
+                var slot = MeshKit.Obj("PadSlot", root.transform, MeshKit.Ring(PadR * rr, PadR * (rr + 0.07f), 40), m.PadSlot);
+                slot.transform.localPosition = new Vector3(p.x, y + 0.08f, p.y);
+            }
+        }
+        // 加速板: 山の裾の輪に、山へ向かう矢印の光
+        foreach (var c in Mounds)
+        {
+            var ring = MeshKit.Obj("Boost", root.transform, BoostMesh(c), m.Boost);
+            ring.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
         return root;
     }
 
+    // 加速板の輪（床に沿わせる）。UV の u は周、v は内向き
+    static Mesh BoostMesh(Vector2 c)
+    {
+        int seg = 72, nr = 3;
+        var v = new List<Vector3>(); var uv = new List<Vector2>(); var t = new List<int>();
+        for (int i = 0; i <= nr; i++)
+        {
+            float rr = Mathf.Lerp(BoostR1, BoostR0, i / (float)nr);
+            for (int j = 0; j <= seg; j++)
+            {
+                float a = j * Mathf.PI * 2 / seg;
+                float x = c.x + Mathf.Cos(a) * rr, z = c.y + Mathf.Sin(a) * rr;
+                v.Add(new Vector3(x, FloorH(x, z) + 0.035f, z));
+                uv.Add(new Vector2(j / (float)seg * 22f, i / (float)nr));
+            }
+        }
+        int W = seg + 1;
+        for (int i = 0; i < nr; i++)
+            for (int j = 0; j < seg; j++)
+            {
+                int a = i * W + j, b = a + 1, cc = a + W, d = cc + 1;
+                t.Add(a); t.Add(cc); t.Add(b); t.Add(b); t.Add(cc); t.Add(d);
+            }
+        var m = new Mesh();
+        m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(t, 0);
+        m.RecalculateNormals(); m.RecalculateBounds();
+        return m;
+    }
+
     static Mesh FloorMesh()
     {
-        int seg = 192;
+        int seg = 288;
         var rings = new List<float>();
         for (float r = 0; r < R - 0.01f; r += 0.4f) rings.Add(r);
-        rings.Add(R); rings.Add(R + 0.08f); rings.Add(R + 0.16f); rings.Add(R + 0.24f); rings.Add(R + 0.32f); rings.Add(R + 0.8f); rings.Add(Edge);
+        rings.Add(R); rings.Add(R + 0.09f); rings.Add(R + 0.18f); rings.Add(R + 0.27f); rings.Add(R + 0.36f); rings.Add(R + 1f); rings.Add(Edge);
         var v = new List<Vector3>(); var uv = new List<Vector2>(); var t = new List<int>();
         for (int i = 0; i < rings.Count; i++)
             for (int j = 0; j <= seg; j++)
             {
                 float a = j * Mathf.PI * 2 / seg, r = rings[i];
                 float x = Mathf.Cos(a) * r, z = Mathf.Sin(a) * r;
-                v.Add(new Vector3(x, BaseH(x, z), z));
+                v.Add(new Vector3(x, FloorH(x * 0.99999f, z * 0.99999f), z));
                 uv.Add(new Vector2(x / (2 * Edge) + 0.5f, z / (2 * Edge) + 0.5f));
             }
         int W = seg + 1;
@@ -153,15 +210,14 @@ public static class Arena
                 int a = i * W + j, b = a + 1, c = a + W, d = c + 1;
                 t.Add(a); t.Add(b); t.Add(c); t.Add(b); t.Add(d); t.Add(c);
             }
-        // 外側の壁（縁の外周から下へ）
         int top0 = v.Count;
+        Vector2 wuv = new Vector2((R + 0.7f) / (2 * Edge) + 0.5f, 0.5f);
         for (int j = 0; j <= seg; j++)
         {
             float a = j * Mathf.PI * 2 / seg;
             float x = Mathf.Cos(a) * Edge, z = Mathf.Sin(a) * Edge;
-            Vector2 wuv = new Vector2((R + 0.55f) / (2 * Edge) + 0.5f, 0.5f);
             v.Add(new Vector3(x, BaseH(x * 0.9999f, z * 0.9999f), z)); uv.Add(wuv);
-            v.Add(new Vector3(x * 1.03f, -3.2f, z * 1.03f)); uv.Add(wuv);
+            v.Add(new Vector3(x * 1.03f, -3.4f, z * 1.03f)); uv.Add(wuv);
         }
         for (int j = 0; j < seg; j++)
         {
@@ -174,51 +230,11 @@ public static class Arena
         return mesh;
     }
 
-    static Mesh RampMesh(float deg)
-    {
-        float a = deg * Mathf.Deg2Rad;
-        Vector2 d = new Vector2(Mathf.Cos(a), Mathf.Sin(a)), s = new Vector2(-d.y, d.x);
-        var mb = new MeshKit.Builder();
-        int nu = 14, nv = 4;
-        System.Func<float, float, Vector3> top = (u, w) =>
-        {
-            Vector2 p = d * u + s * w; float r = p.magnitude;
-            return new Vector3(p.x, RampTop(u, r) + 0.01f, p.y);
-        };
-        System.Func<float, float, Vector3> bot = (u, w) =>
-        {
-            Vector2 p = d * u + s * w; float r = p.magnitude;
-            return new Vector3(p.x, Bowl(r) - 0.3f, p.y);
-        };
-        // 上面（UV の u は坂の向き＝矢印の模様）
-        for (int i = 0; i < nu; i++)
-            for (int k = 0; k < nv; k++)
-            {
-                float u0 = Mathf.Lerp(RampIn, RampOut, i / (float)nu), u1 = Mathf.Lerp(RampIn, RampOut, (i + 1) / (float)nu);
-                float w0 = Mathf.Lerp(-RampHalfW, RampHalfW, k / (float)nv), w1 = Mathf.Lerp(-RampHalfW, RampHalfW, (k + 1) / (float)nv);
-                mb.Quad(top(u0, w0), top(u0, w1), top(u1, w1), top(u1, w0),
-                    new Vector2((u0 - RampIn) / (RampOut - RampIn), (w0 + RampHalfW) / (2 * RampHalfW)),
-                    new Vector2((u0 - RampIn) / (RampOut - RampIn), (w1 + RampHalfW) / (2 * RampHalfW)),
-                    new Vector2((u1 - RampIn) / (RampOut - RampIn), (w1 + RampHalfW) / (2 * RampHalfW)),
-                    new Vector2((u1 - RampIn) / (RampOut - RampIn), (w0 + RampHalfW) / (2 * RampHalfW)));
-            }
-        var side = new Vector2(0.02f, 0.02f);
-        for (int i = 0; i < nu; i++)
-        {
-            float u0 = Mathf.Lerp(RampIn, RampOut, i / (float)nu), u1 = Mathf.Lerp(RampIn, RampOut, (i + 1) / (float)nu);
-            mb.Quad(bot(u0, -RampHalfW), top(u0, -RampHalfW), top(u1, -RampHalfW), bot(u1, -RampHalfW), side, side, side, side);
-            mb.Quad(bot(u1, RampHalfW), top(u1, RampHalfW), top(u0, RampHalfW), bot(u0, RampHalfW), side, side, side, side);
-        }
-        // 内側の崖
-        mb.Quad(bot(RampIn, RampHalfW), top(RampIn, RampHalfW), top(RampIn, -RampHalfW), bot(RampIn, -RampHalfW), side, side, side, side);
-        return mb.Mesh();
-    }
-
     static Mesh ArcMesh(float deg)
     {
         float c = deg * Mathf.Deg2Rad;
         var mb = new MeshKit.Builder();
-        int n = 18;
+        int n = 22;
         System.Func<float, float, float, Vector3> P = (ang, r, y) => new Vector3(Mathf.Cos(ang) * r, y, Mathf.Sin(ang) * r);
         var side = new Vector2(0.02f, 0.5f);
         for (int i = 0; i < n; i++)

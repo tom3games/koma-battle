@@ -14,7 +14,7 @@ for (const [W, H] of sizes) {
   const tap = async sel => { const bb = await p.locator(sel).boundingBox(); const x = bb.x + bb.width / 2, y = bb.y + bb.height / 2; await T('touchStart', 9, x, y); await wait(60); await T('touchEnd', 9, x, y) }
   await wait(600); await shot('1_title'); const o1 = await over()
   await tap('#btnPlay'); await wait(900); await shot('2_select'); const o2 = await over()
-  await tap('.part[data-slot="leg"][data-i="1"]'); await wait(300); await shot('2b_select_long'); const o3 = await over()
+  await tap('.slot[data-slot="leg"] .arw[data-d="1"]'); await wait(300); await shot('2b_select_long'); const o3 = await over()
   await tap('#btnFight'); await wait(1500); await shot('3_hint')
   await wait(3000)
   // ボット: 左の親指で相手へ寄り、右の親指で相手の向きへはじく
@@ -49,7 +49,7 @@ for (const [W, H] of sizes) {
   if (touches.size) await T('touchEnd', 1, scx, scy)
   await wait(700); await shot('6_result'); const o4 = await over()
   const ev = await p.evaluate(() => { const c = {}; for (const e of window.KB.events) if (e.i === 0 || e.a === 0) c[e.k] = (c[e.k] || 0) + 1; return c })
-  const fps = await p.evaluate(() => window.KB.fps); const sends = await p.evaluate(() => window.__sends)
-  console.log(tag, JSON.stringify({ loadMs, ended: !!res, win: res && res.win, why: res && res.why, time: res && Math.round(res.time), flicks, specials, myEvents: ev, sends, fps, overflow: [o1, o2, o3, o4].map(o => o.sh > o.ih || o.bad.length ? o : 'ok'), errs }))
+  const kos = await p.evaluate(() => window.KB.events.filter(e => e.k === 'ko').map(e => [e.i, e.why, e.r, e.ang, e.lastHit, e.vh])); const fps = await p.evaluate(() => window.KB.fps); const sends = await p.evaluate(() => window.__sends)
+  console.log(tag, JSON.stringify({ loadMs, ended: !!res, win: res && res.win, why: res && res.why, time: res && Math.round(res.time), flicks, specials, myEvents: ev, kos, sends, fps, overflow: [o1, o2, o3, o4].map(o => o.sh > o.ih || o.bad.length ? o : 'ok'), errs }))
   await b.close()
 }

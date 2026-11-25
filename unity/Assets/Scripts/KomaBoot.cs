@@ -21,8 +21,11 @@ public class KomaBoot : MonoBehaviour
     string phase = "title";
     float phaseT, fightT, emitT;
     bool sudden;
-    int pTop = 0, pCore = 0, pLeg = 0, nCpu = 2;
-    bool autoPlayer;
+    int pTop = 0, pCore = 0, pLeg = 0, pSp = 0, nCpu = 2;
+    bool autoPlayer, cpuOff, debugState;
+    readonly Vector2[] movesBuf = new Vector2[4];
+    readonly List<long> keyBuf = new List<long>();
+    Vector2 lastAimDir; float lastAimT = -99;
     float testScale = 1f;
     bool paused;
     Vector2 touchMove;
@@ -34,6 +37,7 @@ public class KomaBoot : MonoBehaviour
     readonly List<Transform> waves = new List<Transform>();
     readonly List<float> waveT = new List<float>();
     readonly List<float> waveSize = new List<float>();
+    readonly List<Material> waveMats = new List<Material>();
     float slowUntil, slowScale = 1f, shake;
     readonly Dictionary<long, float> pairCd = new Dictionary<long, float>();
     readonly Brain[] brains = new Brain[4];
@@ -63,31 +67,38 @@ public class KomaBoot : MonoBehaviour
         QualitySettings.shadowResolution = ShadowResolution.Medium;
         mats = new Materials();
 
-        // 空とライト
+        // 空とライト（暗い場内に真上の強い照明。金属が映り込む環境を作る）
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = new Color(0.36f, 0.4f, 0.56f);
-        RenderSettings.ambientEquatorColor = new Color(0.34f, 0.3f, 0.36f);
-        RenderSettings.ambientGroundColor = new Color(0.14f, 0.12f, 0.18f);
+        RenderSettings.ambientSkyColor = new Color(0.27f, 0.29f, 0.34f);
+        RenderSettings.ambientEquatorColor = new Color(0.17f, 0.17f, 0.19f);
+        RenderSettings.ambientGroundColor = new Color(0.05f, 0.05f, 0.06f);
+        RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Custom;
+        RenderSettings.customReflectionTexture = Materials.EnvCube();
+        RenderSettings.reflectionIntensity = 1f;
         RenderSettings.fog = true; RenderSettings.fogMode = FogMode.Linear;
-        RenderSettings.fogColor = new Color(0.98f, 0.66f, 0.55f); RenderSettings.fogStartDistance = 40; RenderSettings.fogEndDistance = 140;
-        var sky = MeshKit.Obj("Sky", null, MeshKit.SkyDome(180f, new Color(0.18f, 0.25f, 0.6f), new Color(1f, 0.62f, 0.5f), new Color(0.2f, 0.12f, 0.25f)), mats.Sky);
+        RenderSettings.fogColor = new Color(0.04f, 0.045f, 0.06f); RenderSettings.fogStartDistance = 45; RenderSettings.fogEndDistance = 150;
+        var sky = MeshKit.Obj("Sky", null, MeshKit.SkyDome(180f, new Color(0.02f, 0.025f, 0.035f), new Color(0.07f, 0.075f, 0.09f), new Color(0.02f, 0.02f, 0.025f)), mats.Sky);
         sky.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         var sun = new GameObject("Sun").AddComponent<Light>();
-        sun.type = LightType.Directional; sun.color = new Color(1f, 0.93f, 0.85f); sun.intensity = 1.0f;
-        sun.shadows = LightShadows.Soft; sun.shadowStrength = 0.75f;
-        sun.transform.rotation = Quaternion.Euler(55f, -35f, 0);
+        sun.type = LightType.Directional; sun.color = new Color(1f, 0.96f, 0.9f); sun.intensity = 1.35f;
+        sun.shadows = LightShadows.Soft; sun.shadowStrength = 0.85f;
+        sun.transform.rotation = Quaternion.Euler(72f, -25f, 0);
         var rim = new GameObject("Rim").AddComponent<Light>();
-        rim.type = LightType.Directional; rim.color = new Color(0.55f, 0.65f, 1f); rim.intensity = 0.45f;
-        rim.transform.rotation = Quaternion.Euler(25f, 160f, 0);
+        rim.type = LightType.Directional; rim.color = new Color(0.55f, 0.68f, 0.9f); rim.intensity = 0.35f; rim.renderMode = LightRenderMode.ForceVertex;
+        rim.transform.rotation = Quaternion.Euler(18f, 160f, 0);
 
-        // 観客席の代わりの柱の明かり
-        for (int i = 0; i < 16; i++)
+        // 観客席（暗い段々）と照明塔
+        var stands = MeshKit.Obj("Stands", null, MeshKit.Frustum(Arena.Edge + 6f, Arena.Edge + 26f, 14f, 96, false), mats.Stands);
+        stands.transform.position = new Vector3(0, -4f, 0);
+        stands.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        for (int i = 0; i < 8; i++)
         {
-            float a = i * Mathf.PI * 2 / 16;
-            var pillar = MeshKit.Obj("Pillar", null, MeshKit.Box(new Vector3(1.2f, 9f, 1.2f)), mats.Base);
-            pillar.transform.position = new Vector3(Mathf.Cos(a) * 30f, -2f, Mathf.Sin(a) * 30f);
-            var lamp = MeshKit.Obj("Lamp", null, MeshKit.Box(new Vector3(1.6f, 0.5f, 1.6f)), mats.Emis(Color.white, i % 2 == 0 ? new Color(1f, 0.8f, 0.5f) : new Color(0.5f, 0.9f, 1f)));
-            lamp.transform.position = new Vector3(Mathf.Cos(a) * 30f, 2.7f, Mathf.Sin(a) * 30f);
+            float a = (i + 0.5f) * Mathf.PI * 2 / 8;
+            var tower = MeshKit.Obj("Tower", null, MeshKit.Box(new Vector3(0.7f, 22f, 0.7f)), mats.Truss);
+            tower.transform.position = new Vector3(Mathf.Cos(a) * (Arena.Edge + 14f), 5f, Mathf.Sin(a) * (Arena.Edge + 14f));
+            var lamp = MeshKit.Obj("Lamp", null, MeshKit.Box(new Vector3(3.2f, 1.4f, 0.3f)), mats.Emis(new Color(0.2f, 0.2f, 0.2f), new Color(1f, 0.95f, 0.85f) * 1.4f));
+            lamp.transform.position = new Vector3(Mathf.Cos(a) * (Arena.Edge + 13.6f), 15.5f, Mathf.Sin(a) * (Arena.Edge + 13.6f));
+            lamp.transform.rotation = Quaternion.LookRotation(new Vector3(-Mathf.Cos(a), -0.6f, -Mathf.Sin(a)));
         }
 
         Arena.BuildVisual(mats);
@@ -96,10 +107,10 @@ public class KomaBoot : MonoBehaviour
         cam = new GameObject("Cam").AddComponent<Camera>();
         cam.transform.SetParent(camRig, false);
         cam.fieldOfView = 50f; cam.nearClipPlane = 0.2f; cam.farClipPlane = 400f;
-        cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.2f, 0.15f, 0.3f);
+        cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.03f, 0.035f, 0.045f);
 
         // 狙いの印
-        reticle = MeshKit.Obj("Reticle", null, MeshKit.Ring(0.42f, 0.66f, 32), mats.Alpha(new Color(1f, 0.25f, 0.12f, 1f), Texture2D.whiteTexture)).transform;
+        reticle = MeshKit.Obj("Reticle", null, MeshKit.Ring(0.5f, 0.6f, 32), mats.Alpha(new Color(1f, 0.85f, 0.4f, 0.9f), Texture2D.whiteTexture)).transform;
         aimLine = new GameObject("AimLine").AddComponent<LineRenderer>();
         aimLine.material = mats.Alpha(new Color(1f, 0.3f, 0.15f, 0.85f), Texture2D.whiteTexture);
         aimLine.positionCount = 2; aimLine.widthMultiplier = 0.12f;
@@ -111,7 +122,7 @@ public class KomaBoot : MonoBehaviour
         for (int i = 0; i < 6; i++)
         {
             var w = MeshKit.Obj("Wave", null, MeshKit.Ring(0.85f, 1f, 48), mats.AddGlow(new Color(1f, 0.85f, 0.5f, 1f))).transform;
-            w.gameObject.SetActive(false); waves.Add(w); waveT.Add(-1); waveSize.Add(1);
+            w.gameObject.SetActive(false); waves.Add(w); waveT.Add(-1); waveSize.Add(1); waveMats.Add(w.GetComponent<MeshRenderer>().material);
         }
 
         // 自分のコマ（見せる台の上）
@@ -167,18 +178,21 @@ public class KomaBoot : MonoBehaviour
         switch (c)
         {
             case "loadout":
-                pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2);
-                player.Rebuild(pTop, pCore, pLeg, mats);
-                if (phase != "fight") Showcase();
+                pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); if (nums.Length >= 4) pSp = (int)N(3);
+                if (phase == "title" || phase == "select") { player.Rebuild(pTop, pCore, pLeg, mats); player.sp = pSp; Showcase(); }
                 break;
             case "select": phase = "select"; phaseT = 0; Showcase(); break;
             case "title": phase = "title"; phaseT = 0; Showcase(); break;
             case "start":
                 if (nums.Length >= 3) { pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); player.Rebuild(pTop, pCore, pLeg, mats); }
                 if (nums.Length >= 4) nCpu = Mathf.Clamp((int)N(3), 1, 3);
+                if (nums.Length >= 5) pSp = Mathf.Clamp((int)N(4), 0, 3);
+                player.sp = pSp;
                 StartMatch();
                 break;
             case "auto": autoPlayer = N(0) > 0; break;
+            case "cpuoff": cpuOff = N(0) > 0; break;
+            case "debugstate": debugState = N(0) > 0; break;
             case "timescale": testScale = Mathf.Clamp(N(0), 0.05f, 8f); break;
             case "pause": paused = N(0) > 0; break;
             case "move": touchMove = new Vector2(N(0), N(1)); if (touchMove.sqrMagnitude > 1) touchMove.Normalize(); break;
@@ -196,6 +210,12 @@ public class KomaBoot : MonoBehaviour
                     if (phase == "fight" && player.alive) TryDash(player, aim);
                     break;
                 }
+            case "specialdir":
+                {
+                    Vector2 d = new Vector2(N(0), N(1));
+                    if (phase == "fight" && player.alive) TrySpecial(player, player.pos + new Vector3(d.x, 0, d.y).normalized * 8f);
+                    break;
+                }
             case "specialnear":
                 {
                     var t = Nearest(player);
@@ -206,7 +226,7 @@ public class KomaBoot : MonoBehaviour
                 if (N(0) < 1)
                 {
                     QualitySettings.shadowResolution = ShadowResolution.Low;
-                    QualitySettings.shadowDistance = 28f;
+                    QualitySettings.shadowDistance = 28f; QualitySettings.shadowCascades = 1;
                     var sunL = GameObject.Find("Sun"); if (sunL) sunL.GetComponent<Light>().shadows = LightShadows.Hard;
                 }
                 break;
@@ -233,7 +253,7 @@ public class KomaBoot : MonoBehaviour
     {
         foreach (var k in komas) if (!k.isPlayer) k.root.SetActive(false);
         player.Place(new Vector3(0, Arena.H(0, 0), 0));
-        player.grounded = true;
+        player.grounded = true; player.SetArrow(Vector2.zero);
         sudden = false;
     }
 
@@ -247,11 +267,11 @@ public class KomaBoot : MonoBehaviour
         {
             var k = komas[i];
             if (i >= n) { k.root.SetActive(false); k.alive = false; continue; }
-            if (i > 0) k.Rebuild(rng.Next(3), rng.Next(3), rng.Next(3), mats);
-            float ang = -Mathf.PI / 2 + i * Mathf.PI * 2 / n;
-            float r = 8.2f;
+            if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats); k.sp = rng.Next(4); }
+            float ang = -Mathf.PI / 2 + Mathf.PI / 8 + i * Mathf.PI * 2 / n;
+            float r = 11f;
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
-            k.Place(new Vector3(x, Arena.H(x, z) + 6f, z));
+            k.Place(new Vector3(x, Arena.H(x, z) + 3.5f, z));
             brains[i] = new Brain { react = 0.6f + (float)rng.NextDouble() * 0.6f };
         }
         Emit("{\"t\":\"e\",\"k\":\"count\",\"n\":3}");
@@ -303,7 +323,7 @@ public class KomaBoot : MonoBehaviour
 
         // fight / end
         if (phase == "fight") fightT += dt;
-        if (phase == "fight" && !sudden && fightT > 60f) { sudden = true; Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
+        if (phase == "fight" && !sudden && fightT > 75f) { sudden = true; Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
 
         // 入力
         Vector2 move = Vector2.zero; bool dash = false, special = false;
@@ -335,12 +355,12 @@ public class KomaBoot : MonoBehaviour
         }
 
         // CPU
-        var moves = new Vector2[4];
+        var moves = movesBuf; for (int mi = 0; mi < 4; mi++) moves[mi] = Vector2.zero;
         moves[0] = move;
         for (int i = 1; i < komas.Count; i++)
         {
             var k = komas[i];
-            if (!k.alive || !k.root.activeSelf || phase != "fight") continue;
+            if (!k.alive || !k.root.activeSelf || phase != "fight" || cpuOff) continue;
             Think(k, dt, out moves[i], out bool d2, out bool s2);
             if (d2) TryDash(k, AimFor(k));
             if (s2) TrySpecial(k, AimFor(k));
@@ -365,16 +385,18 @@ public class KomaBoot : MonoBehaviour
             if (k.dashT > 0) k.dashT -= dt;
             if (k.dashCd > 0) k.dashCd -= dt;
             if (k.padCd > 0) k.padCd -= dt;
+            if (k.boostCd > 0) k.boostCd -= dt;
+            UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
                 k.spin -= (1.3f * k.st.decay + (sudden ? 8f : 0f)) * dt;
-                k.gauge = Mathf.Min(100f, k.gauge + 2.2f * dt);
+                k.gauge = Mathf.Min(100f, k.gauge + 2.2f * k.st.gaugeRate * dt);
                 if (k.spin <= 0) { k.spin = 0; KO(k, "spin"); }
             }
             k.Visual(dt, realDt);
         }
-        var keys = new List<long>(pairCd.Keys);
-        foreach (var key in keys) { pairCd[key] -= dt; if (pairCd[key] <= 0) pairCd.Remove(key); }
+        keyBuf.Clear(); keyBuf.AddRange(pairCd.Keys);
+        foreach (var key in keyBuf) { pairCd[key] -= dt; if (pairCd[key] <= 0) pairCd.Remove(key); }
 
         // 決着
         if (phase == "fight")
@@ -417,17 +439,18 @@ public class KomaBoot : MonoBehaviour
         if (touchAimOn) aimPoint = player.pos + new Vector3(touchAimDir.x, 0, touchAimDir.y) * 6.5f;
         else if (!autoPlayer && !touchOnly && !touchMode && plane.Raycast(ray, out float d)) aimPoint = ray.GetPoint(d);
         if (autoPlayer) aimPoint = AimFor(player);
-        bool show = phase == "fight" && player.alive && (!touchMode || touchAimOn);
-        reticle.gameObject.SetActive(show);
-        aimLine.enabled = show;
-        if (!show) return;
+        // 2026-11-25 本人「スマホでやってる時コマから赤い線出てるの何」: 線をやめ、足元の短い山形の矢印（ダッシュの向き）にした。
+        // スマホは右の指で狙っている間だけ。PC はマウスの位置に小さな印＋足元の矢印
+        bool fight = phase == "fight" && player.alive && !autoPlayer;
+        bool show = fight && (touchMode ? touchAimOn : true);
+        aimLine.enabled = false;
+        reticle.gameObject.SetActive(fight && !touchMode);
+        Vector3 dir = aimPoint - player.pos; dir.y = 0;
+        player.SetArrow(show && dir.sqrMagnitude > 0.04f ? new Vector2(dir.x, dir.z).normalized : Vector2.zero);
+        if (!fight || touchMode) return;
         float gh = Arena.H(aimPoint.x, aimPoint.z);
         reticle.position = new Vector3(aimPoint.x, (gh > -100 ? gh : aimPoint.y) + 0.06f, aimPoint.z);
-        reticle.localScale = Vector3.one * (player.dashCd > 0 ? 0.6f : 1f + Mathf.Sin(Time.unscaledTime * 8f) * 0.08f);
-        Vector3 from = player.pos + Vector3.up * 0.3f;
-        Vector3 dir = aimPoint - player.pos; dir.y = 0;
-        aimLine.SetPosition(0, from);
-        aimLine.SetPosition(1, from + dir.normalized * Mathf.Min(dir.magnitude, 4.5f));
+        reticle.localScale = Vector3.one * (player.dashCd > 0 ? 0.55f : 0.8f);
     }
 
     Koma Nearest(Koma k)
@@ -467,7 +490,7 @@ public class KomaBoot : MonoBehaviour
                 float sc = (o.pos - k.pos).magnitude + o.SpinRatio * 6f + (float)rng.NextDouble() * 3f;
                 if (sc < best) { best = sc; b.target = o.idx; }
             }
-            b.padGoal = rng.NextDouble() < 0.3 ? rng.Next(Arena.Pads.Length) : -1;
+            b.padGoal = rng.NextDouble() < 0.4 ? rng.Next(Arena.Pads.Length + Arena.Mounds.Length) : -1;
             b.jitter = new Vector2((float)rng.NextDouble() - 0.5f, (float)rng.NextDouble() - 0.5f) * 2f;
         }
         if (b.target < 0) return;
@@ -475,17 +498,17 @@ public class KomaBoot : MonoBehaviour
         Vector3 to = t.pos - k.pos; to.y = 0;
         float dist = to.magnitude;
         Vector2 want = new Vector2(to.x, to.z).normalized + b.jitter * 0.25f;
-        if (b.padGoal >= 0 && dist > 4.5f)
+        if (b.padGoal >= 0 && dist > 6f)
         {
-            var p = Arena.Pads[(int)b.padGoal];
+            var p = b.padGoal < Arena.Pads.Length ? Arena.Pads[(int)b.padGoal] : Arena.Mounds[(int)b.padGoal - Arena.Pads.Length];
             want = (p - new Vector2(k.pos.x, k.pos.z)).normalized;
             if ((p - new Vector2(k.pos.x, k.pos.z)).magnitude < 0.6f) b.padGoal = -1;
         }
         // 端に寄りすぎたら内へ
         float r = new Vector2(k.pos.x, k.pos.z).magnitude;
-        if (r > Arena.R - 2.5f) want += -new Vector2(k.pos.x, k.pos.z).normalized * (r - (Arena.R - 2.5f)) * 1.2f;
+        if (r > Arena.R - 3.5f) want += -new Vector2(k.pos.x, k.pos.z).normalized * (r - (Arena.R - 3.5f)) * 1.2f;
         move = want.sqrMagnitude > 1 ? want.normalized : want;
-        if (k.grounded && k.dashCd <= 0 && dist < 6f && b.react <= 0)
+        if (k.grounded && k.dashCd <= 0 && dist < 7f && b.react <= 0)
         {
             dash = true; b.react = 0.9f + (float)rng.NextDouble() * 1.3f;
         }
@@ -537,8 +560,29 @@ public class KomaBoot : MonoBehaviour
 
     void TrySpecial(Koma k, Vector3 aim)
     {
-        if (!k.alive || k.gauge < 100f || k.specialPhase > 0) return;
+        if (!k.alive || k.gauge < 100f || k.specialPhase > 0 || k.tornadoT > 0 || k.shieldT > 0) return;
         k.gauge = 0; k.specials++;
+        if (k.sp == 1)
+        {
+            // テンペスト・ヴォルテックス: 竜巻で周りを引き寄せて巻き上げ、最後に吹き飛ばす
+            k.tornadoT = 3.5f; k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.15f);
+            EmitEv("special", k, 1); shake = Mathf.Max(shake, 0.2f);
+            return;
+        }
+        if (k.sp == 2)
+        {
+            // ファントム・レイド: 近い相手へ3連続の突進
+            k.specialPhase = 20; k.rushLeft = 3; k.specialT = 0f;
+            EmitEv("special", k, 2);
+            return;
+        }
+        if (k.sp == 3)
+        {
+            // イージス・リバース: 3秒の盾（受ける回転減りと弾かれを抑え、ぶつかった相手を弾き返す）＋回転を大きく戻す
+            k.shieldT = 3.2f; k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.35f);
+            EmitEv("special", k, 3);
+            return;
+        }
         k.specialPhase = 1; k.specialT = 0.55f;
         k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.2f);
         k.vel = new Vector3(k.vel.x * 0.2f, 17f, k.vel.z * 0.2f);
@@ -553,18 +597,61 @@ public class KomaBoot : MonoBehaviour
         }
         k.specialTarget = best != null ? new Vector3(best.idx, -999, 0) : aim;
         EmitEv("special", k, 0);
-        Slow(0.35f, 0.45f);
         shake = Mathf.Max(shake, 0.25f);
+    }
+
+    // 必殺技の続き（毎フレーム）
+    void UpdateSpecial(Koma k, float dt)
+    {
+        if (!k.alive) { k.tornadoT = 0; k.shieldT = 0; if (k.specialPhase == 20) k.specialPhase = 0; return; }
+        if (k.shieldT > 0) k.shieldT -= dt;
+        if (k.tornadoT > 0)
+        {
+            float before = k.tornadoT;
+            k.tornadoT -= dt;
+            foreach (var o in komas)
+            {
+                if (o == k || !o.alive || !o.root.activeSelf) continue;
+                Vector3 d = k.pos - o.pos; d.y = 0;
+                float dist = d.magnitude;
+                if (dist > 8.5f || dist < 0.01f) continue;
+                Vector3 n = d / dist, tan = Vector3.Cross(Vector3.up, n);
+                float f = 1f - dist / 8.5f;
+                float res = o.shieldT > 0 ? 0.25f : 1f;
+                o.vel += (n * 20f * f + tan * 5f * f * Mathf.Clamp01(dist / 4f)) * dt * res;
+                if (dist < 3.4f) { o.vel.y = Mathf.Max(o.vel.y, 4.5f * res); o.grounded = false; }
+                Damage(k, o, 6.5f * f * k.st.atk / o.st.def * dt);
+                if (k.tornadoT <= 0 && before > 0 && dist < 7.5f)
+                {
+                    o.vel += -n * 15f * res; o.vel.y = Mathf.Max(o.vel.y, 6f * res); o.grounded = false;
+                    Damage(k, o, 9f * k.st.atk / o.st.def);
+                }
+            }
+            if (k.tornadoT <= 0) { Wave(k.pos, 6f); shake = Mathf.Max(shake, 0.3f); var sp = cam.WorldToViewportPoint(k.pos); Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}"); }
+            if (Random.value < 0.5f) Dust(k.pos + new Vector3(Random.Range(-3f, 3f), 0, Random.Range(-3f, 3f)), 1);
+        }
+        if (k.specialPhase == 20)
+        {
+            k.specialT -= dt;
+            if (k.specialT <= 0)
+            {
+                var t = Nearest(k);
+                if (k.rushLeft <= 0 || t == null) { k.specialPhase = 0; return; }
+                Vector3 dir = t.pos + t.vel * 0.12f - k.pos; dir.y = 0; dir.Normalize();
+                k.vel = new Vector3(dir.x * 27f, k.grounded ? 1.5f : k.vel.y, dir.z * 27f);
+                k.dashT = 0.36f; k.rushLeft--; k.specialT = 0.42f; k.dashes++;
+                EmitEv("dash", k, 2);
+            }
+        }
     }
 
     void KO(Koma k, string why)
     {
-        if (!k.alive) return;
+        if (!k.alive || phase == "end") return;
         k.Knock(why);
         k.koTime = fightT;
         EmitEv("ko", k, 0, why + "\",\"r\":\"" + F(new Vector2(k.pos.x, k.pos.z).magnitude) + "\",\"vy\":\"" + F(k.vel.y) + "\",\"vh\":\"" + F(new Vector2(k.vel.x, k.vel.z).magnitude) + "\",\"ang\":\"" + F(Mathf.Atan2(k.pos.z, k.pos.x) * Mathf.Rad2Deg) + "\",\"lastHit\":\"" + F(fightT - k.lastHitT));
-        Slow(0.2f, 0.5f);
-        shake = Mathf.Max(shake, 0.5f);
+        shake = Mathf.Max(shake, 0.4f);
     }
 
     // ---------- 物理 ----------
@@ -603,7 +690,7 @@ public class KomaBoot : MonoBehaviour
             float fr = Mathf.Exp(-0.9f * k.st.grip * dt);
             v.x *= fr; v.z *= fr;
             float maxS = 9.5f * k.st.speed, hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
-            if (hs > maxS && k.dashT <= 0)
+            if (hs > maxS && k.dashT <= 0 && k.boostCd < 0.35f)
             {
                 float f = Mathf.Max(maxS / hs, Mathf.Exp(-3.2f * dt));
                 v.x *= f; v.z *= f;
@@ -622,10 +709,17 @@ public class KomaBoot : MonoBehaviour
         float h = Arena.H(np.x, np.z);
         float hw = Arena.WallH(np.x, np.z);
         // 壁（段差・縁・坂の横・縁の上の見えない柵）
-        if (hw > -100 && hw - Mathf.Max(p.y, np.y) > StepUp && hw - p.y > StepUp)
+        float hsNow = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+        // 切れ目の低い縁は、弾かれて速い時だけ越えられる（自分のダッシュや加速では落ちない）
+        float stepAllow = (hsNow > 8f && k.dashT <= 0 && k.boostCd < 0.35f && Arena.GapFactor(Mathf.Atan2(np.z, np.x)) > 0.5f && new Vector2(np.x, np.z).magnitude > Arena.R) ? 0.75f : StepUp;
+        if (hw > -100 && hw - Mathf.Max(p.y, np.y) > stepAllow && hw - p.y > stepAllow)
         {
-            Vector2 gr = Arena.Grad(np.x, np.z);
-            Vector2 n = gr.sqrMagnitude > 1e-4f ? -gr.normalized : new Vector2(p.x - np.x, p.z - np.z).normalized;
+            // 壁の向き: 1刻みの中点で幅を広く取った勾配から。逆向きなら、来た方向へ返す
+            float mx = (p.x + np.x) * 0.5f, mz = (p.z + np.z) * 0.5f, e = 0.3f;
+            Vector2 gr = new Vector2(Arena.WallH(mx + e, mz) - Arena.WallH(mx - e, mz), Arena.WallH(mx, mz + e) - Arena.WallH(mx, mz - e));
+            Vector2 back = new Vector2(p.x - np.x, p.z - np.z);
+            Vector2 n = gr.sqrMagnitude > 1e-4f ? -gr.normalized : back.normalized;
+            if (back.sqrMagnitude > 1e-8f && Vector2.Dot(n, back) < 0) n = back.normalized;
             Vector2 vh = new Vector2(v.x, v.z);
             float vn = Vector2.Dot(vh, n);
             if (vn < 0)
@@ -643,26 +737,45 @@ public class KomaBoot : MonoBehaviour
             h = h0;
         }
 
+        if (k.grounded && k.specialPhase == 2) { SpecialImpact(k, new Vector3(np.x, h > -100 ? h : np.y, np.z)); v = new Vector3(v.x * 0.2f, 6f, v.z * 0.2f); k.grounded = false; }
+        else if (k.grounded && k.specialPhase == 1) k.grounded = false;
         if (k.grounded)
         {
             if (h < -100 || h < np.y - 0.3f)
             {
                 k.grounded = false;
-                // 坂の先から飛び出す（大げさに上へ）
-                if (k.lastGroundRamp && k.alive && v.y > 0.6f)
-                {
-                    v.y = 10f * k.st.jump;
-                    Vector2 hv = Vector2.ClampMagnitude(new Vector2(v.x, v.z) * 0.62f, 9f);
-                    v.x = hv.x; v.z = hv.y;
-                    EmitEv("jump", k, 1);
-                }
             }
             else
             {
                 np.y = h;
                 Vector2 gr = Vector2.ClampMagnitude(Arena.Grad(np.x, np.z), 1.2f);
-                v.y = gr.x * v.x + gr.y * v.z;
-                k.lastGroundRamp = Arena.RampAt(np.x, np.z, out _) >= 0;
+                float newVy = gr.x * v.x + gr.y * v.z;
+                float hsp = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+                // ジャンプ台（円い山）: 登ってきて頂上を越えた瞬間に大きく跳ぶ。どの向きから来ても同じ
+                bool onMound = Arena.MoundAt(np.x, np.z) >= 0;
+                if (k.alive && onMound && k.lastVy > 1.1f && newVy < 0.3f && hsp > 6.5f)
+                {
+                    v.y = Mathf.Min(13.5f, (6.5f + hsp * 0.38f) * k.st.jump);
+                    Vector2 hv = Vector2.ClampMagnitude(new Vector2(v.x, v.z) * 0.85f, 13f);
+                    v.x = hv.x; v.z = hv.y;
+                    k.grounded = false; k.lastVy = 0;
+                    EmitEv("jump", k, 1);
+                }
+                else
+                {
+                    v.y = newVy; k.lastVy = onMound ? Mathf.Max(k.lastVy, newVy) : 0f;
+                    // 加速板: 踏んだ向きへ一気に加速（止める演出はしない）
+                    int bi = Arena.BoostAt(np.x, np.z);
+                    Vector2 toM = bi >= 0 ? (Arena.Mounds[bi] - new Vector2(np.x, np.z)).normalized : Vector2.zero;
+                    if (k.alive && k.boostCd <= 0 && bi >= 0 && (hsp < 1f || Vector2.Dot(new Vector2(v.x, v.z) / Mathf.Max(hsp, 0.01f), toM) > 0.25f))
+                    {
+                        Vector2 dir = hsp > 1f ? new Vector2(v.x, v.z) / hsp : (Arena.Mounds[Arena.BoostAt(np.x, np.z)] - new Vector2(np.x, np.z)).normalized;
+                        float ns = Mathf.Max(hsp + 9f, 20f) * Mathf.Lerp(1f, k.st.speed, 0.5f);
+                        v.x = dir.x * ns; v.z = dir.y * ns;
+                        k.boostCd = 0.9f;
+                        EmitEv("boost", k, ns);
+                    }
+                }
                 // 跳ね台
                 if (Arena.PadAt(np.x, np.z) >= 0 && k.padCd <= 0 && k.alive)
                 {
@@ -685,7 +798,7 @@ public class KomaBoot : MonoBehaviour
             if (k.specialPhase == 0 && k.dashT > 0 && impactV > 10f) k.dashT = 0.15f;
         }
 
-        if (np.y < -5f && k.alive) KO(k, "out");
+        if (k.alive && (np.y < -5f || (new Vector2(np.x, np.z).magnitude > Arena.Edge + 0.4f && np.y < Arena.Bowl(Arena.R)))) KO(k, "out");
         if (np.y < -40f) { np.y = -40f; v = Vector3.zero; }
         k.pos = np; k.vel = v;
     }
@@ -731,10 +844,13 @@ public class KomaBoot : MonoBehaviour
 
     void Damage(Koma from, Koma to, float dmg)
     {
+        if (phase == "end") return;
+        if (to.shieldT > 0) dmg *= 0.2f;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
+        if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);
         from.dealt += dmg;
-        from.gauge = Mathf.Min(100f, from.gauge + dmg * 0.8f);
-        to.gauge = Mathf.Min(100f, to.gauge + dmg * 0.6f);
+        from.gauge = Mathf.Min(100f, from.gauge + dmg * 0.8f * from.st.gaugeRate);
+        to.gauge = Mathf.Min(100f, to.gauge + dmg * 0.6f * to.st.gaugeRate);
         if (to.spin <= 0) { to.spin = 0; KO(to, "spin"); }
     }
 
@@ -757,8 +873,10 @@ public class KomaBoot : MonoBehaviour
                 // 押し出し
                 float pen = rr - dist;
                 float ma = a.st.mass, mb = b.st.mass;
-                a.pos -= nh * pen * mb / (ma + mb);
-                b.pos += nh * pen * ma / (ma + mb);
+                // 押し出し: 押した先が壁（段差・縁・柵）の中なら、その側は動かさない
+                Vector3 pa = a.pos - nh * pen * mb / (ma + mb), pb = b.pos + nh * pen * ma / (ma + mb);
+                if (Arena.WallH(pa.x, pa.z) - a.pos.y <= StepUp) a.pos = new Vector3(pa.x, a.pos.y, pa.z);
+                if (Arena.WallH(pb.x, pb.z) - b.pos.y <= StepUp) b.pos = new Vector3(pb.x, b.pos.y, pb.z);
                 long key = i * 10 + j;
                 Vector3 rel = a.vel - b.vel;
                 float vn = Vector3.Dot(rel, n);
@@ -768,6 +886,7 @@ public class KomaBoot : MonoBehaviour
                 // 空中から上に乗る突撃
                 bool aAir = !a.grounded && a.Center.y > b.Center.y + 0.55f && a.vel.y < -2f;
                 bool bAir = !b.grounded && b.Center.y > a.Center.y + 0.55f && b.vel.y < -2f;
+                Vector3 aV0 = a.vel, bV0 = b.vel;
                 float J = (1f + 0.7f) * vn / (1f / ma + 1f / mb);
                 a.vel -= n * J / ma;
                 b.vel += n * J / mb;
@@ -778,16 +897,19 @@ public class KomaBoot : MonoBehaviour
                 b.vel += nh * spinPushA / mb * (1.5f - b.st.grip * 0.3f) + tang * 1.5f;
                 a.vel -= nh * spinPushB / ma * (1.5f - a.st.grip * 0.3f) + tang * 1.5f;
                 float pop = Mathf.Min(3.2f, 1f + vn * 0.1f);
-                float multA = (a.dashT > 0 ? 1.4f : 1f) * (aAir ? 2.4f * a.st.aerial : 1f) * (a.specialPhase == 2 ? 1.6f : 1f);
-                float multB = (b.dashT > 0 ? 1.4f : 1f) * (bAir ? 2.4f * b.st.aerial : 1f) * (b.specialPhase == 2 ? 1.6f : 1f);
+                float multA = (a.dashT > 0 ? 1.4f : 1f) * (aAir ? 2.4f * a.st.aerial : 1f) * (a.specialPhase == 2 ? 1.6f : 1f) * (a.specialPhase == 20 ? 1.35f : 1f);
+                float multB = (b.dashT > 0 ? 1.4f : 1f) * (bAir ? 2.4f * b.st.aerial : 1f) * (b.specialPhase == 2 ? 1.6f : 1f) * (b.specialPhase == 20 ? 1.35f : 1f);
                 float shareA = sa / (sa + sb + 0.01f);
                 float baseD = 1f + Mathf.Min(vn, 25f) * 0.25f;
                 float dmgToB = baseD * (0.5f + shareA) * a.st.atk / b.st.def * multA * 0.5f;
                 float dmgToA = baseD * (1.5f - shareA) * b.st.atk / a.st.def * multB * 0.5f;
-                if (aAir) { b.vel += nh * 9f; b.vel.y = Mathf.Min(b.vel.y, 1f); a.vel.y = 8f; a.vel.x *= 0.4f; a.vel.z *= 0.4f; a.airDashUsed = 0; a.aerialHits++; }
+                if (aAir) { b.vel += nh * 9f; b.vel.y = Mathf.Min(b.vel.y, 1f); a.vel.y = 8f; a.vel.x *= 0.4f; a.vel.z *= 0.4f; a.airDashUsed = 1; a.aerialHits++; }
                 else if (!bAir) { b.vel.y += pop; b.grounded = false; }
-                if (bAir) { a.vel -= nh * 9f; a.vel.y = Mathf.Min(a.vel.y, 1f); b.vel.y = 8f; b.vel.x *= 0.4f; b.vel.z *= 0.4f; b.airDashUsed = 0; b.aerialHits++; }
+                if (bAir) { a.vel -= nh * 9f; a.vel.y = Mathf.Min(a.vel.y, 1f); b.vel.y = 8f; b.vel.x *= 0.4f; b.vel.z *= 0.4f; b.airDashUsed = 1; b.aerialHits++; }
                 else if (!aAir) { a.vel.y += pop; a.grounded = false; }
+                // 盾: 自分はほとんど弾かれず、相手を弾き返す
+                if (a.shieldT > 0) { a.vel = Vector3.Lerp(aV0, a.vel, 0.2f); b.vel += nh * 9f; }
+                if (b.shieldT > 0) { b.vel = Vector3.Lerp(bV0, b.vel, 0.2f); a.vel -= nh * 9f; }
                 Damage(a, b, dmgToB);
                 Damage(b, a, dmgToA);
                 bool aSp = a.specialPhase == 2, bSp = b.specialPhase == 2;
@@ -807,11 +929,15 @@ public class KomaBoot : MonoBehaviour
     }
 
     // ---------- 演出 ----------
+    // 2026-11-25 本人「いちいち技のたびに画面止まるのやめて」: スロー・ヒットストップは使わない（呼び出しは残して何もしない）
     void Slow(float scale, float dur)
     {
+        return;
+#pragma warning disable CS0162
         float until = Time.unscaledTime + dur;
         if (Time.unscaledTime < slowUntil) { slowScale = Mathf.Min(slowScale, scale); slowUntil = Mathf.Max(slowUntil, until); }
         else { slowScale = scale; slowUntil = until; }
+#pragma warning restore CS0162
     }
 
     void Spark(Vector3 at, Vector3 bias, int n, float power)
@@ -868,7 +994,7 @@ public class KomaBoot : MonoBehaviour
             float size = waveSize[i];
             float k = waveT[i] / 0.45f;
             waves[i].localScale = new Vector3(1, 1, 1) * Mathf.Lerp(0.3f, size, 1 - (1 - k) * (1 - k));
-            waves[i].GetComponent<MeshRenderer>().material.SetColor("_TintColor", new Color(1f, 0.85f, 0.5f, 1f) * 0.5f * (1 - k));
+            waveMats[i].SetColor("_TintColor", new Color(1f, 0.85f, 0.5f, 1f) * 0.5f * (1 - k));
             if (k >= 1) { waveT[i] = -1; waves[i].gameObject.SetActive(false); }
         }
     }
@@ -879,21 +1005,21 @@ public class KomaBoot : MonoBehaviour
         Vector3 focus = player.alive || phase == "count" ? player.pos : Vector3.zero;
         if (phase == "end" && player.alive) focus = player.pos;
         if (focus.y < -3f) focus.y = -3f;
-        Vector3 target = Vector3.Lerp(new Vector3(focus.x, Mathf.Max(focus.y, 0), focus.z), new Vector3(0, 0.6f, 0), 0.32f);
+        Vector3 target = Vector3.Lerp(new Vector3(focus.x, Mathf.Max(focus.y, 0), focus.z), new Vector3(0, 0.6f, 0), 0.18f);
         float zoom = phase == "end" ? 0.8f : 1f;
         if (cam.aspect < 1.2f) zoom *= Mathf.Lerp(1.55f, 1f, Mathf.InverseLerp(0.45f, 1.2f, cam.aspect));
-        Vector3 want = target + new Vector3(0, 9.4f, -8.8f) * zoom;
+        Vector3 want = target + new Vector3(0, 10.6f, -9.9f) * zoom;
         camRig.position = Vector3.SmoothDamp(camRig.position, want, ref camVel, 0.18f, 200f, realDt);
         camLook = Vector3.Lerp(camLook, target + Vector3.up * 0.3f, 1 - Mathf.Exp(-10f * realDt));
         Vector3 off = Vector3.zero;
         if (shake > 0)
         {
-            off = Random.insideUnitSphere * shake * 0.35f;
+            off = Random.insideUnitSphere * shake * 0.2f;
             shake = Mathf.Max(0, shake - realDt * 2.2f);
         }
         cam.transform.localPosition = off;
         cam.transform.rotation = Quaternion.LookRotation(camLook - camRig.position);
-        float fovWant = Time.unscaledTime < slowUntil ? 44f : 50f;
+        float fovWant = 50f;
         cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, fovWant, 1 - Mathf.Exp(-8f * realDt));
     }
 
@@ -922,9 +1048,11 @@ public class KomaBoot : MonoBehaviour
             sb.Append("{\"i\":").Append(k.idx).Append(",\"a\":").Append(k.alive ? 1 : 0).Append(",\"sp\":").Append(F(k.SpinRatio))
               .Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (0.75f * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
-              .Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
+              .Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
               .Append(",\"p\":[").Append(k.top).Append(',').Append(k.core).Append(',').Append(k.leg).Append("]")
-              .Append(",\"why\":\"").Append(k.koWhy).Append("\",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]}");
+              .Append(",\"why\":\"").Append(k.koWhy).Append("\"");
+            if (debugState) sb.Append(",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]");
+            sb.Append('}');
         }
         sb.Append("]}");
         Emit(sb.ToString());

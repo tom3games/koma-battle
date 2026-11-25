@@ -8,7 +8,7 @@ await p.click('#btnPlay'); await wait(500)
 for (let r = 0; r < runs; r++) {
   await p.evaluate(n => { document.querySelector(`#vsPick button[data-n="${n}"]`).click() }, ncpu)
   if (r === 0) await p.click('#btnFight'); else await p.click('#btnAgain')
-  await send(p, 'auto|1'); await send(p, 'timescale|2')
+  await send(p, 'auto|1'); await send(p, 'timescale|2'); await send(p, 'debugstate|1')
   await p.evaluate(() => { window.KB.events.length = 0; window.KB.result = null })
   const t0 = Date.now()
   let res = null, maxT = 0
@@ -20,7 +20,7 @@ for (let r = 0; r < runs; r++) {
   }
   const ev = await p.evaluate(() => { const c = {}; for (const e of window.KB.events) { c[e.k] = (c[e.k] || 0) + 1; if (e.k === 'ko') c['ko_' + e.i + '_' + e.why] = Math.round(window.KB.state.tm) } return c })
   const fps = await p.evaluate(() => new Promise(r => { let n = 0; const t = performance.now(); const f = () => { n++; if (performance.now() - t < 1000) requestAnimationFrame(f); else r(n) }; requestAnimationFrame(f) }))
-  const L = (await state(p)).k.map(k => k.L.map(Math.round).join('/'))
+  const L = (await state(p)).k.map(k => (k.L || []).map(Math.round).join('/'))
   console.log(JSON.stringify({ L, run: r, ended: !!res, res, gameSec: maxT, wallSec: Math.round((Date.now() - t0) / 1000), ev, fps }))
   console.log('  KO', JSON.stringify(await p.evaluate(() => window.KB.events.filter(e => e.k === 'ko').map(e => [e.i, e.why, e.r, e.ang, e.vy, e.vh, e.lastHit]))))
   if (r === 0) await p.screenshot({ path: 'shots/09_result_auto.png' })

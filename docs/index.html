@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@500;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="TemplateData/ui.css?v=3">
+<link rel="stylesheet" href="TemplateData/ui.css?v=5">
 </head>
 <body>
 <canvas id="unity-canvas" tabindex="-1"></canvas>
@@ -26,12 +26,12 @@
   <svg class="ld-koma" viewBox="0 0 120 120" aria-hidden="true">
     <ellipse cx="60" cy="104" rx="34" ry="6" fill="#0d1028" opacity=".55"/>
     <g class="ld-spin">
-      <path d="M60 100 L52 82 H68 Z" fill="#c9ccd8"/>
-      <ellipse cx="60" cy="70" rx="44" ry="12" fill="#e8402a"/>
-      <ellipse cx="60" cy="66" rx="44" ry="12" fill="#ff6a4a"/>
-      <rect x="49" y="44" width="22" height="22" rx="3" fill="#3b82f6"/>
-      <ellipse cx="60" cy="44" rx="11" ry="4" fill="#ffd24a"/>
-      <path d="M20 66 l-10 -8 l16 2 z M100 66 l10 8 l-16 -2 z" fill="#d7dbe6"/>
+      <path d="M60 100 L52 82 H68 Z" fill="#9aa1ab"/>
+      <ellipse cx="60" cy="70" rx="44" ry="12" fill="#5a1d14"/>
+      <ellipse cx="60" cy="66" rx="44" ry="12" fill="#b8402e"/>
+      <rect x="49" y="44" width="22" height="22" fill="#555b64"/>
+      <ellipse cx="60" cy="44" rx="11" ry="4" fill="#b08a4a"/>
+      <path d="M20 66 l-10 -8 l16 2 z M100 66 l10 8 l-16 -2 z" fill="#c9ccd2"/>
     </g>
   </svg>
 </div>
@@ -70,18 +70,7 @@
 <div id="hud" class="scr" hidden>
   <div id="tags"></div>
   <div class="hud-time" id="hudTime"></div>
-  <div class="tacho">
-    <svg viewBox="0 0 160 160" aria-hidden="true">
-      <circle cx="80" cy="80" r="70" class="t-bg"/>
-      <circle cx="80" cy="80" r="62" class="t-track"/>
-      <circle cx="80" cy="80" r="62" class="t-spin" id="tSpin"/>
-      <circle cx="80" cy="80" r="50" class="t-track2"/>
-      <circle cx="80" cy="80" r="50" class="t-gauge" id="tGauge"/>
-    </svg>
-    <div class="t-num"><b id="tNum">100</b><small>回転</small></div>
-    <div class="t-sp pc-only" id="tSp">必殺 右クリック</div>
-    <div class="t-dash" id="tDash"></div>
-  </div>
+  <div id="spReady" class="pc-only">必殺　右クリック</div>
   <div id="count" class="count"></div>
   <div id="sudden" class="sudden" hidden>延長　回転が減りやすい</div>
 </div>
@@ -125,7 +114,7 @@
   <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#fff"/><path id="muteWave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path id="muteX" d="M16 9l5 6M21 9l-5 6" stroke="#fff" stroke-width="2" stroke-linecap="round" hidden/></svg>
 </button>
 
-<div class="credit" id="credit">効果音・曲: CC0（Kenney ほか）</div>
+<div class="credit" id="credit">効果音: CC0（Kenney ほか）／BGM: Suno で作成</div>
 
 <script>
 (function(){
@@ -155,7 +144,7 @@
 })();
 window.KB_BUILD = { loader: "Build/docs.loader.js", data: "Build/docs.data.unityweb", framework: "Build/docs.framework.js.unityweb", code: "Build/docs.wasm.unityweb", company: "tom3games", product: "GYRO RAGNAROK", version: "1.0" };
 </script>
-<script src="TemplateData/sfx.js?v=3"></script>
-<script src="TemplateData/ui.js?v=3"></script>
+<script src="TemplateData/sfx.js?v=5"></script>
+<script src="TemplateData/ui.js?v=5"></script>
 </body>
 </html>
