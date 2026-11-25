@@ -198,6 +198,11 @@ public class KomaBoot : MonoBehaviour
             case "move": touchMove = new Vector2(N(0), N(1)); if (touchMove.sqrMagnitude > 1) touchMove.Normalize(); break;
             case "dash": touchDash = true; break;
             case "touchmode": touchMode = N(0) > 0; break;
+            // 2026-11-25 本人「車のゲームみたいにマウスで視点変えたい」: 画面に固定したマウスの動きで向きと高さを変える
+            case "mlock": mouseLook = N(0) > 0; break;
+            case "look":
+                if (mouseLook) { camYaw += N(0) * 0.0032f; camElev = Mathf.Clamp(camElev + N(1) * 0.0026f, 0.1f, 0.95f); }
+                break;
             case "aimdir": touchAimOn = true; touchAimDir = new Vector2(N(0), N(1)); break;
             case "aimoff": touchAimOn = false; break;
             case "dashdir":
@@ -439,6 +444,7 @@ public class KomaBoot : MonoBehaviour
         var plane = new Plane(Vector3.up, new Vector3(0, py, 0));
         bool touchOnly = touchMove.sqrMagnitude > 0.01f && !Input.GetMouseButton(0);
         if (touchAimOn) { var ad = CamRel(touchAimDir); aimPoint = player.pos + new Vector3(ad.x, 0, ad.y) * 6.5f; }
+        else if (!autoPlayer && mouseLook && ChaseOn) aimPoint = player.pos + new Vector3(Mathf.Sin(camYaw), 0, Mathf.Cos(camYaw)) * 6.5f;
         else if (!autoPlayer && !touchOnly && !touchMode && plane.Raycast(ray, out float d)) aimPoint = ray.GetPoint(d);
         if (autoPlayer) aimPoint = AimFor(player);
         // 2026-11-25 本人「スマホでやってる時コマから赤い線出てるの何」: 線をやめ、足元の短い山形の矢印（ダッシュの向き）にした。
@@ -1002,7 +1008,7 @@ public class KomaBoot : MonoBehaviour
     }
 
     Vector3 camVel, camLook;
-    float camYaw; bool camInit;
+    float camYaw, camElev = 0.43f; bool camInit, mouseLook;
     // 操作の向きをカメラ基準にする（上＝カメラの向いている前）
     Vector2 CamRel(Vector2 v)
     {
@@ -1026,7 +1032,7 @@ public class KomaBoot : MonoBehaviour
             camYaw = toC.sqrMagnitude > 0.01f ? Mathf.Atan2(toC.x, toC.y) : 0f;
             camVel = Vector3.zero;
         }
-        else if (phase == "fight" && hv.magnitude > 2.5f)
+        else if (phase == "fight" && !mouseLook && hv.magnitude > 2.5f)
         {
             float want = Mathf.Atan2(hv.x, hv.y);
             float diff = Mathf.DeltaAngle(camYaw * Mathf.Rad2Deg, want * Mathf.Rad2Deg) * Mathf.Deg2Rad;
@@ -1039,7 +1045,8 @@ public class KomaBoot : MonoBehaviour
         Vector3 fwd = new Vector3(Mathf.Sin(camYaw), 0, Mathf.Cos(camYaw));
         float portrait = cam.aspect < 1.2f ? Mathf.Lerp(1.45f, 1f, Mathf.InverseLerp(0.45f, 1.2f, cam.aspect)) : 1f;
         float baseY = Mathf.Max(p.y, -3f);
-        Vector3 want3 = new Vector3(p.x, baseY, p.z) - fwd * 7.2f * portrait + Vector3.up * 3.3f * portrait;
+        const float camD = 7.9f;
+        Vector3 want3 = new Vector3(p.x, baseY, p.z) + (-fwd * Mathf.Cos(camElev) + Vector3.up * Mathf.Sin(camElev)) * camD * portrait;
         float fh = Arena.H(want3.x, want3.z);
         if (fh > -100 && want3.y < fh + 1.4f) want3.y = fh + 1.4f;
         camRig.position = snap ? want3 : Vector3.SmoothDamp(camRig.position, want3, ref camVel, 0.12f, 200f, realDt);

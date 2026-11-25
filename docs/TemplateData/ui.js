@@ -226,6 +226,13 @@ window.__jsUp = true
     }
   })
   $('btnFight').onclick = () => { if (!KB.ready) return; Snd.init(); Snd.play('ui', { vol: 0.6 }); startMatch() }
+  // マウスで視点: 試合中は画面にマウスを固定して、動いた量を Unity へ送る。Esc で解除、画面を押すと戻る
+  function lockMouse() { if (!isTouch && canvas.requestPointerLock && document.pointerLockElement !== canvas) { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}) } catch (e) {} } }
+  let lookX = 0, lookY = 0
+  document.addEventListener('pointerlockchange', () => send('mlock|' + (document.pointerLockElement === canvas ? 1 : 0)))
+  document.addEventListener('mousemove', e => { if (document.pointerLockElement === canvas) { lookX += e.movementX; lookY += e.movementY } })
+  canvas.addEventListener('mousedown', () => { if (KB.screen === 'hud') lockMouse() })
+  ;(function lookLoop() { if (lookX || lookY) { send(`look|${lookX},${lookY}`); lookX = lookY = 0 } requestAnimationFrame(lookLoop) })()
   function startMatch() {
     if (document.activeElement) document.activeElement.blur()
     canvas.focus()
@@ -235,6 +242,7 @@ window.__jsUp = true
     if (isTouch && store.get('koma-hint', '') !== '1') showHint()
     send('move|0,0')
     send(`start|${pick.top},${pick.core},${pick.leg},${nCpu},${pick.sp}`)
+    lockMouse()
   }
 
   // ---------- HUD ----------
@@ -320,6 +328,7 @@ window.__jsUp = true
 
   // ---------- 結果 ----------
   function result(m) {
+    if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock()
     Snd.loop('bgm', null)
     Snd.play(m.win ? 'win' : 'lose', { vol: 0.9 })
     const big = $('rsBig')
