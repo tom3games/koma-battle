@@ -1,5 +1,5 @@
 import { open, wait, state, send } from './lib.mjs'
-const url = process.argv[2] || 'http://localhost:5392/'
+const url = process.argv[2] || 'http://localhost:5393/'
 const { b, p, errs, loadMs } = await open(url)
 console.log('loadMs', loadMs)
 await wait(1500)

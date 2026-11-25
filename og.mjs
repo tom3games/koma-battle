@@ -28,9 +28,10 @@ await q.setContent(`<html><head><link href="https://fonts.googleapis.com/css2?fa
 body{margin:0;background:#1b1f3b;width:${W}px;height:${H}px;position:relative;overflow:hidden;font-family:"M PLUS 1",sans-serif}
 img{position:absolute;left:${left}px;top:${top}px;width:${K * 100}%;height:${K * 100}%}
 .sh{position:absolute;inset:0;background:linear-gradient(90deg,rgba(18,20,44,.9) 0%,rgba(18,20,44,.6) 36%,rgba(18,20,44,0) 52%)}
-.t{position:absolute;left:56px;top:150px;color:#f5f3ee;font-weight:900;font-size:150px;line-height:.9;letter-spacing:-.04em;transform:rotate(-4deg);transform-origin:left bottom;text-shadow:0 7px 0 #c22a14}
+.k{position:absolute;left:62px;top:118px;color:#ffc83a;font-weight:900;font-size:26px;letter-spacing:.28em}
+.t{position:absolute;left:56px;top:160px;color:#f5f3ee;font-weight:900;font-size:118px;line-height:.9;letter-spacing:-.04em;transform:rotate(-4deg);transform-origin:left bottom;text-shadow:0 7px 0 #c22a14}
 .l{position:absolute;left:62px;top:478px;color:#ffc83a;font-weight:900;font-size:36px}
-</style></head><body><img src="data:image/png;base64,${raw}"><div class="sh"></div><div class="t">コマ<br>バトル</div><div class="l">跳んで、上から落とせ。</div></body></html>`)
+</style></head><body><img src="data:image/png;base64,${raw}"><div class="sh"></div><div class="k">GYRO RAGNAROK</div><div class="t">ジャイロ<br>ラグナロク</div><div class="l">跳んで、上から落とせ。</div></body></html>`)
 await q.waitForLoadState('networkidle'); await q.evaluate(() => document.fonts.ready)
 await q.screenshot({ path: 'unity/Assets/WebGLTemplates/Koma/og.png' })
 // アイコン（読み込み画面のコマ）

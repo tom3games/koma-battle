@@ -55,13 +55,37 @@ public static class Build
         AssetDatabase.SaveAssets();
     }
 
+    static void SetProp(string asset, string name, int v)
+    {
+        var o = AssetDatabase.LoadAllAssetsAtPath(asset);
+        if (o.Length == 0) return;
+        var so = new SerializedObject(o[0]);
+        var p = so.FindProperty(name);
+        if (p == null) { Debug.Log("KOMA no prop " + name); return; }
+        if (p.propertyType == SerializedPropertyType.Boolean) p.boolValue = v != 0; else p.intValue = v;
+        so.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    // 使わないシェーダーの種類と音の仕組みを外して小さくする
+    static void StripSettings()
+    {
+        const string g = "ProjectSettings/GraphicsSettings.asset";
+        SetProp(g, "m_LightmapStripping", 1);
+        foreach (var n in new[] { "m_LightmapKeepPlain", "m_LightmapKeepDirCombined", "m_LightmapKeepDynamicPlain", "m_LightmapKeepDynamicDirCombined", "m_LightmapKeepShadowMask", "m_LightmapKeepSubtractive" }) SetProp(g, n, 0);
+        SetProp(g, "m_FogStripping", 1);
+        SetProp(g, "m_FogKeepLinear", 1); SetProp(g, "m_FogKeepExp", 0); SetProp(g, "m_FogKeepExp2", 0);
+        SetProp(g, "m_InstancingStripping", 1);
+        SetProp("ProjectSettings/AudioManager.asset", "m_DisableAudio", 1);
+        AssetDatabase.SaveAssets();
+    }
+
     public static void WebGL()
     {
         MakeScene();
         var outDir = Arg("-out", "../build");
         var comp = Arg("-compression", "gzip");
         PlayerSettings.companyName = "tom3games";
-        PlayerSettings.productName = "コマバトル";
+        PlayerSettings.productName = "GYRO RAGNAROK";
         PlayerSettings.WebGL.compressionFormat = comp == "none" ? WebGLCompressionFormat.Disabled :
             comp == "brotli" ? WebGLCompressionFormat.Brotli : WebGLCompressionFormat.Gzip;
         PlayerSettings.WebGL.decompressionFallback = comp != "none";
@@ -72,6 +96,11 @@ public static class Build
         if (tpl != "") PlayerSettings.WebGL.template = tpl;
         PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.High);
         PlayerSettings.stripEngineCode = true;
+        PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, Il2CppCodeGeneration.OptimizeSize);
+        UnityEditor.WebGL.UserBuildSettings.codeOptimization = UnityEditor.WebGL.WasmCodeOptimization.DiskSizeLTO;
+        StripSettings();
+        PlayerSettings.SplashScreen.showUnityLogo = false;
+        PlayerSettings.SplashScreen.show = false;
         PlayerSettings.runInBackground = true;
         var t0 = DateTime.Now;
         var opts = new BuildPlayerOptions

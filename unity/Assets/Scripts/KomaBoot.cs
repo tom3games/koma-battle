@@ -26,6 +26,7 @@ public class KomaBoot : MonoBehaviour
     float testScale = 1f;
     bool paused;
     Vector2 touchMove;
+    bool touchMode, touchAimOn; Vector2 touchAimDir;
     bool touchDash, touchSpecial;
     Vector3 aimPoint;
     Transform reticle; LineRenderer aimLine;
@@ -96,7 +97,6 @@ public class KomaBoot : MonoBehaviour
         cam.transform.SetParent(camRig, false);
         cam.fieldOfView = 50f; cam.nearClipPlane = 0.2f; cam.farClipPlane = 400f;
         cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.2f, 0.15f, 0.3f);
-        cam.gameObject.AddComponent<AudioListener>();
 
         // 狙いの印
         reticle = MeshKit.Obj("Reticle", null, MeshKit.Ring(0.42f, 0.66f, 32), mats.Alpha(new Color(1f, 0.25f, 0.12f, 1f), Texture2D.whiteTexture)).transform;
@@ -183,6 +183,33 @@ public class KomaBoot : MonoBehaviour
             case "pause": paused = N(0) > 0; break;
             case "move": touchMove = new Vector2(N(0), N(1)); if (touchMove.sqrMagnitude > 1) touchMove.Normalize(); break;
             case "dash": touchDash = true; break;
+            case "touchmode": touchMode = N(0) > 0; break;
+            case "aimdir": touchAimOn = true; touchAimDir = new Vector2(N(0), N(1)); break;
+            case "aimoff": touchAimOn = false; break;
+            case "dashdir":
+                {
+                    touchAimOn = false;
+                    Vector2 d = new Vector2(N(0), N(1));
+                    Vector3 aim;
+                    if (d.sqrMagnitude < 0.01f) { var t = Nearest(player); aim = t != null ? t.pos : player.pos + Vector3.forward; }
+                    else aim = player.pos + new Vector3(d.x, 0, d.y).normalized * 7f;
+                    if (phase == "fight" && player.alive) TryDash(player, aim);
+                    break;
+                }
+            case "specialnear":
+                {
+                    var t = Nearest(player);
+                    if (phase == "fight" && player.alive) TrySpecial(player, t != null ? t.pos : player.pos);
+                    break;
+                }
+            case "quality":
+                if (N(0) < 1)
+                {
+                    QualitySettings.shadowResolution = ShadowResolution.Low;
+                    QualitySettings.shadowDistance = 28f;
+                    var sunL = GameObject.Find("Sun"); if (sunL) sunL.GetComponent<Light>().shadows = LightShadows.Hard;
+                }
+                break;
             case "special": touchSpecial = true; break;
             case "gauge": if (nums.Length > 1) komas[(int)N(1)].gauge = N(0); else player.gauge = N(0); break;
             case "spin": komas[(int)N(1)].spin = N(0) * komas[(int)N(1)].spinMax; break;
@@ -213,6 +240,7 @@ public class KomaBoot : MonoBehaviour
     void StartMatch()
     {
         phase = "count"; phaseT = 0; fightT = 0; sudden = false; endWin = -1; endT = 0;
+        touchMove = Vector2.zero; touchAimOn = false; touchDash = false; touchSpecial = false;
         pairCd.Clear();
         int n = 1 + nCpu;
         for (int i = 0; i < 4; i++)
@@ -248,7 +276,7 @@ public class KomaBoot : MonoBehaviour
             Vector3 look = phase == "title" ? new Vector3(0, 0.5f, 0) : new Vector3(0, 0.7f, 0);
             camRig.position = new Vector3(Mathf.Sin(a) * dist, hgt, -Mathf.Cos(a) * dist);
             cam.transform.localPosition = Vector3.zero;
-            if (phase == "title") look -= Vector3.Cross(Vector3.up, (look - camRig.position).normalized) * 7f;
+            if (phase == "title") look -= Vector3.Cross(Vector3.up, (look - camRig.position).normalized) * 7f * Mathf.Clamp01(cam.aspect - 0.6f);
             cam.transform.rotation = Quaternion.LookRotation(look - camRig.position);
             reticle.gameObject.SetActive(false); aimLine.enabled = false;
             EmitState(realDt, false);
@@ -291,8 +319,8 @@ public class KomaBoot : MonoBehaviour
                 if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) move.x -= 1;
                 if (touchMove.sqrMagnitude > 0.01f) move = touchMove;
                 if (move.sqrMagnitude > 1) move.Normalize();
-                dash = Input.GetMouseButtonDown(0) || touchDash;
-                special = Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || touchSpecial;
+                dash = (!touchMode && Input.GetMouseButtonDown(0)) || touchDash;
+                special = (!touchMode && Input.GetMouseButtonDown(1)) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || touchSpecial;
                 if (touchDash && Input.touchCount == 0 && !Input.GetMouseButtonDown(0))
                 {
                     // 画面のボタンのダッシュ: 動かしている向き、なければ近い相手へ
@@ -386,9 +414,10 @@ public class KomaBoot : MonoBehaviour
         float py = player.grounded ? player.pos.y : Arena.H(player.pos.x, player.pos.z) > -100 ? Mathf.Min(player.pos.y, Arena.H(player.pos.x, player.pos.z) + 0.5f) : player.pos.y;
         var plane = new Plane(Vector3.up, new Vector3(0, py, 0));
         bool touchOnly = touchMove.sqrMagnitude > 0.01f && !Input.GetMouseButton(0);
-        if (!autoPlayer && !touchOnly && plane.Raycast(ray, out float d)) aimPoint = ray.GetPoint(d);
+        if (touchAimOn) aimPoint = player.pos + new Vector3(touchAimDir.x, 0, touchAimDir.y) * 6.5f;
+        else if (!autoPlayer && !touchOnly && !touchMode && plane.Raycast(ray, out float d)) aimPoint = ray.GetPoint(d);
         if (autoPlayer) aimPoint = AimFor(player);
-        bool show = phase == "fight" && player.alive;
+        bool show = phase == "fight" && player.alive && (!touchMode || touchAimOn);
         reticle.gameObject.SetActive(show);
         aimLine.enabled = show;
         if (!show) return;
@@ -494,7 +523,7 @@ public class KomaBoot : MonoBehaviour
             dir.Normalize();
             k.vel = dir * 24f;
             // 狙った所の近くに相手がいれば、その相手を追いかけて落ちる
-            k.diveTarget = -1; float bd = 16f;
+            k.diveTarget = -1; float bd = 25f;
             foreach (var o in komas)
             {
                 if (o == k || !o.alive || !o.root.activeSelf) continue;
@@ -852,6 +881,7 @@ public class KomaBoot : MonoBehaviour
         if (focus.y < -3f) focus.y = -3f;
         Vector3 target = Vector3.Lerp(new Vector3(focus.x, Mathf.Max(focus.y, 0), focus.z), new Vector3(0, 0.6f, 0), 0.32f);
         float zoom = phase == "end" ? 0.8f : 1f;
+        if (cam.aspect < 1.2f) zoom *= Mathf.Lerp(1.55f, 1f, Mathf.InverseLerp(0.45f, 1.2f, cam.aspect));
         Vector3 want = target + new Vector3(0, 9.4f, -8.8f) * zoom;
         camRig.position = Vector3.SmoothDamp(camRig.position, want, ref camVel, 0.18f, 200f, realDt);
         camLook = Vector3.Lerp(camLook, target + Vector3.up * 0.3f, 1 - Mathf.Exp(-10f * realDt));

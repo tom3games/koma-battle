@@ -2,6 +2,7 @@
 
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
+import { appendFileSync } from 'node:fs'
 import { extname, join, normalize } from 'node:path'
 
 const ROOT = process.env.ROOT ? join(import.meta.dirname, process.env.ROOT) : import.meta.dirname
@@ -36,6 +37,9 @@ function resolve(urlPath) {
 const PORT = Number(process.env.PORT ?? 5310)
 
 createServer(async (req, res) => {
+  if (req.method === 'POST' && req.url.startsWith('/log')) {
+    let b = ''; req.on('data', c => b += c); req.on('end', () => { appendFileSync(process.env.LOG || 'debug-log.txt', new Date().toISOString().slice(11, 19) + ' ' + b + '\n'); res.writeHead(204).end() }); return
+  }
   const file = resolve(req.url)
   if (!file) { res.writeHead(400).end('bad path'); return }
   try {

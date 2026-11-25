@@ -1,24 +1,26 @@
-// 画面（HTML）側: 読み込み・タイトル・パーツ選び・HUD・演出・音・結果。3D と物理は Unity 側
+// 画面（HTML）側: 読み込み・タイトル・パーツ選び・HUD・スマホの操作・演出・音・結果。3D と物理は Unity 側
 window.__jsUp = true
 ;(() => {
   const $ = id => document.getElementById(id)
   const SLOTS = [
     { key: 'top', name: '上', parts: [
-      { n: 'キバ', d: 'とげ4本。当てると痛い' },
-      { n: 'タテ', d: '分厚く重い。受けに強い' },
-      { n: 'ハネ', d: '軽い羽。空中で曲がれる' }] },
+      { n: 'ブラッドファング', d: 'とげ4本。当てると痛い' },
+      { n: 'アイギスウォール', d: '分厚く重い。受けに強い' },
+      { n: 'ゼファーウイング', d: '軽い羽。空中で曲がれる' }] },
     { key: 'core', name: '芯', parts: [
-      { n: 'ネバリ', d: '長く回る' },
-      { n: 'ハヤテ', d: '速い。ダッシュが早く戻る' },
-      { n: 'オモシ', d: '重い。押し負けない' }] },
+      { n: 'エターナルコア', d: '長く回る' },
+      { n: 'ソニックコア', d: '速い。ダッシュが早く戻る' },
+      { n: 'グラビティコア', d: '重い。押し負けない' }] },
     { key: 'leg', name: '足', parts: [
-      { n: 'ベタ', d: '踏ん張る。飛ばされにくい' },
-      { n: 'ツンツン', d: 'よく滑る。回転が減りにくい' },
-      { n: 'バネ', d: '高く跳ぶ。上からの一撃が重い' }] },
+      { n: 'タイタンベース', d: '踏ん張る。飛ばされにくい' },
+      { n: 'スティンガーニードル', d: 'よく滑る。回転が減りにくい' },
+      { n: 'ヘヴンズスプリング', d: '高く跳ぶ。上からの一撃が重い' }] },
   ]
-  const NAMES = ['あなた', 'ぐるぐる丸', 'ドスコイ', '目まわし']
+  const NAMES = ['あなた', 'クリムゾン・ガルム', 'アイアン・ゴーレム', 'ミラージュ・ヴァイパー']
   const COLORS = ['#f2402a', '#2673f2', '#33bf4d', '#fabf1a']
-  const SPECIAL = '星落とし'
+  const SPECIAL = 'メテオ・ジャッジメント'
+  const isTouch = matchMedia('(pointer: coarse)').matches
+  const DEBUG = /debug/.test(location.search)
 
   // パーツの横からの絵（自前の SVG）
   const ART = {
@@ -46,20 +48,23 @@ window.__jsUp = true
     if (c === 1) { s.stamina = 0.85; s.speed *= 1.22 }
     if (c === 2) { s.stamina = 1.05; s.speed *= 0.95; s.mass += 0.35; s.def *= 1.1 }
     if (l === 0) { s.grip = 1.7; s.jump = 0.85; s.speed *= 0.95 }
-    if (l === 1) { s.grip = 0.6; s.speed *= 1.15;}
+    if (l === 1) { s.grip = 0.6; s.speed *= 1.15 }
     if (l === 2) { s.jump = 1.45 }
     return s
   }
   const STAT_ROWS = [['攻撃', 'atk', 0.8, 1.4], ['防御', 'def', 0.8, 1.6], ['重さ', 'mass', 0.8, 1.7], ['持久', 'stamina', 0.8, 1.4], ['速さ', 'speed', 0.8, 1.45], ['跳躍', 'jump', 0.8, 1.5]]
 
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v } catch (e) { return d } },
+    set(k, v) { try { localStorage.setItem(k, v) } catch (e) {} },
+  }
   const pick = { top: 0, core: 0, leg: 0 }
-  try { const s = JSON.parse(localStorage.getItem('koma-pick') || 'null'); if (s) Object.assign(pick, s) } catch (e) {}
-  let nCpu = 2
-  try { nCpu = +(localStorage.getItem('koma-ncpu') || 2) || 2 } catch (e) {}
+  try { const s = JSON.parse(store.get('koma-pick', 'null')); if (s) Object.assign(pick, s) } catch (e) {}
+  let nCpu = +store.get('koma-ncpu', 2) || 2
 
   // ---------- Unity ----------
-  let unity = null
-  const KB = window.KB = { state: null, events: [], ready: false, send, onUnity }
+  let unity = null, progress = 0
+  const KB = window.KB = { state: null, events: [], ready: false, send, onUnity, screen: 'title' }
   function send(cmd) { if (unity) unity.SendMessage('KomaBoot', 'Cmd', cmd) }
 
   const canvas = $('unity-canvas')
@@ -70,13 +75,14 @@ window.__jsUp = true
     createUnityInstance(canvas, {
       dataUrl: B.data, frameworkUrl: B.framework, codeUrl: B.code,
       streamingAssetsUrl: 'StreamingAssets', companyName: B.company, productName: B.product, productVersion: B.version,
-      devicePixelRatio: Math.min(window.devicePixelRatio || 1, matchMedia('(pointer: coarse)').matches ? 1.5 : 1.25),
+      // スマホは描く量を抑える（画素の倍率を下げる）
+      devicePixelRatio: isTouch ? Math.min(window.devicePixelRatio || 1, 1.5) : Math.min(window.devicePixelRatio || 1, 1.25),
       showBanner: (msg, type) => { if (type === 'error') console.error(msg); else console.warn(msg) },
-    }, p => { $('ldFill').style.width = Math.round(p * 100) + '%' })
+    }, p => { progress = p; $('ldFill').style.width = Math.round(p * 100) + '%'; fightBtn() })
       .then(inst => { unity = inst; window.unityInstance = inst })
-      .catch(e => { window.__kbErrs.push(String(e)); console.error(e) })
+      .catch(e => { window.__kbErrs.push(String(e)); console.error(e); $('ldText').textContent = '読み込みに失敗しました。再読み込みしてください' })
   }
-  loaderScript.onerror = () => window.__kbErrs.push('loader failed')
+  loaderScript.onerror = () => { window.__kbErrs.push('loader failed'); $('ldText').textContent = '読み込みに失敗しました。再読み込みしてください' }
   document.body.appendChild(loaderScript)
 
   function onUnity(s) {
@@ -88,19 +94,29 @@ window.__jsUp = true
 
   // ---------- 画面の切り替え ----------
   function show(id) {
-    for (const s of ['load', 'title', 'select', 'hud', 'result']) $(s).hidden = s !== id
+    for (const s of ['title', 'select', 'hud', 'result']) $(s).hidden = s !== id
     document.body.classList.toggle('playing', id === 'hud')
+    document.body.classList.toggle('on-title', id === 'title')
     $('touch').hidden = !(id === 'hud' && isTouch)
+    if (id !== 'hud') { resetTouch(); $('hint').hidden = true }
     KB.screen = id
   }
-  const isTouch = matchMedia('(pointer: coarse)').matches
+
+  function fightBtn() {
+    const b = $('btnFight')
+    b.disabled = !KB.ready
+    b.textContent = KB.ready ? '試合開始' : `準備中 ${Math.round(progress * 100)}%`
+  }
 
   function ev(m) {
     switch (m.k) {
       case 'ready':
         KB.ready = true; window.__kbReady = true
-        show('title'); send('title')
+        $('ldMini').classList.add('done'); $('load').classList.add('gone')
+        if (isTouch) { send('touchmode|1'); send('quality|0') }
         sendLoadout()
+        send(KB.screen === 'select' ? 'select' : 'title')
+        fightBtn()
         break
       case 'count': countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
       case 'go':
@@ -132,7 +148,7 @@ window.__jsUp = true
     }
   }
 
-  // ---------- タイトル ----------
+  // ---------- タイトル（読み込み中から触れる） ----------
   $('btnPlay').onclick = () => { Snd.init(); startAmb(); Snd.play('ui', { vol: 0.6 }); toSelect() }
   function startAmb() { Snd.loop('amb', 'TemplateData/snd/crowd-shoutingspeaking-ambience_crowd_shouting_0.mp3', 0.16) }
 
@@ -141,12 +157,12 @@ window.__jsUp = true
     const box = $('slots'); box.innerHTML = ''
     SLOTS.forEach(sl => {
       const d = document.createElement('div'); d.className = 'slot'
-      d.innerHTML = `<div class="slot-name">${sl.name}</div><div class="slot-row"></div>`
+      d.innerHTML = `<div class="slot-name">${sl.name}</div><div class="slot-row"></div><div class="slot-desc">${sl.parts[pick[sl.key]].d}</div>`
       const row = d.querySelector('.slot-row')
       sl.parts.forEach((p, i) => {
         const b = document.createElement('button'); b.className = 'part' + (pick[sl.key] === i ? ' on' : '')
         b.dataset.slot = sl.key; b.dataset.i = i
-        b.innerHTML = `<svg viewBox="0 0 80 40">${ART[sl.key][i]}</svg><b>${p.n}</b><small>${p.d}</small>`
+        b.innerHTML = `<svg viewBox="0 0 80 40">${ART[sl.key][i]}</svg><b>${p.n}</b>`
         b.onclick = () => { pick[sl.key] = i; Snd.play('ui', { vol: 0.4 }); buildSlots(); sendLoadout() }
         row.appendChild(b)
       })
@@ -157,32 +173,36 @@ window.__jsUp = true
       const w = Math.max(8, Math.min(100, (s[k] - lo) / (hi - lo) * 100))
       return `<div class="st${w > 62 ? ' hi' : ''}"><span>${n}</span><i><u style="width:${w}%"></u></i></div>`
     }).join('')
-    try { localStorage.setItem('koma-pick', JSON.stringify(pick)) } catch (e) {}
+    store.set('koma-pick', JSON.stringify(pick))
   }
   function sendLoadout() { send(`loadout|${pick.top},${pick.core},${pick.leg}`) }
-  function toSelect() { buildSlots(); show('select'); send('select'); sendLoadout() }
+  function toSelect() { buildSlots(); show('select'); send('select'); sendLoadout(); fightBtn() }
   document.querySelectorAll('#vsPick button').forEach(b => {
     b.classList.toggle('on', +b.dataset.n === nCpu)
     b.onclick = () => {
       nCpu = +b.dataset.n
       document.querySelectorAll('#vsPick button').forEach(x => x.classList.toggle('on', x === b))
-      try { localStorage.setItem('koma-ncpu', nCpu) } catch (e) {}
+      store.set('koma-ncpu', nCpu)
     }
   })
-  $('btnFight').onclick = () => { Snd.init(); startAmb(); Snd.play('ui', { vol: 0.6 }); startMatch() }
+  $('btnFight').onclick = () => { if (!KB.ready) return; Snd.init(); startAmb(); Snd.play('ui', { vol: 0.6 }); startMatch() }
   function startMatch() {
     if (document.activeElement) document.activeElement.blur()
     canvas.focus()
     $('sudden').hidden = true
-    tagEls.forEach(t => t.remove()); tagEls.length = 0
+    tagEls.forEach(t => t && t.remove()); tagEls.length = 0
     show('hud')
+    if (isTouch && store.get('koma-hint', '') !== '1') showHint()
+    send('move|0,0')
     send(`start|${pick.top},${pick.core},${pick.leg},${nCpu}`)
   }
 
   // ---------- HUD ----------
   const tagEls = []
-  let lastSpin = -1
+  let lastSpin = -1, frames = 0, fpsT = performance.now(), fps = 0
   function hud(m) {
+    frames++
+    const now = performance.now(); if (now - fpsT > 1000) { fps = Math.round(frames * 1000 / (now - fpsT)); frames = 0; fpsT = now; KB.fps = fps }
     if (KB.screen !== 'hud') return
     const t = Math.floor(m.tm)
     $('hudTime').textContent = m.ph === 'count' ? '' : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
@@ -196,9 +216,11 @@ window.__jsUp = true
       tc.classList.toggle('full', me.g >= 1 && me.a === 1)
       tc.classList.toggle('low', me.sp < 0.3)
       $('tDash').classList.toggle('wait', me.cd > 0)
-      $('tSpBtn').classList.toggle('full', me.g >= 1)
+      $('tSpBtn').classList.toggle('full', me.g >= 1 && me.a === 1)
+      $('flickArrow').classList.toggle('cd', me.cd > 0)
+      KB.me = me
     }
-    const W = innerWidth, H = innerHeight
+    const W = innerWidth, H = canvas.clientHeight || innerHeight
     m.k.forEach(k => {
       let el = tagEls[k.i]
       if (!el) {
@@ -210,8 +232,7 @@ window.__jsUp = true
       }
       el.classList.toggle('out', k.a === 0)
       el.style.display = k.z > 0 && k.h > -6 ? '' : 'none'
-      el.style.left = (k.x * W).toFixed(0) + 'px'
-      el.style.top = ((1 - k.y) * H).toFixed(0) + 'px'
+      el.style.transform = `translate(${(k.x * W).toFixed(0)}px,${((1 - k.y) * H).toFixed(0)}px) translate(-50%,-100%)`
       el.querySelector('u').style.width = (k.sp * 100).toFixed(0) + '%'
     })
   }
@@ -221,7 +242,7 @@ window.__jsUp = true
   function lines(x, y, power) {
     const svg = $('lines')
     svg.innerHTML = ''
-    const n = 70
+    const n = isTouch ? 44 : 70
     const cx = (x - 0.5) * 60, cy = (0.5 - y) * 40
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2
@@ -263,7 +284,7 @@ window.__jsUp = true
     big.textContent = m.win ? '勝ち' : '負け'
     big.className = 'rs-big ' + (m.win ? 'win' : 'lose')
     $('rsWhy').textContent = m.win ? '最後まで回り切った' : m.why === 'out' ? '場外に飛ばされた' : '回転が尽きた'
-    $('rsLine').textContent = `${Math.floor(m.time)}秒　削った回転 ${Math.round(m.dealt)}　上からの一撃 ${m.aerial}回　${SPECIAL} ${m.specials}回`
+    $('rsLine').textContent = `${Math.floor(m.time)}秒　削った回転 ${Math.round(m.dealt)}　上からの一撃 ${m.aerial}回　必殺 ${m.specials}回`
     $('onoma').classList.remove('on'); $('banner').classList.remove('on')
     show('result')
     KB.result = m
@@ -288,33 +309,114 @@ window.__jsUp = true
     lose: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL09')],
     ui: [S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_hit_01')],
   })
-  let muted = false
-  try { muted = localStorage.getItem('koma-mute') === '1' } catch (e) {}
+  let muted = store.get('koma-mute', '0') === '1'
   function applyMute() { Snd.setMute(muted); $('muteX').hidden = !muted; $('muteWave').style.display = muted ? 'none' : '' }
   applyMute()
-  $('btnMute').onclick = () => { muted = !muted; Snd.init(); applyMute(); try { localStorage.setItem('koma-mute', muted ? '1' : '0') } catch (e) {} }
+  $('btnMute').onclick = () => { muted = !muted; Snd.init(); applyMute(); store.set('koma-mute', muted ? '1' : '0') }
 
-  // ---------- スマホ（仮の操作） ----------
-  const zone = $('stickZone'), stick = $('stick'), knob = stick.querySelector('i')
+  // ---------- スマホの操作 ----------
+  // 左: 触った所が中心になる浮くスティック。右: はじいた向きへダッシュ（空中なら急降下）。タップだけなら近くの相手へ。星のボタンで必殺
+  const stick = $('stick'), knob = stick.querySelector('i')
+  const arrow = $('flickArrow'), faLine = $('faLine'), faDot = $('faDot'), faOrigin = $('faOrigin')
   let sid = null, sx = 0, sy = 0
-  zone.addEventListener('pointerdown', e => {
+  let fid = null, fx = 0, fy = 0, fdx = 0, fdy = 0
+  const STICK_R = 50, FLICK_MIN = 22, FLICK_MAX = 120
+  function idleStick() {
+    const z = $('stickZone').getBoundingClientRect()
+    stick.style.transform = `translate(${z.left + z.width * 0.4}px,${z.top + z.height * 0.62}px)`
+    stick.className = 'idle'; knob.style.transform = ''
+  }
+  function resetTouch() {
+    if (sid !== null) send('move|0,0')
+    if (fid !== null) send('aimoff')
+    sid = null; fid = null; arrow.classList.remove('on'); if (!$('touch').hidden) idleStick()
+  }
+  const zs = $('stickZone'), zf = $('flickZone')
+  zs.addEventListener('pointerdown', e => {
+    if (sid !== null) return
+    e.preventDefault(); Snd.init(); hintSeen()
     sid = e.pointerId; sx = e.clientX; sy = e.clientY
-    stick.style.display = 'block'; stick.style.left = sx + 'px'; stick.style.top = sy + 'px'
-    knob.style.transform = ''
-    zone.setPointerCapture(e.pointerId); e.preventDefault()
+    stick.style.transform = `translate(${sx}px,${sy}px)`; stick.className = 'on'; knob.style.transform = ''
+    try { zs.setPointerCapture(e.pointerId) } catch (err) {}
   })
-  zone.addEventListener('pointermove', e => {
+  zs.addEventListener('pointermove', e => {
     if (e.pointerId !== sid) return
     let dx = e.clientX - sx, dy = e.clientY - sy
-    const len = Math.hypot(dx, dy), max = 45
-    if (len > max) { dx = dx / len * max; dy = dy / len * max }
+    const len = Math.hypot(dx, dy)
+    if (len > STICK_R) { dx = dx / len * STICK_R; dy = dy / len * STICK_R }
     knob.style.transform = `translate(${dx}px,${dy}px)`
-    send(`move|${(dx / max).toFixed(2)},${(-dy / max).toFixed(2)}`)
+    send(`move|${(dx / STICK_R).toFixed(2)},${(-dy / STICK_R).toFixed(2)}`)
   })
-  const endStick = e => { if (e.pointerId !== sid) return; sid = null; stick.style.display = 'none'; send('move|0,0') }
-  zone.addEventListener('pointerup', endStick); zone.addEventListener('pointercancel', endStick)
-  $('tDashBtn').addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); send('dash') })
-  $('tSpBtn').addEventListener('pointerdown', e => { e.preventDefault(); send('special') })
+  const endStick = e => { if (e.pointerId !== sid) return; sid = null; send('move|0,0'); idleStick() }
+  zs.addEventListener('pointerup', endStick); zs.addEventListener('pointercancel', endStick)
 
-  show('load')
+  function drawArrow() {
+    const len = Math.hypot(fdx, fdy)
+    const k = len > FLICK_MAX ? FLICK_MAX / len : 1
+    const ex = fx + fdx * k, ey = fy + fdy * k
+    faOrigin.setAttribute('cx', fx); faOrigin.setAttribute('cy', fy)
+    faLine.setAttribute('x1', fx); faLine.setAttribute('y1', fy); faLine.setAttribute('x2', ex); faLine.setAttribute('y2', ey)
+    faDot.setAttribute('cx', ex); faDot.setAttribute('cy', ey)
+    arrow.classList.toggle('weak', len < FLICK_MIN)
+  }
+  zf.addEventListener('pointerdown', e => {
+    if (fid !== null) return
+    e.preventDefault(); Snd.init(); hintSeen()
+    fid = e.pointerId; fx = e.clientX; fy = e.clientY; fdx = 0; fdy = 0
+    drawArrow(); arrow.classList.add('on')
+    try { zf.setPointerCapture(e.pointerId) } catch (err) {}
+  })
+  zf.addEventListener('pointermove', e => {
+    if (e.pointerId !== fid) return
+    fdx = e.clientX - fx; fdy = e.clientY - fy
+    drawArrow()
+    const len = Math.hypot(fdx, fdy)
+    if (len >= FLICK_MIN) send(`aimdir|${(fdx / len).toFixed(3)},${(-fdy / len).toFixed(3)}`)
+  })
+  const endFlick = (e, cancel) => {
+    if (e.pointerId !== fid) return
+    fid = null; arrow.classList.remove('on')
+    const len = Math.hypot(fdx, fdy)
+    if (cancel) { send('aimoff'); return }
+    if (len >= FLICK_MIN) send(`dashdir|${(fdx / len).toFixed(3)},${(-fdy / len).toFixed(3)}`)
+    else send('dashdir|0,0')
+  }
+  zf.addEventListener('pointerup', e => endFlick(e, false)); zf.addEventListener('pointercancel', e => endFlick(e, true))
+  const spb = $('tSpBtn')
+  spb.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation(); hintSeen()
+    spb.classList.add('press'); setTimeout(() => spb.classList.remove('press'), 120)
+    send('specialnear')
+  })
+
+  // 最初の1回だけの操作説明
+  let hintT = 0, hintShownAt = 0
+  function showHint() {
+    const h = $('hint'); h.hidden = false; h.classList.remove('fade'); hintShownAt = performance.now()
+    clearTimeout(hintT); hintT = setTimeout(hintSeen, 9000)
+  }
+  function hintSeen() {
+    const h = $('hint'); if (h.hidden) return
+    if (performance.now() - hintShownAt < 700) return
+    store.set('koma-hint', '1'); h.classList.add('fade'); setTimeout(() => { h.hidden = true }, 500)
+  }
+  new MutationObserver(() => { if (!$('touch').hidden) idleStick() }).observe($('touch'), { attributes: true, attributeFilter: ['hidden'] })
+  addEventListener('resize', () => { if (!$('touch').hidden && sid === null) idleStick() })
+
+  // ---------- 確認用（?debug で手元のサーバーへ記録を送る） ----------
+  if (DEBUG) {
+    const post = o => { try { fetch('/log', { method: 'POST', body: JSON.stringify(o) }) } catch (e) {} }
+    post({ t: 'boot', ua: navigator.userAgent, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, vv: window.visualViewport && visualViewport.height })
+    addEventListener('error', e => post({ t: 'error', m: e.message, f: e.filename, l: e.lineno }))
+    let fr = 0, t0 = performance.now()
+    const loop = () => { fr++; requestAnimationFrame(loop) }; requestAnimationFrame(loop)
+    setInterval(() => {
+      const now = performance.now(), f = Math.round(fr * 1000 / (now - t0)); fr = 0; t0 = now
+      const s = KB.state
+      post({ t: 'tick', screen: KB.screen, ready: KB.ready, progress, raf: f, fps: KB.fps, ph: s && s.ph, tm: s && s.tm, me: KB.me && { sp: KB.me.sp, wx: KB.me.wx, wz: KB.me.wz }, errs: window.__kbErrs.slice(-3), snd: Snd.ctx && Snd.ctx.state, played: Object.keys(Snd.played || {}).length, mem: performance.memory && performance.memory.usedJSHeapSize, res: KB.result && KB.result.win })
+    }, 2000)
+  }
+
+  show('title')
+  fightBtn()
 })()

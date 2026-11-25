@@ -1,9 +1,9 @@
 // キーボードの WASD が効くか（HTML のボタンを押した後でも）
 import { open, wait, state, send } from './lib.mjs'
-const url = process.argv[2] || 'http://localhost:5392/'
+const url = process.argv[2] || 'http://localhost:5393/'
 const { b, p, errs } = await open(url)
 await p.click('#btnPlay'); await wait(300)
-await p.click('#vsPick button[data-n="1"]'); await p.click('#btnFight'); await wait(4300)
+await p.click('#vsPick button[data-n="1"]'); await p.click('#btnFight'); await p.waitForFunction(() => window.KB.state && window.KB.state.ph === 'fight' && window.KB.state.tm > 1.5, null, { timeout: 60000 })
 const z0 = (await state(p)).k[0].wz
 await p.keyboard.down('KeyS'); await wait(1000); await p.keyboard.up('KeyS')
 const z1 = (await state(p)).k[0].wz
