@@ -10,11 +10,11 @@ public static class Arena
     public const float R = 22.5f;        // すり鉢の床の半径
     public const float LipW = 1.6f;      // 縁の幅
     public const float Edge = R + LipW;  // ここより外は奈落
-    public const float BowlH = 3.6f;
+    public const float BowlH = 4.8f;   // 2026-11-25 本人「もっと白熱する感じ」: すり鉢を深くして自然に中央でぶつかる（3.6→4.8）
     public const float LipH = 2.0f, GapLipH = 0.5f, GapHalf = 0.1f;
     public static readonly float[] GapDeg = { 0, 90, 180, 270 };
     // ジャンプ台（円い山）と、その裾の加速板（輪）
-    public static readonly float[] MoundDeg = { 45, 135, 225, 315 };
+    public static readonly float[] MoundDeg = { 45, 225 };   // 2026-11-25 本人「ジャンプ台減らして」: 4→2
     public const float MoundR = 13f, MoundBase = 3.6f, MoundH = 2.4f;
     public const float BoostR0 = MoundBase + 0.25f, BoostR1 = MoundBase + 1.55f;
     public static readonly Vector2[] Mounds = MakeRing(MoundDeg, MoundR);
@@ -52,7 +52,7 @@ public static class Arena
     public static float BaseH(float x, float z)
     {
         float r = Mathf.Sqrt(x * x + z * z);
-        if (r > Edge) return -1000f;
+        if (r > Edge || r > CollapseR) return -1000f;
         if (r <= R) return Bowl(r) - Dip(r);
         float ang = Mathf.Atan2(z, x);
         float t = Mathf.Clamp01((r - R) / 0.36f);
@@ -117,7 +117,7 @@ public static class Arena
     {
         float h = H(x, z);
         float r = Mathf.Sqrt(x * x + z * z);
-        if (r > R + 0.25f && r <= Edge + 0.6f && GapFactor(Mathf.Atan2(z, x)) < 0.5f) return Mathf.Max(h, Bowl(R) + LipH + 14f);
+        if (CollapseR >= Edge && r > R + 0.25f && r <= Edge + 0.6f && GapFactor(Mathf.Atan2(z, x)) < 0.5f) return Mathf.Max(h, Bowl(R) + LipH + 14f);
         return h;
     }
 
@@ -127,14 +127,101 @@ public static class Arena
         return new Vector2((H(x + e, z) - H(x - e, z)) / (2 * e), (H(x, z + e) - H(x, z - e)) / (2 * e));
     }
 
+    // ---------- 最終局面: 外から床が崩れ落ちる ----------
+    // 2026-11-25 本人「もっと白熱する感じ」→「終盤を盛り上げる」: 外周を輪ごとに落として、最後は中央の半径 KeepR だけ残す
+    public const float KeepR = 9.2f;
+    static readonly float[] RingR = { KeepR, 12.2f, 15.2f, 18.2f, 21.2f, Edge };
+    public static float CollapseR = 1e9f;   // ここより外は奈落（物理）
+    public static float SafeR = 1e9f;       // 次に落ちる線（CPU はここより内にいたがる）
+    class Piece { public GameObject go; public int ring; public Vector3 center, vel, spin; public float delay; public bool falling; }
+    static readonly List<Piece> pieces = new List<Piece>();
+    static GameObject warnRing, baseObj;
+    static float colT = -1; static int nextRing;
+    const float WarnSec = 2.6f, RingGap = 2.6f;
+
+    public static void ResetCollapse()
+    {
+        CollapseR = 1e9f; SafeR = 1e9f; colT = -1; nextRing = RingR.Length - 2;
+        foreach (var p in pieces) { p.go.SetActive(true); p.go.transform.localPosition = Vector3.zero; p.go.transform.localRotation = Quaternion.identity; p.falling = false; p.vel = Vector3.zero; }
+        if (warnRing) warnRing.SetActive(false);
+        if (baseObj) baseObj.SetActive(true);
+    }
+
+    public static void StartCollapse() { if (colT < 0) { colT = 0; nextRing = RingR.Length - 2; } }
+    public static bool Collapsing => colT >= 0;
+
+    // 戻り値: この呼び出しで輪が落ち始めたら true（揺れ・音用）
+    public static bool UpdateCollapse(float dt)
+    {
+        bool dropped = false;
+        if (colT >= 0)
+        {
+            colT += dt;
+            if (nextRing >= 0)
+            {
+                float ri = RingR[nextRing];
+                float dropAt = WarnSec + (RingR.Length - 2 - nextRing) * RingGap;
+                SafeR = ri;
+                // 次に落ちる線を赤く点滅
+                warnRing.SetActive(true);
+                warnRing.transform.localPosition = new Vector3(0, Bowl(ri) + 0.07f, 0);
+                warnRing.transform.localScale = new Vector3(ri, 1, ri);
+                float left = dropAt - colT;
+                float blink = 0.5f + 0.5f * Mathf.Sin(colT * (left < 1.2f ? 26f : 12f));
+                warnRing.GetComponent<MeshRenderer>().sharedMaterial.SetColor("_TintColor", new Color(1f, 0.15f, 0.08f, 1f) * (0.35f + 0.65f * blink));
+                // 落ちる直前の輪は小刻みに震える
+                foreach (var p in pieces) if (p.ring == nextRing && !p.falling)
+                    p.go.transform.localPosition = left < 1.2f ? Random.insideUnitSphere * 0.05f : Vector3.zero;
+                if (colT >= dropAt)
+                {
+                    foreach (var p in pieces) if (p.ring == nextRing)
+                    {
+                        p.falling = true; p.delay = Random.Range(0f, 0.35f);
+                        p.vel = new Vector3(0, Random.Range(-1f, 1f), 0) + p.center.normalized * Random.Range(0.5f, 2f);
+                        p.spin = new Vector3(Random.Range(-60f, 60f), Random.Range(-20f, 20f), Random.Range(-60f, 60f));
+                    }
+                    CollapseR = ri;
+                    if (baseObj) baseObj.SetActive(false);
+                    nextRing--; dropped = true;
+                    if (nextRing < 0) { warnRing.SetActive(false); SafeR = KeepR; }
+                }
+            }
+        }
+        foreach (var p in pieces)
+        {
+            if (!p.falling || !p.go.activeSelf) continue;
+            if (p.delay > 0) { p.delay -= dt; continue; }
+            p.vel.y -= 26f * dt;
+            var t = p.go.transform;
+            t.localPosition += p.vel * dt;
+            t.RotateAround(t.TransformPoint(p.center), p.spin.normalized, p.spin.magnitude * dt);
+            if (t.localPosition.y < -60f) p.go.SetActive(false);
+        }
+        return dropped;
+    }
+
     // ---------- 見た目 ----------
     public static GameObject BuildVisual(Materials m)
     {
         var root = new GameObject("Arena");
-        var floor = MeshKit.Obj("Floor", root.transform, FloorMesh(), m.Floor);
+        // 床: 崩れない中央と、最終局面で外から崩れ落ちる輪（1周を8つに分けた破片）
+        var floor = MeshKit.Obj("Floor", root.transform, FloorMesh(0, KeepR, 0, Mathf.PI * 2), m.Floor);
         floor.GetComponent<MeshRenderer>().receiveShadows = true;
+        pieces.Clear();
+        for (int ri = 0; ri < RingR.Length - 1; ri++)
+            for (int sg = 0; sg < 8; sg++)
+            {
+                float a0 = sg * Mathf.PI / 4, a1 = a0 + Mathf.PI / 4;
+                var go = MeshKit.Obj("FloorPiece", root.transform, FloorMesh(RingR[ri], RingR[ri + 1], a0, a1), m.Floor);
+                go.GetComponent<MeshRenderer>().receiveShadows = true;
+                pieces.Add(new Piece { go = go, ring = ri, center = new Vector3(Mathf.Cos((a0 + a1) / 2), 0, Mathf.Sin((a0 + a1) / 2)) * (RingR[ri] + RingR[ri + 1]) / 2 });
+            }
+        warnRing = MeshKit.Obj("WarnRing", root.transform, MeshKit.Ring(0.985f, 1.03f, 160), m.Warn);
+        warnRing.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        warnRing.SetActive(false);
         var basePlate = MeshKit.Obj("Base", root.transform, MeshKit.Frustum(Edge + 4f, Edge + 2.2f, 3.4f, 128, true), m.Base);
         basePlate.transform.localPosition = new Vector3(0, -6.4f, 0);
+        baseObj = basePlate;
         foreach (var d in ArcDeg) MeshKit.Obj("Arc", root.transform, ArcMesh(d), m.Arc);
         foreach (var p in Pads)
         {
@@ -180,17 +267,20 @@ public static class Arena
         return m;
     }
 
-    static Mesh FloorMesh()
+    static Mesh FloorMesh(float rMin, float rMax, float aMin, float aMax)
     {
-        int seg = 288;
-        var rings = new List<float>();
-        for (float r = 0; r < R - 0.01f; r += 0.4f) rings.Add(r);
-        rings.Add(R); rings.Add(R + 0.09f); rings.Add(R + 0.18f); rings.Add(R + 0.27f); rings.Add(R + 0.36f); rings.Add(R + 1f); rings.Add(Edge);
+        int seg = Mathf.Max(8, Mathf.RoundToInt(288 * (aMax - aMin) / (Mathf.PI * 2)));
+        var all = new List<float>();
+        for (float r = 0; r < R - 0.01f; r += 0.4f) all.Add(r);
+        all.Add(R); all.Add(R + 0.09f); all.Add(R + 0.18f); all.Add(R + 0.27f); all.Add(R + 0.36f); all.Add(R + 1f); all.Add(Edge);
+        var rings = new List<float> { rMin };
+        foreach (var r in all) if (r > rMin + 0.01f && r < rMax - 0.01f) rings.Add(r);
+        rings.Add(rMax);
         var v = new List<Vector3>(); var uv = new List<Vector2>(); var t = new List<int>();
         for (int i = 0; i < rings.Count; i++)
             for (int j = 0; j <= seg; j++)
             {
-                float a = j * Mathf.PI * 2 / seg, r = rings[i];
+                float a = aMin + j * (aMax - aMin) / seg, r = rings[i];
                 float x = Mathf.Cos(a) * r, z = Mathf.Sin(a) * r;
                 v.Add(new Vector3(x, FloorH(x * 0.99999f, z * 0.99999f), z));
                 uv.Add(new Vector2(x / (2 * Edge) + 0.5f, z / (2 * Edge) + 0.5f));
@@ -202,19 +292,22 @@ public static class Arena
                 int a = i * W + j, b = a + 1, c = a + W, d = c + 1;
                 t.Add(a); t.Add(b); t.Add(c); t.Add(b); t.Add(d); t.Add(c);
             }
-        int top0 = v.Count;
-        Vector2 wuv = new Vector2((R + 0.7f) / (2 * Edge) + 0.5f, 0.5f);
-        for (int j = 0; j <= seg; j++)
+        if (rMax >= Edge - 0.01f)
         {
-            float a = j * Mathf.PI * 2 / seg;
-            float x = Mathf.Cos(a) * Edge, z = Mathf.Sin(a) * Edge;
-            v.Add(new Vector3(x, BaseH(x * 0.9999f, z * 0.9999f), z)); uv.Add(wuv);
-            v.Add(new Vector3(x * 1.03f, -3.4f, z * 1.03f)); uv.Add(wuv);
-        }
-        for (int j = 0; j < seg; j++)
-        {
-            int a = top0 + j * 2, b = a + 1, c = a + 2, d = a + 3;
-            t.Add(a); t.Add(b); t.Add(c); t.Add(b); t.Add(d); t.Add(c);
+            int top0 = v.Count;
+            Vector2 wuv = new Vector2((R + 0.7f) / (2 * Edge) + 0.5f, 0.5f);
+            for (int j = 0; j <= seg; j++)
+            {
+                float a = aMin + j * (aMax - aMin) / seg;
+                float x = Mathf.Cos(a) * Edge, z = Mathf.Sin(a) * Edge;
+                v.Add(new Vector3(x, BaseH(x * 0.9999f, z * 0.9999f), z)); uv.Add(wuv);
+                v.Add(new Vector3(x * 1.03f, -3.4f, z * 1.03f)); uv.Add(wuv);
+            }
+            for (int j = 0; j < seg; j++)
+            {
+                int a = top0 + j * 2, b = a + 1, c = a + 2, d = a + 3;
+                t.Add(a); t.Add(b); t.Add(c); t.Add(b); t.Add(d); t.Add(c);
+            }
         }
         var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
         mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(t, 0);

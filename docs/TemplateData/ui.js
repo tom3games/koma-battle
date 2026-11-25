@@ -156,7 +156,9 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         break
       case 'hit': {
         const big = m.big, air = m.air
-        Snd.play(big ? 'clang' : 'hit', { vol: Math.min(1, 0.45 + m.p / 25) })
+        // 2026-11-25「当たりの手応え」: 低めに鳴らして重く、強い当たりは金属音を重ねる
+        Snd.play('hit', { vol: Math.min(1, 0.5 + m.p / 20), rate: big ? 0.8 : 0.9 })
+        if (big || m.vn > 14) Snd.play('clang', { vol: Math.min(1, 0.4 + m.p / 22), rate: 0.85 })
         if (air) { lines(m.x, m.y, 1); onoma('ドゴォッ', m.x, m.y); flash(); Snd.duck(0.5, 0.8) }
         else if (big) { lines(m.x, m.y, 0.7); onoma('ガギィン', m.x, m.y) }
         break
@@ -174,7 +176,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         Snd.play('down', { vol: m.i === 0 ? 1 : 0.7 })
         onoma(m.why === 'out' ? '場外' : 'ダウン', m.x, Math.max(0.25, m.y))
         break
-      case 'sudden': $('sudden').hidden = false; break
+      case 'sudden': $('sudden').hidden = false; Snd.play('down', { vol: 0.6, rate: 0.7 }); Snd.rate('bgm', 1.12); break
+      case 'collapse': Snd.play('down', { vol: 0.9, rate: 0.6 }); Snd.play('boom', { vol: 0.7, rate: 0.7 }); break
       case 'end': result(m); break
     }
   }

@@ -7,7 +7,7 @@ using UnityEngine;
 public class Materials
 {
     Material std, stdE, vtx, add, alpha;
-    public Material Floor, Base, Arc, Pad, PadSlot, Boost, Sky, Line, Stands, Truss;
+    public Material Floor, Base, Arc, Pad, PadSlot, Boost, Sky, Line, Stands, Truss, Warn;
     public Texture2D Dot, Streak, Brushed, Worn, Chevron, Funnel;
 
     public Materials()
@@ -28,6 +28,7 @@ public class Materials
         Arc = Lit(Color.white, 0.55f, 0.7f, ArcTex());
         Pad = Lit(new Color(0.32f, 0.34f, 0.37f), 0.7f, 0.9f, Brushed);
         PadSlot = AddGlow(new Color(0.35f, 0.9f, 1f, 1f));
+        Warn = AddGlow(new Color(1f, 0.15f, 0.08f, 1f));
         Boost = AddGlow(new Color(1f, 0.6f, 0.2f, 0.8f), Chevron);
         Sky = new Material(vtx);
         Line = new Material(add) { mainTexture = Dot };

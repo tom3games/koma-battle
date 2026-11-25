@@ -80,6 +80,7 @@ const Snd = {
     }
     if (!this.bufs[url]) this.load(); start()
   },
+  rate(slot, r) { const l = this.loops[slot]; if (l && l.node && this.ctx) l.node.playbackRate.setTargetAtTime(r, this.ctx.currentTime, 0.4) },
   duck(to = 0.4, sec = 1) { if (!this.ctx) return; const g = this.bed.gain, t = this.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(to, t + 0.08); g.linearRampToValueAtTime(1, t + sec) },
   level() { if (!this.an) return 0; const d = new Float32Array(this.an.fftSize); this.an.getFloatTimeDomainData(d); let m = 0; for (const v of d) m = Math.max(m, Math.abs(v)); return m },
 }
