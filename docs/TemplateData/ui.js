@@ -1,5 +1,6 @@
 // 画面（HTML）側: 読み込み・タイトル・パーツ選び・HUD・スマホの操作・演出・音・結果。3D と物理は Unity 側
 window.__jsUp = true
+const UI_V = (() => { try { return new URL(document.currentScript.src).searchParams.get('v') } catch (e) { return '' } })()
 ;(() => {
   const $ = id => document.getElementById(id)
   const SLOTS = [
@@ -96,11 +97,14 @@ window.__jsUp = true
 
   const canvas = $('unity-canvas')
   const B = window.KB_BUILD
+  // 2026-11-25 本人「準備中100%から動かない」: Build/ のファイル名は毎回同じなので、前の版がブラウザに残って新しい版と混ざった。
+  // ui.js と同じ版の番号（index.html の ?v=）を付けて、版ごとに必ず取り直す
+  const BV = '?v=' + (UI_V || Date.now())
   const loaderScript = document.createElement('script')
-  loaderScript.src = B.loader
+  loaderScript.src = B.loader + BV
   loaderScript.onload = () => {
     createUnityInstance(canvas, {
-      dataUrl: B.data, frameworkUrl: B.framework, codeUrl: B.code,
+      dataUrl: B.data + BV, frameworkUrl: B.framework + BV, codeUrl: B.code + BV,
       streamingAssetsUrl: 'StreamingAssets', companyName: B.company, productName: B.product, productVersion: B.version,
       // スマホは描く量を抑える（画素の倍率を下げる）
       devicePixelRatio: isTouch ? Math.min(window.devicePixelRatio || 1, 1.5) : Math.min(window.devicePixelRatio || 1, 1.25),
