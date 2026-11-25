@@ -34,7 +34,7 @@ const Snd = {
     const urls = new Set(Object.values(this.files).flat().concat(Object.values(this.loops).filter(Boolean).map(l => l.url)))
     await Promise.all([...urls].filter(u => u && !this.bufs[u]).map(async u => {
       this.bufs[u] = 'loading'
-      try { const ab = await (await fetch(u)).arrayBuffer(); this.bufs[u] = await new Promise((ok, ng) => this.ctx.decodeAudioData(ab, ok, ng)) } catch (e) { delete this.bufs[u] }   // 古い Safari はコールバック形しか無い
+      try { const res = await fetch(u); if (!res.ok) throw new Error('fetch ' + res.status); const ab = await res.arrayBuffer(); this.bufs[u] = await new Promise((ok, ng) => { const pr = this.ctx.decodeAudioData(ab, ok, ng); if (pr && pr.catch) pr.catch(ng) }) } catch (e) { delete this.bufs[u] }   // 古い Safari はコールバック形しか無い
     }))
   },
   setMute(m) { this.muted = m; if (this.master) this.master.gain.value = m || this.away ? 0 : 0.9 },
