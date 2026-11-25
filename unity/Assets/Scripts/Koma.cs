@@ -51,7 +51,7 @@ public class Koma
     public Vector3 pos, vel;
     public bool grounded, alive = true, down;
     public float spin, spinMax, gauge;
-    public float dashCd, dashT, airDashUsed, padCd, boostCd, hitFlash;
+    public float dashCd, dashT, lockT, airDashUsed, padCd, boostCd, hitFlash;
     public float specialT; public int specialPhase; public Vector3 specialTarget; public int rushLeft;
     public float shieldT, tornadoT;
     public string koWhy = "";

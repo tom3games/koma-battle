@@ -159,6 +159,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         // 2026-11-25「当たりの手応え」: 低めに鳴らして重く、強い当たりは金属音を重ねる
         Snd.play('hit', { vol: Math.min(1, 0.5 + m.p / 20), rate: big ? 0.8 : 0.9 })
         if (big || m.vn > 14) Snd.play('clang', { vol: Math.min(1, 0.4 + m.p / 22), rate: 0.85 })
+        // 自分の当て方・当てられ方だけ出す
+        { const mine = m.a === 0 ? m.ka : m.b === 0 ? m.kb : 0, his = m.a === 0 ? m.kb : m.b === 0 ? m.ka : 0
+          const dm = m.a === 0 ? m.db : m.da, dh = m.a === 0 ? m.da : m.db   // 与えた・受けた
+          if (!air && (m.a === 0 || m.b === 0)) { if (mine === 4 || mine === 3 || mine === 2) angTag(['', '', '芯', '横', '背後'][mine], m.x, m.y, 'good k' + mine); else if (his === 4 && dh > dm) angTag('背後をとられた', m.x, m.y, 'bad'); else if (mine === 1 && his !== 1) angTag('かすり', m.x, m.y, 'weak') } }
         if (air) { lines(m.x, m.y, 1); onoma('ドゴォッ', m.x, m.y); flash(); Snd.duck(0.5, 0.8) }
         else if (big) { lines(m.x, m.y, 0.7); onoma('ガギィン', m.x, m.y) }
         break
@@ -322,6 +326,12 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     o.style.top = Math.min(80, Math.max(20, (1 - y) * 100 - 8)) + '%'
     o.classList.remove('on'); void o.offsetWidth; o.classList.add('on')
   }
+  function angTag(text, x, y, cls) {
+    const o = $('angTag'); o.textContent = text
+    o.style.left = Math.min(82, Math.max(18, x * 100)) + '%'
+    o.style.top = Math.min(82, Math.max(16, (1 - y) * 100 + 9)) + '%'
+    o.className = cls; void o.offsetWidth; o.classList.add('on')
+  }
   function banner(i, kind) {
     const b = $('banner')
     b.querySelector('span').textContent = SPECIALS[kind | 0] || SPECIALS[0]
@@ -378,7 +388,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   const arrow = $('flickArrow'), faLine = $('faLine'), faDot = $('faDot'), faOrigin = $('faOrigin')
   let sid = null, sx = 0, sy = 0
   let cid = null, cx = 0, cy = 0, tx0 = 0, ty0 = 0
-  let fid = null, fx = 0, fy = 0, fdx = 0, fdy = 0, lastFlick = null, aiming = false
+  let fid = null, fx = 0, fy = 0, fdx = 0, fdy = 0, fmax = 0, lastFlick = null, aiming = false
   // 通知・タブ切替・ツールバーで指の離しが届かなかった時も、入力を残さない
   const dropTouch = () => resetTouch()
   addEventListener('blur', dropTouch); addEventListener('pagehide', dropTouch)
@@ -426,6 +436,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   zf.addEventListener('pointerdown', e => {
     e.preventDefault(); Snd.init(); hintSeen()
     fid = e.pointerId; { const z = zf.getBoundingClientRect(); fx = z.left + z.width / 2; fy = z.top + z.height / 2 } fdx = e.clientX - fx; fdy = e.clientY - fy; if (Math.hypot(fdx, fdy) < 34) fdx = fdy = 0
+    else { const l = Math.hypot(fdx, fdy); send(`aimdir|${(fdx / l).toFixed(3)},${(-fdy / l).toFixed(3)}`); aiming = true }   // 端を押したら、その向きの矢印をすぐ出す
+    fmax = 0
     tx0 = e.clientX; ty0 = e.clientY
     drawArrow(); arrow.classList.add('on')
     try { zf.setPointerCapture(e.pointerId) } catch (err) {}
@@ -434,19 +446,20 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (e.pointerId !== fid) return
     fdx = e.clientX - fx; fdy = e.clientY - fy
     drawArrow()
-    const len = Math.hypot(fdx, fdy)
+    const len = Math.hypot(fdx, fdy); fmax = Math.max(fmax, Math.hypot(e.clientX - tx0, e.clientY - ty0))
     if (len >= FLICK_MIN) { send(`aimdir|${(fdx / len).toFixed(3)},${(-fdy / len).toFixed(3)}`); aiming = true }
     else if (aiming) { send('aimoff'); aiming = false }
   })
   const endFlick = (e, cancel) => {
     if (e.pointerId !== fid) return
     fid = null; aiming = false; arrow.classList.remove('on')
-    const tap = Math.hypot(e.clientX - tx0, e.clientY - ty0) < 10
+    const tap = fmax < 10 && Math.hypot(fdx, fdy) < 34   // 真ん中を軽く押しただけ
     const len = Math.hypot(fdx, fdy)
     const ux = fdx, uy = fdy; fdx = fdy = 0; drawArrow(); fdx = ux; fdy = uy
     if (cancel) { send('aimoff'); return }
     if (len >= FLICK_MIN && !tap) { lastFlick = { x: fdx / len, y: -fdy / len, t: performance.now() }; send(`dashdir|${(fdx / len).toFixed(3)},${(-fdy / len).toFixed(3)}`) }
-    else send('dashdir|0,0')
+    else if (tap) send('dashdir|0,0')   // 真ん中のタップは近い相手へ
+    else send('aimoff')                 // 倒してから真ん中へ戻して離したら、やめる
   }
   zf.addEventListener('pointerup', e => endFlick(e, false)); zf.addEventListener('pointercancel', e => endFlick(e, true))
   // 視点: スティックの外をなぞる
