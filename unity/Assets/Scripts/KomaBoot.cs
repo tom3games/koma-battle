@@ -203,6 +203,8 @@ public class KomaBoot : MonoBehaviour
             case "look":
                 if (mouseLook) { camYaw += N(0) * 0.0032f; camElev = Mathf.Clamp(camElev + N(1) * 0.0026f, 0.1f, 0.95f); }
                 break;
+            // スマホ: 画面のなぞりで視点を回す。なぞっている間と直後は、進む向きへの自動の追従を止める
+            case "tlook": camYaw += N(0) * 0.0075f; camElev = Mathf.Clamp(camElev + N(1) * 0.005f, 0.1f, 0.95f); touchLookT = 1.6f; break;
             case "aimdir": touchAimOn = true; touchAimDir = new Vector2(N(0), N(1)); break;
             case "aimoff": touchAimOn = false; break;
             case "dashdir":
@@ -329,11 +331,11 @@ public class KomaBoot : MonoBehaviour
 
         // fight / end
         if (phase == "fight") fightT += dt;
-        // 最終局面: 60秒たつか、4人の試合で残り2人になったら外から床が崩れる
+        // 最終局面: 100秒たつか、4人の試合で50秒を過ぎて残り2人になったら外から床が崩れる
         if (phase == "fight" && !sudden)
         {
             int act = 0, alv = 0; foreach (var k in komas) if (k.root.activeSelf) { act++; if (k.alive) alv++; }
-            if (fightT > 60f || (act >= 4 && alv <= 2 && fightT > 12f)) { sudden = true; Arena.StartCollapse(); Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
+            if (fightT > 100f || (act >= 4 && alv <= 2 && fightT > 50f)) { sudden = true; Arena.StartCollapse(); Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
         }
         if (phase == "fight" || phase == "end")
         {
@@ -407,7 +409,7 @@ public class KomaBoot : MonoBehaviour
             UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
-                k.spin -= (1.3f * k.st.decay + (sudden ? 3f : 0f)) * dt;
+                k.spin -= (0.75f * k.st.decay + (sudden ? 1.2f : 0f)) * dt;
                 k.gauge = Mathf.Min(100f, k.gauge + 2.2f * k.st.gaugeRate * dt);
                 if (k.spin <= 0) { k.spin = 0; KO(k, "spin"); }
             }
@@ -555,7 +557,7 @@ public class KomaBoot : MonoBehaviour
             float sp = 19f * k.st.speed;
             k.vel = new Vector3(dir.x * sp + k.vel.x * 0.25f, k.vel.y, dir.z * sp + k.vel.z * 0.25f);
             k.dashT = 0.32f; k.dashCd = DashCdBase * k.st.dashCd;
-            k.spin -= 2.5f; k.dashes++; k.lossDash += 2.5f;
+            k.spin -= 1.2f; k.dashes++; k.lossDash += 1.2f;
             EmitEv("dash", k, 0);
             Dust(k.pos, 10);
         }
@@ -576,7 +578,7 @@ public class KomaBoot : MonoBehaviour
                 Vector3 dd = o.pos - aim; dd.y = 0;
                 if (dd.sqrMagnitude < bd) { bd = dd.sqrMagnitude; k.diveTarget = o.idx; }
             }
-            k.dashT = 0.5f; k.dashCd = DashCdBase * k.st.dashCd; k.spin -= 3f; k.dashes++; k.lossDash += 3f;
+            k.dashT = 0.5f; k.dashCd = DashCdBase * k.st.dashCd; k.spin -= 1.4f; k.dashes++; k.lossDash += 1.4f;
             EmitEv("dive", k, 0);
         }
     }
@@ -866,15 +868,16 @@ public class KomaBoot : MonoBehaviour
         Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
     }
 
+    const float HitScale = 0.42f;   // 当たりで減る量。試合の長さはここで決まる
     void Damage(Koma from, Koma to, float dmg)
     {
         if (phase == "end") return;
-        if (to.shieldT > 0) dmg *= 0.2f;
+        dmg *= HitScale; if (to.shieldT > 0) dmg *= 0.2f;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
         if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);
         from.dealt += dmg;
-        from.gauge = Mathf.Min(100f, from.gauge + dmg * 0.8f * from.st.gaugeRate);
-        to.gauge = Mathf.Min(100f, to.gauge + dmg * 0.6f * to.st.gaugeRate);
+        from.gauge = Mathf.Min(100f, from.gauge + dmg * 1.5f * from.st.gaugeRate);
+        to.gauge = Mathf.Min(100f, to.gauge + dmg * 1.1f * to.st.gaugeRate);
         if (to.spin <= 0) { to.spin = 0; KO(to, "spin"); }
     }
 
@@ -1027,7 +1030,7 @@ public class KomaBoot : MonoBehaviour
     }
 
     Vector3 camVel, camLook;
-    float camYaw, camElev = 0.43f, fovKick, camFov = 60f; bool camInit, mouseLook, sprint;
+    float camYaw, camElev = 0.43f, fovKick, camFov = 60f; bool camInit, mouseLook, sprint; float touchLookT;
     // 操作の向きをカメラ基準にする（上＝カメラの向いている前）
     Vector2 CamRel(Vector2 v)
     {
@@ -1051,6 +1054,7 @@ public class KomaBoot : MonoBehaviour
             camYaw = toC.sqrMagnitude > 0.01f ? Mathf.Atan2(toC.x, toC.y) : 0f;
             camVel = Vector3.zero;
         }
+        else if (touchLookT > 0) touchLookT -= realDt;
         else if (phase == "fight" && !mouseLook && hv.magnitude > 2.5f)
         {
             float want = Mathf.Atan2(hv.x, hv.y);

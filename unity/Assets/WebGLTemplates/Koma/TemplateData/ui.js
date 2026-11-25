@@ -372,10 +372,12 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   $('btnMute').onclick = () => { muted = !muted; Snd.init(); applyMute(); store.set('koma-mute', muted ? '1' : '0') }
 
   // ---------- スマホの操作 ----------
-  // 左: 触った所が中心になる浮くスティック。右: はじいた向きへダッシュ（空中なら急降下）。タップだけなら近くの相手へ。星のボタンで必殺
+  // 2026-11-26 本人「右スティックも固定して、カメラのスワイプできるように」: 左右とも場所を固定。左で動く。右は倒して離すとその向きへダッシュ（空中なら急降下）、タップだけなら近くの相手へ。
+  // スティックの外をなぞると視点が回る。星のボタンで必殺
   const stick = $('stick'), knob = stick.querySelector('i')
   const arrow = $('flickArrow'), faLine = $('faLine'), faDot = $('faDot'), faOrigin = $('faOrigin')
   let sid = null, sx = 0, sy = 0
+  let cid = null, cx = 0, cy = 0, tx0 = 0, ty0 = 0
   let fid = null, fx = 0, fy = 0, fdx = 0, fdy = 0, lastFlick = null, aiming = false
   // 通知・タブ切替・ツールバーで指の離しが届かなかった時も、入力を残さない
   const dropTouch = () => resetTouch()
@@ -384,29 +386,31 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   const STICK_R = 50, FLICK_MIN = 22, FLICK_MAX = 70
   function idleStick() {
     const z = $('stickZone').getBoundingClientRect()
-    stick.style.transform = `translate(${z.left + z.width * 0.4}px,${z.top + z.height * 0.62}px)`
+    stick.style.transform = `translate(${z.left + z.width / 2}px,${z.top + z.height / 2}px)`
+    { const f = $('flickZone').getBoundingClientRect(); fx = f.left + f.width / 2; fy = f.top + f.height / 2; if (fid === null) { fdx = fdy = 0; drawArrow() } }
     stick.className = 'idle'; knob.style.transform = ''
   }
   function resetTouch() {
     if (sid !== null) send('move|0,0')
     if (fid !== null) send('aimoff')
-    sid = null; fid = null; arrow.classList.remove('on'); if (!$('touch').hidden) idleStick()
+    sid = null; fid = null; cid = null; arrow.classList.remove('on'); if (!$('touch').hidden) idleStick()
   }
   const zs = $('stickZone'), zf = $('flickZone')
   zs.addEventListener('pointerdown', e => {
     e.preventDefault(); Snd.init(); hintSeen()   // 前の指の離しが届いていなくても、新しい指で上書きする
-    sid = e.pointerId; sx = e.clientX; sy = e.clientY
-    stick.style.transform = `translate(${sx}px,${sy}px)`; stick.className = 'on'; knob.style.transform = ''
+    sid = e.pointerId; { const z = zs.getBoundingClientRect(); sx = z.left + z.width / 2; sy = z.top + z.height / 2 }
+    stick.className = 'on'; moveStick(e)
     try { zs.setPointerCapture(e.pointerId) } catch (err) {}
   })
-  zs.addEventListener('pointermove', e => {
+  const moveStick = e => {
     if (e.pointerId !== sid) return
     let dx = e.clientX - sx, dy = e.clientY - sy
     const len = Math.hypot(dx, dy)
     if (len > STICK_R) { dx = dx / len * STICK_R; dy = dy / len * STICK_R }
     knob.style.transform = `translate(${dx}px,${dy}px)`
     send(`move|${(dx / STICK_R).toFixed(2)},${(-dy / STICK_R).toFixed(2)}`)
-  })
+  }
+  zs.addEventListener('pointermove', moveStick)
   const endStick = e => { if (e.pointerId !== sid) return; sid = null; send('move|0,0'); idleStick() }
   zs.addEventListener('pointerup', endStick); zs.addEventListener('pointercancel', endStick)
 
@@ -421,7 +425,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   }
   zf.addEventListener('pointerdown', e => {
     e.preventDefault(); Snd.init(); hintSeen()
-    fid = e.pointerId; fx = e.clientX; fy = e.clientY; fdx = 0; fdy = 0
+    fid = e.pointerId; { const z = zf.getBoundingClientRect(); fx = z.left + z.width / 2; fy = z.top + z.height / 2 } fdx = e.clientX - fx; fdy = e.clientY - fy; if (Math.hypot(fdx, fdy) < 34) fdx = fdy = 0
+    tx0 = e.clientX; ty0 = e.clientY
     drawArrow(); arrow.classList.add('on')
     try { zf.setPointerCapture(e.pointerId) } catch (err) {}
   })
@@ -436,12 +441,20 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   const endFlick = (e, cancel) => {
     if (e.pointerId !== fid) return
     fid = null; aiming = false; arrow.classList.remove('on')
+    const tap = Math.hypot(e.clientX - tx0, e.clientY - ty0) < 10
     const len = Math.hypot(fdx, fdy)
+    const ux = fdx, uy = fdy; fdx = fdy = 0; drawArrow(); fdx = ux; fdy = uy
     if (cancel) { send('aimoff'); return }
-    if (len >= FLICK_MIN) { lastFlick = { x: fdx / len, y: -fdy / len, t: performance.now() }; send(`dashdir|${(fdx / len).toFixed(3)},${(-fdy / len).toFixed(3)}`) }
+    if (len >= FLICK_MIN && !tap) { lastFlick = { x: fdx / len, y: -fdy / len, t: performance.now() }; send(`dashdir|${(fdx / len).toFixed(3)},${(-fdy / len).toFixed(3)}`) }
     else send('dashdir|0,0')
   }
   zf.addEventListener('pointerup', e => endFlick(e, false)); zf.addEventListener('pointercancel', e => endFlick(e, true))
+  // 視点: スティックの外をなぞる
+  const zc = $('camZone')
+  zc.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); hintSeen(); cid = e.pointerId; cx = e.clientX; cy = e.clientY; try { zc.setPointerCapture(e.pointerId) } catch (err) {} })
+  zc.addEventListener('pointermove', e => { if (e.pointerId !== cid) return; send(`tlook|${(e.clientX - cx).toFixed(1)},${(e.clientY - cy).toFixed(1)}`); cx = e.clientX; cy = e.clientY })
+  const endCam = e => { if (e.pointerId === cid) cid = null }
+  zc.addEventListener('pointerup', endCam); zc.addEventListener('pointercancel', endCam)
   const spb = $('tSpBtn')
   spb.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation(); hintSeen()

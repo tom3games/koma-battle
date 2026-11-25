@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@500;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="TemplateData/ui.css?v=11">
+<link rel="stylesheet" href="TemplateData/ui.css?v=10">
 </head>
 <body>
 <canvas id="unity-canvas" tabindex="-1"></canvas>
@@ -83,6 +83,7 @@
 </div>
 
 <div id="touch" hidden>
+  <div id="camZone"></div>
   <div id="stickZone"></div>
   <div id="flickZone"></div>
   <div id="stick"><i></i></div>
@@ -91,8 +92,8 @@
 </div>
 
 <div id="hint" hidden>
-  <div class="h-l"><div class="h-ring"><i></i></div><b>左で動く</b><small>触った所が中心</small></div>
-  <div class="h-r"><div class="h-flick"><i></i></div><b>右ではじいてダッシュ</b><small>空中なら上から急降下</small></div>
+  <div class="h-l"><div class="h-ring"><i></i></div><b>左で動く</b><small>外をなぞると視点</small></div>
+  <div class="h-r"><div class="h-flick"><i></i></div><b>右を倒して離すとダッシュ</b><small>空中なら上から急降下</small></div>
   <div class="h-s"><b>星が光ったら必殺</b></div>
 </div>
 
@@ -144,7 +145,7 @@
 })();
 window.KB_BUILD = { loader: "Build/docs.loader.js", data: "Build/docs.data.unityweb", framework: "Build/docs.framework.js.unityweb", code: "Build/docs.wasm.unityweb", company: "tom3games", product: "GYRO RAGNAROK", version: "1.0" };
 </script>
-<script src="TemplateData/sfx.js?v=11"></script>
-<script src="TemplateData/ui.js?v=11"></script>
+<script src="TemplateData/sfx.js?v=10"></script>
+<script src="TemplateData/ui.js?v=10"></script>
 </body>
 </html>

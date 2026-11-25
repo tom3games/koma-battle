@@ -19,8 +19,8 @@ for (const [W, H] of sizes) {
   await wait(3000)
   // ボット: 左の親指で相手へ寄り、右の親指で相手の向きへはじく
   const zs = await p.locator('#stickZone').boundingBox(), zf = await p.locator('#flickZone').boundingBox()
-  const scx = zs.x + zs.width * 0.45, scy = zs.y + zs.height * 0.6
-  const fcx = zf.x + zf.width * 0.5, fcy = zf.y + zf.height * 0.6
+  const scx = zs.x + zs.width * 0.5, scy = zs.y + zs.height * 0.5
+  const fcx = zf.x + zf.width * 0.5, fcy = zf.y + zf.height * 0.5
   await p.evaluate(() => { window.__sends = {}; const o = window.unityInstance.SendMessage.bind(window.unityInstance); window.unityInstance.SendMessage = (a, b2, c) => { const k = String(c).split('|')[0]; window.__sends[k] = (window.__sends[k] || 0) + 1; return o(a, b2, c) } })
   await T('touchStart', 1, scx, scy)
   const t0 = Date.now(); let res = null, flicks = 0, specials = 0, shotN = 0

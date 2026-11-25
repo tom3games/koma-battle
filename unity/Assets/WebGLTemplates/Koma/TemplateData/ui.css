@@ -115,17 +115,21 @@ button{font-family:inherit;touch-action:manipulation;cursor:pointer;-webkit-tap-
 
 /* スマホの操作 */
 #touch{position:fixed;inset:0;z-index:7}
-#stickZone,#flickZone{position:absolute;top:calc(56px + var(--st));bottom:0;touch-action:none}
-#stickZone{left:0;width:50%}
-#flickZone{right:0;width:50%}
+#camZone{position:absolute;left:0;right:0;top:calc(56px + var(--st));bottom:0;touch-action:none}
+#stickZone,#flickZone{position:absolute;bottom:calc(26px + var(--sb));width:168px;height:168px;border-radius:50%;touch-action:none}
+#stickZone{left:calc(10px + var(--sl,0px))}
+#flickZone{right:calc(10px + var(--sr))}
 #stick{position:absolute;left:0;top:0;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(14,16,36,.32);opacity:0;transition:opacity .15s;pointer-events:none}
 #stick.on{opacity:1}
 #stick i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(255,255,255,.9)}
-#stick.idle{opacity:.35}
+#stick.idle{opacity:.6}
 #flickArrow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 #flickArrow line{stroke:rgba(255,255,255,.75);stroke-width:4;stroke-linecap:round;opacity:0}
 #flickArrow circle{fill:none;stroke:rgba(255,255,255,.6);stroke-width:3;opacity:0}
 #faDot{fill:rgba(217,164,65,.95)!important;stroke:#fff!important}
+#faOrigin{r:60px;fill:rgba(14,16,36,.32)!important;stroke:rgba(255,255,255,.55)!important;stroke-width:2!important}
+#faDot{r:26px}
+#flickArrow circle{opacity:.6}
 #flickArrow.on line,#flickArrow.on circle{opacity:1}
 #flickArrow.weak line{opacity:.35}
 #flickArrow.cd #faOrigin{stroke:rgba(255,255,255,.2)}
@@ -170,7 +174,6 @@ body:not(.on-title) .credit{display:none}
   .sel-vs{flex:0 0 auto;padding:6px 8px;gap:6px}
   .vs-pick button{width:40px}
   .sel-row .btn-main{flex:1;padding:10px 12px;font-size:18px}
-  #stickZone,#flickZone{top:45%}
   #tSpBtn{bottom:calc(var(--vh) * .36)}
   #hint .h-s{bottom:calc(var(--vh) * .36 + 80px)}
   .rs-card{margin-left:20px}
@@ -225,3 +228,6 @@ body:not(.on-title) .credit{display:none}
   #banner{height:56px;top:18%}
   #banner span{font-size:min(5vw,9vh,40px)}
 }
+
+/* 横画面: 説明をスティックの内側に */
+@media (max-height:520px){#hint{padding:0 200px 8vh}}
