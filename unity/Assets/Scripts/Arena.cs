@@ -8,7 +8,7 @@ public static class Arena
     public const float LipW = 1.3f;      // 縁の幅
     public const float Edge = R + LipW;  // ここより外は奈落
     public const float BowlH = 2.6f;
-    public const float LipH = 2.0f, GapLipH = 0.24f, GapHalf = 0.2f;
+    public const float LipH = 2.0f, GapLipH = 0.5f, GapHalf = 0.17f;
     public static readonly float[] GapDeg = { 30, 150, 270 };
     public static readonly float[] RampDeg = { 90, 210, 330 };
     public const float RampIn = 5.8f, RampOut = 10.6f, RampHalfW = 1.4f, RampH = 2.2f;
