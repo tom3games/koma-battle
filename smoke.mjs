@@ -1,0 +1,15 @@
+import { open, wait, state, send } from './lib.mjs'
+const url = process.argv[2] || 'http://localhost:5392/'
+const { b, p, errs, loadMs } = await open(url)
+console.log('loadMs', loadMs)
+await wait(1500)
+await p.screenshot({ path: 'shots/01_title.png' })
+await p.click('#btnPlay'); await wait(1200)
+await p.screenshot({ path: 'shots/02_select.png' })
+await p.click('#btnFight'); await wait(1500)
+await p.screenshot({ path: 'shots/03_count.png' })
+await wait(3000)
+await p.screenshot({ path: 'shots/04_fight.png' })
+console.log(JSON.stringify(await state(p)).slice(0, 600))
+console.log('errs', errs)
+await b.close()

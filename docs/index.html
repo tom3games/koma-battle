@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>コマバトル｜コマになってぶつかり合う3Dバトル</title>
+<meta name="description" content="自分がコマになって戦うブラウザゲーム。WASDで動いて、クリックした方向へダッシュ。ジャンプ台で跳んで相手の頭上から突撃。回転が尽きるか場外で負け。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="コマバトル">
+<meta property="og:description" content="自分がコマになって戦う。ジャンプ台で跳んで、相手の頭上から突撃。">
+<meta property="og:image" content="https://tom3games.github.io/koma-battle/og.png">
+<meta property="og:url" content="https://tom3games.github.io/koma-battle/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1b1f3b">
+<link rel="icon" href="TemplateData/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@500;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="TemplateData/ui.css?v=1">
+</head>
+<body>
+<canvas id="unity-canvas" tabindex="-1"></canvas>
+
+<div id="load" class="scr">
+  <svg class="ld-koma" viewBox="0 0 120 120" aria-hidden="true">
+    <ellipse cx="60" cy="104" rx="34" ry="6" fill="#0d1028" opacity=".55"/>
+    <g class="ld-spin">
+      <path d="M60 100 L52 82 H68 Z" fill="#c9ccd8"/>
+      <ellipse cx="60" cy="70" rx="44" ry="12" fill="#e8402a"/>
+      <ellipse cx="60" cy="66" rx="44" ry="12" fill="#ff6a4a"/>
+      <rect x="49" y="44" width="22" height="22" rx="3" fill="#3b82f6"/>
+      <ellipse cx="60" cy="44" rx="11" ry="4" fill="#ffd24a"/>
+      <path d="M20 66 l-10 -8 l16 2 z M100 66 l10 8 l-16 -2 z" fill="#d7dbe6"/>
+    </g>
+  </svg>
+  <div class="ld-label">スタジアム設営中</div>
+  <div class="ld-bar"><i id="ldFill"></i></div>
+</div>
+
+<div id="title" class="scr" hidden>
+  <div class="tt-block">
+    <div class="tt-kicker">3D コマ対戦</div>
+    <h1 class="tt-name">コマ<br>バトル</h1>
+    <p class="tt-lead">自分がコマになる。跳んで、上から落とせ。</p>
+    <button id="btnPlay" class="btn-main">はじめる</button>
+  </div>
+  <div class="tt-keys">
+    <span><b>WASD</b>移動</span><span><b>左クリック</b>ダッシュ</span><span><b>右クリック</b>必殺</span>
+  </div>
+</div>
+
+<div id="select" class="scr" hidden>
+  <div class="sel-panel">
+    <div class="sel-head">コマを組む</div>
+    <div id="slots"></div>
+  </div>
+  <div class="sel-side">
+    <div class="sel-stats" id="stats"></div>
+    <div class="sel-vs">
+      <div class="vs-label">相手</div>
+      <div class="vs-pick" id="vsPick">
+        <button data-n="1">1</button><button data-n="2" class="on">2</button><button data-n="3">3</button>
+      </div>
+    </div>
+    <button id="btnFight" class="btn-main">試合開始</button>
+  </div>
+</div>
+
+<div id="hud" class="scr" hidden>
+  <div id="tags"></div>
+  <div class="hud-time" id="hudTime"></div>
+  <div class="tacho">
+    <svg viewBox="0 0 160 160" aria-hidden="true">
+      <circle cx="80" cy="80" r="70" class="t-bg"/>
+      <circle cx="80" cy="80" r="62" class="t-track"/>
+      <circle cx="80" cy="80" r="62" class="t-spin" id="tSpin"/>
+      <circle cx="80" cy="80" r="50" class="t-track2"/>
+      <circle cx="80" cy="80" r="50" class="t-gauge" id="tGauge"/>
+      <g id="tTicks"></g>
+    </svg>
+    <div class="t-num"><b id="tNum">100</b><small>回転</small></div>
+    <div class="t-sp" id="tSp">必殺 右クリック</div>
+    <div class="t-dash" id="tDash"></div>
+  </div>
+  <div id="count" class="count"></div>
+  <div id="sudden" class="sudden" hidden>延長　回転が減りやすい</div>
+</div>
+
+<div id="fx" aria-hidden="true">
+  <svg id="lines" viewBox="-50 -50 100 100" preserveAspectRatio="xMidYMid slice"></svg>
+  <div id="flash"></div>
+  <div id="onoma"></div>
+  <div id="banner"><span>星落とし</span></div>
+</div>
+
+<div id="result" class="scr" hidden>
+  <div class="rs-card">
+    <div class="rs-big" id="rsBig">勝ち</div>
+    <div class="rs-why" id="rsWhy"></div>
+    <div class="rs-line" id="rsLine"></div>
+    <div class="rs-btns">
+      <button id="btnAgain" class="btn-main">もう一回</button>
+      <button id="btnParts" class="btn-sub">パーツを変える</button>
+    </div>
+  </div>
+</div>
+
+<div id="touch" hidden>
+  <div id="stickZone"><div id="stick"><i></i></div></div>
+  <button id="tDashBtn" class="tb" aria-label="ダッシュ"><svg viewBox="0 0 48 48"><path d="M8 24h22M22 12l12 12-12 12" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 16h8M6 32h8" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></button>
+  <button id="tSpBtn" class="tb sp" aria-label="必殺"><svg viewBox="0 0 48 48"><path d="M24 4l5 13 14 1-11 9 4 14-12-8-12 8 4-14-11-9 14-1z" fill="#fff"/></svg></button>
+</div>
+
+<button id="btnMute" class="mute" aria-label="音">
+  <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#fff"/><path id="muteWave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path id="muteX" d="M16 9l5 6M21 9l-5 6" stroke="#fff" stroke-width="2" stroke-linecap="round" hidden/></svg>
+</button>
+
+<div class="credit" id="credit">効果音・曲: CC0（Kenney ほか）</div>
+
+<script>
+(function(){
+  var opt={passive:false};
+  ['gesturestart','gesturechange','gestureend'].forEach(function(n){document.addEventListener(n,function(e){e.preventDefault()},opt)});
+  document.addEventListener('touchmove',function(e){e.preventDefault()},opt);
+  var last=0;document.addEventListener('touchend',function(e){var n=Date.now();if(n-last<300&&!(e.target.closest&&e.target.closest('button,a')))e.preventDefault();last=n},opt);
+  document.addEventListener('dblclick',function(e){e.preventDefault()},opt);
+  document.addEventListener('contextmenu',function(e){e.preventDefault()});
+  window.addEventListener('wheel',function(e){if(e.ctrlKey)e.preventDefault()},opt);
+  window.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['+','-','=','0',';'].indexOf(e.key)>=0)e.preventDefault()});
+})();
+(function(){
+  var errs=[];window.__kbErrs=errs;
+  window.addEventListener('error',function(e){errs.push((e.message||'error')+' @'+(e.filename||'')+':'+(e.lineno||''))});
+  window.addEventListener('unhandledrejection',function(e){errs.push('reject: '+(e.reason&&e.reason.message||e.reason))});
+  setTimeout(function(){
+    if(window.__jsUp) return;
+    var d=document.createElement('div');d.id='boot-err';
+    d.textContent='起動できませんでした / failed to start\n'+(errs.join('\n')||'(no error captured)')+'\n'+navigator.userAgent;
+    document.body.appendChild(d);
+  },5000);
+})();
+window.KB_BUILD = { loader: "Build/docs.loader.js", data: "Build/docs.data.unityweb", framework: "Build/docs.framework.js.unityweb", code: "Build/docs.wasm.unityweb", company: "tom3games", product: "コマバトル", version: "1.0" };
+</script>
+<script src="TemplateData/sfx.js?v=1"></script>
+<script src="TemplateData/ui.js?v=1"></script>
+</body>
+</html>
