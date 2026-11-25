@@ -539,20 +539,22 @@ public class KomaBoot : MonoBehaviour
         if (b.think <= 0) b.think = 0.3f;
     }
 
+    // 左クリックの連打で出し続けられないよう、ダッシュと急降下で同じ待ち時間を使う
+    const float DashCdBase = 1.3f;
+
     void TryDash(Koma k, Vector3 aim)
     {
-        if (!k.alive || k.specialPhase > 0) return;
+        if (!k.alive || k.specialPhase > 0 || k.dashCd > 0) return;
         Vector3 dir = aim - k.pos;
         if (k.grounded)
         {
-            if (k.dashCd > 0) return;
             dir.y = 0;
             if (dir.sqrMagnitude < 0.01f) dir = new Vector3(k.vel.x, 0, k.vel.z);
             if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
             dir.Normalize();
             float sp = 19f * k.st.speed;
             k.vel = new Vector3(dir.x * sp + k.vel.x * 0.25f, k.vel.y, dir.z * sp + k.vel.z * 0.25f);
-            k.dashT = 0.32f; k.dashCd = 0.75f * k.st.dashCd;
+            k.dashT = 0.32f; k.dashCd = DashCdBase * k.st.dashCd;
             k.spin -= 2.5f; k.dashes++; k.lossDash += 2.5f;
             EmitEv("dash", k, 0);
             Dust(k.pos, 10);
@@ -574,7 +576,7 @@ public class KomaBoot : MonoBehaviour
                 Vector3 dd = o.pos - aim; dd.y = 0;
                 if (dd.sqrMagnitude < bd) { bd = dd.sqrMagnitude; k.diveTarget = o.idx; }
             }
-            k.dashT = 0.5f; k.spin -= 3f; k.dashes++; k.lossDash += 3f;
+            k.dashT = 0.5f; k.dashCd = DashCdBase * k.st.dashCd; k.spin -= 3f; k.dashes++; k.lossDash += 3f;
             EmitEv("dive", k, 0);
         }
     }
@@ -1130,7 +1132,7 @@ public class KomaBoot : MonoBehaviour
             if (!first) sb.Append(','); first = false;
             var sp = cam.WorldToViewportPoint(k.pos + Vector3.up * 1.25f);
             sb.Append("{\"i\":").Append(k.idx).Append(",\"a\":").Append(k.alive ? 1 : 0).Append(",\"sp\":").Append(F(k.SpinRatio))
-              .Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (0.75f * k.st.dashCd))))
+              .Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
               .Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
               .Append(",\"p\":[").Append(k.top).Append(',').Append(k.core).Append(',').Append(k.leg).Append("]")
