@@ -14,7 +14,6 @@
 - snd/100-cc0-sfx_100-CC0-SFX_0_spring_05.mp3: 100 CC0 SFX / rubberduck / CC0
 - snd/air-whoosh_whoosh2_0.mp3: Air whoosh / pyranostudios / CC0
 - snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_hit_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
-- snd/crowd-shoutingspeaking-ambience_crowd_shouting_0.mp3: Crowd Shouting/Speaking Ambience / StarNinjas / CC0
 - snd/gyro_ragnarok_bgm.mp3: BGM: Suno で作成（本人の有料プラン）
 - snd/85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL00.mp3: 85 Short music jingles / Kenney / CC0
 - snd/85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL04.mp3: 85 Short music jingles / Kenney / CC0

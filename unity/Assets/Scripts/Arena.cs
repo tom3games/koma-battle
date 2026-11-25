@@ -21,8 +21,11 @@ public static class Arena
     // 中央の段差（弧の台）
     public static readonly float[] ArcDeg = { 30, 150, 270 };
     public const float ArcHalf = 0.45f, ArcR0 = 4.2f, ArcR1 = 6.0f, ArcH = 0.75f;
-    // 跳ね台
-    public static readonly Vector2[] Pads = MakeRing(new float[] { 90, 210, 330 }, 8.5f);
+    // 跳ね台: 2026-11-25 本人「バネみたいなところ消して」で無し（配列を空にして判定・見た目・CPU の狙いから外す）
+    public static readonly Vector2[] Pads = new Vector2[0];
+    // 中央のへこみ: 2026-11-25 本人「中央は半円みたいな感じで凹ませて」。球の一部の形（縁の傾きは約30度で、出られなくならない深さ）
+    public const float DipR = 3.9f, DipD = 1.1f;
+    static readonly float DipS = (DipR * DipR + DipD * DipD) / (2 * DipD);
     public const float PadR = 1.1f;
 
     static Vector2[] MakeRing(float[] deg, float r)
@@ -33,6 +36,7 @@ public static class Arena
     }
 
     public static float Bowl(float r) { float t = r / R; return BowlH * t * t; }
+    public static float Dip(float r) => r >= DipR ? 0f : Mathf.Sqrt(DipS * DipS - r * r) - Mathf.Sqrt(DipS * DipS - DipR * DipR);
 
     static float AngDist(float a, float deg) => Mathf.Abs(Mathf.DeltaAngle(a * Mathf.Rad2Deg, deg) * Mathf.Deg2Rad);
 
@@ -49,7 +53,7 @@ public static class Arena
     {
         float r = Mathf.Sqrt(x * x + z * z);
         if (r > Edge) return -1000f;
-        if (r <= R) return Bowl(r);
+        if (r <= R) return Bowl(r) - Dip(r);
         float ang = Mathf.Atan2(z, x);
         float t = Mathf.Clamp01((r - R) / 0.36f);
         return Bowl(R) + LipHeight(ang) * t * t * (3 - 2 * t);
@@ -75,15 +79,8 @@ public static class Arena
 
     public static int MoundAt(float x, float z) { MoundAdd(x, z, out int i); return i; }
 
-    public static int BoostAt(float x, float z)
-    {
-        for (int i = 0; i < Mounds.Length; i++)
-        {
-            float d = (new Vector2(x, z) - Mounds[i]).magnitude;
-            if (d >= BoostR0 && d <= BoostR1) return i;
-        }
-        return -1;
-    }
+    // 加速板: 2026-11-25 本人「ジャンプ台の加速もいらない」で無し
+    public static int BoostAt(float x, float z) => -1;
 
     public static bool OnArc(float x, float z)
     {
@@ -150,12 +147,7 @@ public static class Arena
                 slot.transform.localPosition = new Vector3(p.x, y + 0.08f, p.y);
             }
         }
-        // 加速板: 山の裾の輪に、山へ向かう矢印の光
-        foreach (var c in Mounds)
-        {
-            var ring = MeshKit.Obj("Boost", root.transform, BoostMesh(c), m.Boost);
-            ring.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        }
+
         return root;
     }
 

@@ -261,6 +261,7 @@ public class KomaBoot : MonoBehaviour
     {
         phase = "count"; phaseT = 0; fightT = 0; sudden = false; endWin = -1; endT = 0;
         touchMove = Vector2.zero; touchAimOn = false; touchDash = false; touchSpecial = false;
+        camInit = true;
         pairCd.Clear();
         int n = 1 + nCpu;
         for (int i = 0; i < 4; i++)
@@ -339,6 +340,7 @@ public class KomaBoot : MonoBehaviour
                 if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) move.x -= 1;
                 if (touchMove.sqrMagnitude > 0.01f) move = touchMove;
                 if (move.sqrMagnitude > 1) move.Normalize();
+                move = CamRel(move);
                 dash = (!touchMode && Input.GetMouseButtonDown(0)) || touchDash;
                 special = (!touchMode && Input.GetMouseButtonDown(1)) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || touchSpecial;
                 if (touchDash && Input.touchCount == 0 && !Input.GetMouseButtonDown(0))
@@ -436,7 +438,7 @@ public class KomaBoot : MonoBehaviour
         float py = player.grounded ? player.pos.y : Arena.H(player.pos.x, player.pos.z) > -100 ? Mathf.Min(player.pos.y, Arena.H(player.pos.x, player.pos.z) + 0.5f) : player.pos.y;
         var plane = new Plane(Vector3.up, new Vector3(0, py, 0));
         bool touchOnly = touchMove.sqrMagnitude > 0.01f && !Input.GetMouseButton(0);
-        if (touchAimOn) aimPoint = player.pos + new Vector3(touchAimDir.x, 0, touchAimDir.y) * 6.5f;
+        if (touchAimOn) { var ad = CamRel(touchAimDir); aimPoint = player.pos + new Vector3(ad.x, 0, ad.y) * 6.5f; }
         else if (!autoPlayer && !touchOnly && !touchMode && plane.Raycast(ray, out float d)) aimPoint = ray.GetPoint(d);
         if (autoPlayer) aimPoint = AimFor(player);
         // 2026-11-25 本人「スマホでやってる時コマから赤い線出てるの何」: 線をやめ、足元の短い山形の矢印（ダッシュの向き）にした。
@@ -1000,8 +1002,64 @@ public class KomaBoot : MonoBehaviour
     }
 
     Vector3 camVel, camLook;
+    float camYaw; bool camInit;
+    // 操作の向きをカメラ基準にする（上＝カメラの向いている前）
+    Vector2 CamRel(Vector2 v)
+    {
+        if (!ChaseOn) return v;
+        float s = Mathf.Sin(camYaw), c = Mathf.Cos(camYaw);
+        return new Vector2(v.x * c + v.y * s, -v.x * s + v.y * c);
+    }
+    bool ChaseOn => player != null && player.alive && (phase == "count" || phase == "fight" || phase == "end");
+
+    // 2026-11-25 本人「臨場感が欲しいから、車のゲームみたいな感じで視点を変えて」: 自分のコマの後ろ・低めから追う。
+    // 向きは進む向きにゆっくり付いていく（ぶつかって跳ね返った時は振り回さない）
+    void ChaseCamera(float realDt)
+    {
+        Vector3 p = player.pos;
+        Vector2 hv = new Vector2(player.vel.x, player.vel.z);
+        bool snap = camInit;
+        if (camInit)
+        {
+            camInit = false;
+            Vector2 toC = -new Vector2(p.x, p.z);
+            camYaw = toC.sqrMagnitude > 0.01f ? Mathf.Atan2(toC.x, toC.y) : 0f;
+            camVel = Vector3.zero;
+        }
+        else if (phase == "fight" && hv.magnitude > 2.5f)
+        {
+            float want = Mathf.Atan2(hv.x, hv.y);
+            float diff = Mathf.DeltaAngle(camYaw * Mathf.Rad2Deg, want * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+            if (Mathf.Abs(diff) < 1.75f)
+            {
+                float rate = 2.2f * Mathf.Clamp01((hv.magnitude - 2.5f) / 6f) * (1f - Mathf.Abs(diff) / 1.75f * 0.6f);
+                camYaw += diff * (1 - Mathf.Exp(-rate * realDt));
+            }
+        }
+        Vector3 fwd = new Vector3(Mathf.Sin(camYaw), 0, Mathf.Cos(camYaw));
+        float portrait = cam.aspect < 1.2f ? Mathf.Lerp(1.45f, 1f, Mathf.InverseLerp(0.45f, 1.2f, cam.aspect)) : 1f;
+        float baseY = Mathf.Max(p.y, -3f);
+        Vector3 want3 = new Vector3(p.x, baseY, p.z) - fwd * 7.2f * portrait + Vector3.up * 3.3f * portrait;
+        float fh = Arena.H(want3.x, want3.z);
+        if (fh > -100 && want3.y < fh + 1.4f) want3.y = fh + 1.4f;
+        camRig.position = snap ? want3 : Vector3.SmoothDamp(camRig.position, want3, ref camVel, 0.12f, 200f, realDt);
+        Vector3 lookWant = new Vector3(p.x, baseY + 0.6f, p.z) + fwd * 4f;
+        camLook = snap ? lookWant : Vector3.Lerp(camLook, lookWant, 1 - Mathf.Exp(-12f * realDt));
+        Vector3 off = Vector3.zero;
+        if (shake > 0)
+        {
+            off = Random.insideUnitSphere * shake * 0.2f;
+            shake = Mathf.Max(0, shake - realDt * 2.2f);
+        }
+        cam.transform.localPosition = off;
+        cam.transform.rotation = Quaternion.LookRotation(camLook - camRig.position);
+        float fovWant = (cam.aspect < 1.2f ? 66f : 60f) + Mathf.Clamp01((hv.magnitude - 10f) / 15f) * 8f;
+        cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, fovWant, 1 - Mathf.Exp(-6f * realDt));
+    }
+
     void FightCamera(float realDt)
     {
+        if (ChaseOn) { ChaseCamera(realDt); return; }
         Vector3 focus = player.alive || phase == "count" ? player.pos : Vector3.zero;
         if (phase == "end" && player.alive) focus = player.pos;
         if (focus.y < -3f) focus.y = -3f;

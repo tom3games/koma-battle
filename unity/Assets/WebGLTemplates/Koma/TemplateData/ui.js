@@ -153,7 +153,7 @@ window.__jsUp = true
       case 'hit': {
         const big = m.big, air = m.air
         Snd.play(big ? 'clang' : 'hit', { vol: Math.min(1, 0.45 + m.p / 25) })
-        if (air) { lines(m.x, m.y, 1); onoma('ドゴォッ', m.x, m.y); flash(); Snd.play('crowd', { vol: 0.5 }); Snd.duck(0.5, 0.8) }
+        if (air) { lines(m.x, m.y, 1); onoma('ドゴォッ', m.x, m.y); flash(); Snd.duck(0.5, 0.8) }
         else if (big) { lines(m.x, m.y, 0.7); onoma('ガギィン', m.x, m.y) }
         break
       }
@@ -165,10 +165,9 @@ window.__jsUp = true
       case 'special':
         banner(m.i, m.p); lines(m.x, m.y, 1); Snd.play('whoosh', { vol: 0.9 }); Snd.duck(0.35, 1.2)
         break
-      case 'boom': lines(m.x, m.y, 1); flash(); onoma('ズドン', m.x, m.y); Snd.play('boom', { vol: 1 }); Snd.play('crowd', { vol: 0.6 }); break
+      case 'boom': lines(m.x, m.y, 1); flash(); onoma('ズドン', m.x, m.y); Snd.play('boom', { vol: 1 }); break
       case 'ko':
         Snd.play('down', { vol: m.i === 0 ? 1 : 0.7 })
-        if (m.i !== 0) Snd.play('crowd', { vol: 0.45 })
         onoma(m.why === 'out' ? '場外' : 'ダウン', m.x, Math.max(0.25, m.y))
         break
       case 'sudden': $('sudden').hidden = false; break
@@ -177,22 +176,34 @@ window.__jsUp = true
   }
 
   // ---------- タイトル（読み込み中から触れる） ----------
-  $('btnPlay').onclick = () => { Snd.init(); startAmb(); Snd.play('ui', { vol: 0.6 }); toSelect() }
-  function startAmb() { Snd.loop('amb', 'TemplateData/snd/crowd-shoutingspeaking-ambience_crowd_shouting_0.mp3', 0.16) }
+  $('btnPlay').onclick = () => { Snd.init(); Snd.play('ui', { vol: 0.6 }); toSelect() }
 
   // ---------- パーツ選び ----------
   // パーツ選び: 1段に1つ、左右で切り替える（並べすぎない）
+  function slotBody(sl) {
+    const i = pick[sl.key], p = sl.parts[i], n = sl.parts.length
+    const art = ART[sl.key] ? `<svg viewBox="0 0 80 40">${ART[sl.key][i]}</svg>` : ''
+    return `${art}<div class="slot-txt"><b>${p.n}</b><small>${p.d}</small></div><i class="slot-no">${i + 1}/${n}</i>`
+  }
   function buildSlots() {
     const box = $('slots'); box.innerHTML = ''
     SLOTS.forEach(sl => {
-      const i = pick[sl.key], p = sl.parts[i], n = sl.parts.length
+      const n = sl.parts.length
       const d = document.createElement('div'); d.className = 'slot' + (sl.key === 'sp' ? ' sp' : '')
-      const art = ART[sl.key] ? `<svg viewBox="0 0 80 40">${ART[sl.key][i]}</svg>` : ''
-      d.innerHTML = `<div class="slot-name">${sl.name}</div><button class="arw" data-d="-1" aria-label="前">${ARROW_L}</button><div class="slot-body">${art}<div class="slot-txt"><b>${p.n}</b><small>${p.d}</small></div><i class="slot-no">${i + 1}/${n}</i></div><button class="arw" data-d="1" aria-label="次">${ARROW_R}</button>`
+      d.innerHTML = `<div class="slot-name">${sl.name}</div><button class="arw" data-d="-1" aria-label="前">${ARROW_L}</button><div class="slot-body">${slotBody(sl)}</div><button class="arw" data-d="1" aria-label="次">${ARROW_R}</button>`
       d.dataset.slot = sl.key
-      d.querySelectorAll('.arw').forEach(b => b.onclick = () => { pick[sl.key] = (pick[sl.key] + +b.dataset.d + n) % n; Snd.play('ui', { vol: 0.4 }); buildSlots(); sendLoadout() })
+      // 2026-11-25 本人「左右のボタンが反応が悪い」: click を待たず押した瞬間に切り替え、段は作り直さず中身だけ書き換える。
+      // Unity への送信（コマの作り直し）は連打をまとめて1回
+      const step = dd => { pick[sl.key] = (pick[sl.key] + dd + n) % n; d.querySelector('.slot-body').innerHTML = slotBody(sl); renderStats(); sendLoadoutSoon() }
+      d.querySelectorAll('.arw').forEach(b => {
+        b.onpointerdown = e => { if (e.button > 0) return; e.preventDefault(); step(+b.dataset.d); Snd.play('ui', { vol: 0.4 }) }
+        b.onclick = e => { if (e.detail === 0) step(+b.dataset.d) }
+      })
       box.appendChild(d)
     })
+    renderStats()
+  }
+  function renderStats() {
     const s = stats(pick.top, pick.core, pick.leg)
     $('stats').innerHTML = STAT_ROWS.map(([n, k, lo, hi]) => {
       const w = Math.max(6, Math.min(100, (s[k] - lo) / (hi - lo) * 100))
@@ -203,6 +214,8 @@ window.__jsUp = true
   const ARROW_L = '<svg viewBox="0 0 24 24"><path d="M15 4L7 12l8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg>'
   const ARROW_R = '<svg viewBox="0 0 24 24"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg>'
   function sendLoadout() { send(`loadout|${pick.top},${pick.core},${pick.leg},${pick.sp}`) }
+  let loadoutT = 0
+  function sendLoadoutSoon() { clearTimeout(loadoutT); loadoutT = setTimeout(sendLoadout, 140) }
   function toSelect() { buildSlots(); show('select'); send('select'); sendLoadout(); fightBtn() }
   document.querySelectorAll('#vsPick button').forEach(b => {
     b.classList.toggle('on', +b.dataset.n === nCpu)
@@ -212,7 +225,7 @@ window.__jsUp = true
       store.set('koma-ncpu', nCpu)
     }
   })
-  $('btnFight').onclick = () => { if (!KB.ready) return; Snd.init(); startAmb(); Snd.play('ui', { vol: 0.6 }); startMatch() }
+  $('btnFight').onclick = () => { if (!KB.ready) return; Snd.init(); Snd.play('ui', { vol: 0.6 }); startMatch() }
   function startMatch() {
     if (document.activeElement) document.activeElement.blur()
     canvas.focus()
@@ -331,7 +344,6 @@ window.__jsUp = true
     swish: [S('swishes-sound-pack_swishes_swishes_swish-7'), S('swishes-sound-pack_swishes_swishes_swish-9'), S('swishes-sound-pack_swishes_swishes_swish-3')],
     spring: [S('100-cc0-sfx_100-CC0-SFX_0_spring_03'), S('100-cc0-sfx_100-CC0-SFX_0_spring_05')],
     whoosh: [S('air-whoosh_whoosh2_0')],
-    crowd: [S('crowd-shoutingspeaking-ambience_crowd_shouting_0')],
     tick: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_HIT_jingles_HIT03')],
     go: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL04')],
     win: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL00')],
