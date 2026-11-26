@@ -175,7 +175,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'count': countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
       case 'go':
         countdown('勝負', true); Snd.play('go', { vol: 0.8 })
-        Snd.loop('bgm', 'TemplateData/snd/gyro_ragnarok_bgm.mp3', 0.3)
+        Snd.loop('bgm', 'TemplateData/snd/gyro_ragnarok_bgm.mp3', 0.55)
         break
       case 'hit': {
         const big = m.big, air = m.air
@@ -510,7 +510,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
 
   // ---------- 音 ----------
   const S = n => 'TemplateData/snd/' + n + '.mp3'
-  Snd.sfxGain = 1.7   // 2026-11-26 本人「効果音もうちょっと大きく」: 効果音の道だけ1.0→1.7倍（BGM は 0.3 のまま）。割れないよう出口にコンプレッサー
+  Snd.sfxGain = 1   // 2026-11-26 本人「効果音じゃなくて BGM を上げて」: 効果音は元の1.0倍。BGM は 0.3→0.55。出口のコンプレッサーは BGM+効果音の合算が割れないよう残す
   Snd.def({
     hit: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_hit_01'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_hit_02'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_hit_03'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_hit_04'), S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_hit_01')],
     clang: [S('100-cc0-sfx_100-CC0-SFX_0_metal_04'), S('100-cc0-sfx_100-CC0-SFX_0_metal_12')],
