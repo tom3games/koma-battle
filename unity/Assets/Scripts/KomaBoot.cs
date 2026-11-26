@@ -387,7 +387,7 @@ public class KomaBoot : MonoBehaviour
                 if (move.sqrMagnitude > 1) move.Normalize();
                 move = CamRel(move);
                 dash = (!touchMode && Input.GetMouseButtonDown(0)) || touchDash;
-                special = (!touchMode && Input.GetMouseButtonDown(1)) || Input.GetKeyDown(KeyCode.E) || touchSpecial;
+                special = (!touchMode && Input.GetMouseButtonDown(1)) || touchSpecial;   // 2026-11-26 本人「必殺は右クリックだけでいい」
                 if (touchDash && Input.touchCount == 0 && !Input.GetMouseButtonDown(0))
                 {
                     // 画面のボタンのダッシュ: 動かしている向き、なければ近い相手へ
