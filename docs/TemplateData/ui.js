@@ -159,10 +159,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         // 2026-11-25「当たりの手応え」: 低めに鳴らして重く、強い当たりは金属音を重ねる
         Snd.play('hit', { vol: Math.min(1, 0.5 + m.p / 20), rate: big ? 0.8 : 0.9 })
         if (big || m.vn > 14) Snd.play('clang', { vol: Math.min(1, 0.4 + m.p / 22), rate: 0.85 })
-        // 自分の当て方・当てられ方だけ出す
-        { const mine = m.a === 0 ? m.ka : m.b === 0 ? m.kb : 0, his = m.a === 0 ? m.kb : m.b === 0 ? m.ka : 0
-          const dm = m.a === 0 ? m.db : m.da, dh = m.a === 0 ? m.da : m.db   // 与えた・受けた
-          if (!air && (m.a === 0 || m.b === 0)) { if (mine === 4 || mine === 3 || mine === 2) angTag(['', '', '芯', '横', '背後'][mine], m.x, m.y, 'good k' + mine); else if (his === 4 && dh > dm) angTag('背後をとられた', m.x, m.y, 'bad'); else if (mine === 1 && his !== 1) angTag('かすり', m.x, m.y, 'weak') } }
+        // 2026-11-26 本人「芯とか掠りとか出すのやめて」: 当たりの角度は数値だけに効かせ、文字は出さない
         if (air) { lines(m.x, m.y, 1); onoma('ドゴォッ', m.x, m.y); flash(); Snd.duck(0.5, 0.8) }
         else if (big) { lines(m.x, m.y, 0.7); onoma('ガギィン', m.x, m.y) }
         break
