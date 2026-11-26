@@ -142,10 +142,10 @@ public partial class KomaBoot
         return true;
     }
 
-    // ---------- 雷鳴の刻印: 予告の円 → 0.9秒後に落ちる。円の外へ逃げれば外れる ----------
+    // ---------- 雷鳴の刻印: 予告の円 → 0.55秒後に落ちる。円の外へ逃げれば外れる。円の中の全員に当たる（使った本人は除く） ----------
     class Strike { public Vector3 pos; public Koma owner; public float t; public bool done, active; public bool[] react = new bool[4]; public Transform ring, fill, bolt; public Material rm, fm, bm; public float boltT; }
     readonly List<Strike> strikes = new List<Strike>();
-    public const float StrikeDelay = 0.9f, StrikeR = 2.4f;
+    public const float StrikeDelay = 0.55f, StrikeR = 2.4f;
 
     void SpawnStrike(Koma owner, Koma victim)
     {
@@ -212,7 +212,7 @@ public partial class KomaBoot
             Vector3 d = o.pos - s.pos; d.y = 0;
             if (d.magnitude > StrikeR || o.pos.y - s.pos.y > 3.2f) continue;
             hits++;
-            Damage(s.owner, o, 16f * s.owner.st.atk / o.st.def);
+            Damage(s.owner, o, 14f * s.owner.st.atk / o.st.def);
             o.lockT = 0.9f; o.vel = new Vector3(o.vel.x * 0.1f, Mathf.Max(0f, o.vel.y), o.vel.z * 0.1f); o.hitFlash = 0.3f;
             Spark(o.Center, Vector3.up, 70, 1.8f);
         }
@@ -231,10 +231,12 @@ public partial class KomaBoot
         move = Vector2.zero;
         foreach (var s in strikes)
         {
-            if (!s.active || s.done || s.owner == k || !s.react[k.idx] || s.t < 0.18f) continue;
+            if (!s.active || s.done || s.owner == k || !s.react[k.idx] || s.t < 0.1f) continue;
             Vector3 d = k.pos - s.pos; d.y = 0;
             if (d.magnitude > StrikeR + 1.2f) continue;
             move = d.sqrMagnitude > 0.01f ? new Vector2(d.x, d.z).normalized : Vector2.right;
+            // ダッシュで抜ける（人もダッシュなら間に合う長さ。CPU も同じ手を使う）
+            if (k.grounded && k.dashCd <= 0 && k.alive) TryDash(k, k.pos + new Vector3(move.x, 0, move.y) * 7f);
             return true;
         }
         return false;

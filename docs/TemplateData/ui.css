@@ -366,3 +366,21 @@ body.shk #fx{animation:shk .32s linear}
 .ladder li span{line-height:1.25}
 @media (max-aspect-ratio:4/5){.ladder{gap:3px}.ladder li{min-height:30px;padding:3px 8px;font-size:12px;grid-template-columns:3em 1fr auto}.ladder li b{font-size:13px}.grow-card{overflow-y:auto}}
 @media (max-height:520px){#pasTag{top:14%;font-size:18px;padding:3px 14px}.ladder li{min-height:28px}}
+
+/* 装備: 名前は折り返して全部出し、説明は短く。全文は「詳しい説明」 */
+.slot-txt b{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.15;font-size:14px}
+.slot-txt small{white-space:nowrap;overflow:hidden;text-overflow:clip}
+.slot-body{padding-right:34px}
+.sel-side{display:flex;flex-direction:column;gap:8px}
+.detail{background:var(--dim);clip-path:var(--cut);padding:10px 14px;font-size:12px;line-height:1.55;font-weight:500}
+.detail b{display:block;font-size:15px;font-weight:900;color:var(--gold);margin-bottom:2px}
+.detail em{display:block;font-style:normal;font-weight:800;opacity:.9;margin-top:4px;color:#cfe9e4}
+@media (max-aspect-ratio:4/5){
+  .slot-body{min-height:44px;padding:2px 30px 2px 6px}
+  .slot-txt b{font-size:13px}.slot-txt small{font-size:10.5px}
+  .arw{height:44px}
+  .sel-stats{grid-template-columns:1fr 1fr 1fr;column-gap:10px}
+  .detail{padding:8px 12px;font-size:11.5px;line-height:1.45}
+}
+@media (max-height:520px){.detail{font-size:11px;padding:6px 10px;line-height:1.4}.detail b{font-size:13px}}
+@media (max-aspect-ratio:4/5){.sel-head{display:none}.sel-panel{padding:8px 8px 3px}.slot{margin-bottom:3px}}
