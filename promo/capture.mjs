@@ -75,8 +75,12 @@ mark('h2')
 // 見どころ2: 逆鱗（回転が減るとオーラ）
 await send('setpas|0,0'); await send('spin|0.22,0'); await sleep(3600); await send('spin|0.9,0')
 mark('h3')
-// 見どころ3: 雷鳴の刻印（予告の円 → 落雷）
-{ const k = (await st()).k; const t = k.find(x => x.i !== 0 && x.a === 1); await send('setpas|3,0'); if (t) await send(`strike|${t.i},0`); await sleep(4600) }
+// 見どころ3: 雷鳴の刻印（予告の円 → 落雷。円の中の2体に同時に当たる）
+{ const k = (await st()).k; const t = k.filter(x => x.i !== 0 && x.a === 1)
+  await send('setpas|3,0'); await send('cpuoff|1')
+  if (t.length >= 2) { await send(`tp|${t[0].wx + 1.1},${t[0].gh + 0.5},${t[0].wz + 0.4},0,0,0,${t[1].i}`); await sleep(500) }
+  if (t[0]) await send(`strike|${t[0].i},0`)
+  await sleep(1700); await send('cpuoff|0'); await sleep(2400) }
 mark('h4')
 // 見どころ4: 必殺（メテオ・ジャッジメント）
 await send('gauge|100'); await send('specialnear'); await sleep(4800)
