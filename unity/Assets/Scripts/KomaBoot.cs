@@ -5,7 +5,7 @@ using System.Text;
 using UnityEngine;
 
 // 全体の進行・入力・物理・CPU・演出・画面（HTML）とのやりとり
-public class KomaBoot : MonoBehaviour
+public partial class KomaBoot : MonoBehaviour
 {
 #if UNITY_WEBGL && !UNITY_EDITOR
     [DllImport("__Internal")] static extern void KB_Emit(string s);
@@ -21,14 +21,14 @@ public class KomaBoot : MonoBehaviour
     string phase = "title";
     float phaseT, fightT, emitT;
     bool sudden;
-    int pTop = 0, pCore = 0, pLeg = 0, pSp = 0, nCpu = 2; bool pLeft;
+    int pTop = 0, pCore = 0, pLeg = 0, pSp = 0, nCpu = 2; bool pLeft; int pPas = -1;
     bool autoPlayer, cpuOff, debugState;
     readonly Vector2[] movesBuf = new Vector2[4];
     readonly List<long> keyBuf = new List<long>();
     Vector2 lastAimDir; float lastAimT = -99;
     float testScale = 1f;
     bool boardAnnounced;
-    class Fire { public Vector3 pos; public Koma owner; public float t; }
+    class Fire { public Vector3 pos; public Koma owner; public float t, dmg = 12f; }
     readonly List<Fire> fires = new List<Fire>();
     ParticleSystem fireP;
     float BoardAt = 40f; const float FireLife = 2.5f;
@@ -67,6 +67,9 @@ public class KomaBoot : MonoBehaviour
     void Start()
     {
         Application.targetFrameRate = 60;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        WebGLInput.captureAllKeyboardInput = false;   // 名前の入力欄に打てるように（試合の開始で canvas にフォーカスを渡す）
+#endif
         QualitySettings.shadowDistance = 45f;
         QualitySettings.shadows = ShadowQuality.All;
         QualitySettings.shadowResolution = ShadowResolution.Medium;
@@ -185,20 +188,25 @@ public class KomaBoot : MonoBehaviour
         switch (c)
         {
             case "loadout":
-                pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); if (nums.Length >= 4) pSp = (int)N(3); if (nums.Length >= 5) pLeft = N(4) > 0;
+                pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); if (nums.Length >= 4) pSp = (int)N(3); if (nums.Length >= 5) pLeft = N(4) > 0; if (nums.Length >= 6) pPas = (int)N(5);
                 if (phase == "title" || phase == "select") { player.Rebuild(pTop, pCore, pLeg, mats, pLeft); player.sp = pSp; Showcase(); }
                 break;
             case "select": phase = "select"; phaseT = 0; Showcase(); break;
             case "title": phase = "title"; phaseT = 0; Showcase(); break;
             case "start":
-                if (nums.Length >= 6) pLeft = N(5) > 0;
+                if (nums.Length >= 6) pLeft = N(5) > 0; if (nums.Length >= 7) pPas = (int)N(6);
                 if (nums.Length >= 3) { pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); player.Rebuild(pTop, pCore, pLeg, mats, pLeft); }
                 if (nums.Length >= 4) nCpu = Mathf.Clamp((int)N(3), 1, 3);
                 if (nums.Length >= 5) pSp = Mathf.Clamp((int)N(4), 0, 3);
-                player.sp = pSp;
+                player.sp = pSp; player.pas = Mathf.Clamp(pPas, -1, 7);
                 StartMatch();
                 break;
             case "auto": autoPlayer = N(0) > 0; break;
+            case "cpupas": cpuPasMode = (int)N(0); break;
+            case "assist": assistOn = N(0) > 0; break;
+            case "strike": SpawnStrike(komas[(int)N(1)], komas[(int)N(0)]); break;   // 検査用: 雷（0=標的 1=撃つ側）
+            case "guard": komas[(int)N(1)].guard = N(0) > 0; break;
+            case "setpas": komas[(int)N(1)].pas = (int)N(0); break;
             case "cpuoff": cpuOff = N(0) > 0; break;
             case "debugstate": debugState = N(0) > 0; break;
             case "timescale": testScale = Mathf.Clamp(N(0), 0.05f, 8f); break;
@@ -288,7 +296,7 @@ public class KomaBoot : MonoBehaviour
         {
             var k = komas[i];
             if (i >= n) { k.root.SetActive(false); k.alive = false; continue; }
-            if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = rng.Next(4); }
+            if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = rng.Next(4); k.pas = cpuPasMode == -2 ? (rng.NextDouble() < 0.5 ? rng.Next(8) : -1) : cpuPasMode; }
             float ang = -Mathf.PI / 2 + Mathf.PI / 8 + i * Mathf.PI * 2 / n;
             float r = 11f;
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
@@ -466,8 +474,10 @@ public class KomaBoot : MonoBehaviour
                     }
                 }
             }
+            PassiveUpdate(k, dt);
             k.Visual(dt, realDt);
         }
+        UpdateStrikes(dt); UpdateClones(dt);
         keyBuf.Clear(); keyBuf.AddRange(pairCd.Keys);
         foreach (var key in keyBuf) { pairCd[key] -= dt; if (pairCd[key] <= 0) pairCd.Remove(key); }
 
@@ -553,6 +563,7 @@ public class KomaBoot : MonoBehaviour
     {
         var b = brains[k.idx];
         move = Vector2.zero; dash = false; special = false;
+        if (DodgeStrike(k, out move)) return;
         b.retarget -= dt; b.react -= dt; b.think -= dt;
         if (b.target < 0 || b.retarget <= 0 || !komas[b.target].alive)
         {
@@ -604,9 +615,38 @@ public class KomaBoot : MonoBehaviour
     // 左クリックの連打で出し続けられないよう、ダッシュと急降下で同じ待ち時間を使う
     const float DashCdBase = 1.3f;
 
+    // 狙いの補助（かなり甘め）: 狙った向きから 18度以内・9m以内に相手がいる時だけ、その相手の向きへ 50% 寄せる（最大およそ9度）。
+    // 範囲に誰もいなければ何もしない。カメラは動かさない
+    const float AssistAngle = 18f, AssistRange = 9f, AssistRate = 0.5f;
+    bool assistOn = true; public float assistMaxBend;
+    Vector3 AssistDir(Koma k, Vector3 dir)
+    {
+        if (!assistOn || !k.isPlayer || autoPlayer) return dir;
+        Vector3 h = new Vector3(dir.x, 0, dir.z); if (h.sqrMagnitude < 1e-4f) return dir; h.Normalize();
+        float best = AssistAngle + 1f; Vector3 bt = Vector3.zero;
+        foreach (var o in komas)
+        {
+            if (o == k || !o.alive || !o.root.activeSelf) continue;
+            Vector3 d = o.pos - k.pos; d.y = 0; float dist = d.magnitude;
+            if (dist > AssistRange || dist < 0.3f) continue;
+            float ang = Vector3.Angle(h, d / dist);
+            if (ang < best) { best = ang; bt = d / dist; }
+        }
+        if (best > AssistAngle) return dir;
+        Vector3 nd = Vector3.Slerp(h, bt, AssistRate).normalized;
+        assistMaxBend = Mathf.Max(assistMaxBend, best * AssistRate);
+        return new Vector3(nd.x, dir.y, nd.z);
+    }
+
     void TryDash(Koma k, Vector3 aim)
     {
         if (!k.alive || k.specialPhase > 0 || k.dashCd > 0) return;
+        if (!k.grounded && k.isPlayer)
+        {
+            // 空中の急降下: 狙う点を、水平の向きだけ補助で寄せる
+            Vector3 hh = aim - k.pos; float hl = new Vector2(hh.x, hh.z).magnitude;
+            if (hl > 0.5f) { var nd = AssistDir(k, new Vector3(hh.x, 0, hh.z)); aim = new Vector3(k.pos.x + nd.x * hl, aim.y, k.pos.z + nd.z * hl); }
+        }
         Vector3 dir = aim - k.pos;
         if (k.grounded)
         {
@@ -614,6 +654,7 @@ public class KomaBoot : MonoBehaviour
             if (dir.sqrMagnitude < 0.01f) dir = new Vector3(k.vel.x, 0, k.vel.z);
             if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
             dir.Normalize();
+            dir = AssistDir(k, dir);
             float sp = 19f * k.st.speed;
             float keep = stickDash ? 0f : 0.25f;   // スマホは倒した向きへまっすぐ（前の勢いを混ぜない）
             k.vel = new Vector3(dir.x * sp + k.vel.x * keep, k.vel.y, dir.z * sp + k.vel.z * keep);
@@ -622,6 +663,7 @@ public class KomaBoot : MonoBehaviour
             k.spin -= 1.2f; k.dashes++; k.lossDash += 1.2f;
             EmitEv("dash", k, 0);
             Dust(k.pos, 10);
+            if (k.pas == 6) SpawnClone(k);
         }
         else
         {
@@ -786,7 +828,7 @@ public class KomaBoot : MonoBehaviour
                 if (o == f.owner || !o.alive || !o.root.activeSelf) continue;
                 float dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z;
                 if (dx * dx + dz * dz > 1.3f * 1.3f || o.pos.y - f.pos.y > 1.2f) continue;
-                Damage(f.owner, o, 12f * dt);
+                Damage(f.owner, o, f.dmg * dt);
                 if (o.burnSnd <= 0) { o.burnSnd = 0.45f; o.hitFlash = 0.08f; EmitEv("burn", o, 0); }
             }
         }
@@ -795,6 +837,7 @@ public class KomaBoot : MonoBehaviour
     void KO(Koma k, string why)
     {
         if (!k.alive || phase == "end") return;
+        if (PassiveKo(k, why)) return;
         k.Knock(why);
         k.koTime = fightT;
         EmitEv("ko", k, 0, why + "\",\"r\":\"" + F(new Vector2(k.pos.x, k.pos.z).magnitude) + "\",\"vy\":\"" + F(k.vel.y) + "\",\"vh\":\"" + F(new Vector2(k.vel.x, k.vel.z).magnitude) + "\",\"ang\":\"" + F(Mathf.Atan2(k.pos.z, k.pos.x) * Mathf.Rad2Deg) + "\",\"lastHit\":\"" + F(fightT - k.lastHitT));
@@ -985,6 +1028,7 @@ public class KomaBoot : MonoBehaviour
         if (k.alive && (np.y < -5f || (new Vector2(np.x, np.z).magnitude > Arena.Edge + 0.4f && np.y < Arena.Bowl(Arena.R)))) KO(k, "out");
         if (np.y < -40f) { np.y = -40f; v = Vector3.zero; }
         k.pos = np; k.vel = v;
+        if (k.rescueSet) { k.pos = k.rescue; k.vel = Vector3.zero; k.grounded = false; k.rescueSet = false; }
     }
 
     // 着地の演出（強さに比例: 土ぼこり・先端の火花・輪・音・自分の画面の揺れ）と回転の減り
@@ -1003,6 +1047,7 @@ public class KomaBoot : MonoBehaviour
         }
         if (k.isPlayer && impactV > 10f) shake = Mathf.Max(shake, 0.08f + 0.4f * s);
         EmitEv("land", k, impactV);
+        PasLanded(k, at, impactV);
     }
 
     // 光（必殺の発動・当たりの瞬間に周りを一瞬照らす）
@@ -1121,7 +1166,7 @@ public class KomaBoot : MonoBehaviour
         dmg *= HitScale; if (to.shieldT > 0) dmg *= 0.2f;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
         if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);
-        from.dealt += dmg;
+        from.dealt += dmg; PasSoul(from, to, dmg);
         from.gauge = Mathf.Min(100f, from.gauge + dmg * 1.5f * from.st.gaugeRate);
         to.gauge = Mathf.Min(100f, to.gauge + dmg * 1.1f * to.st.gaugeRate);
         if (to.spin <= 0) { to.spin = 0; KO(to, "spin"); }
@@ -1195,8 +1240,8 @@ public class KomaBoot : MonoBehaviour
                 b.vel += nh * spinPushA / mb * (1.5f - b.st.grip * 0.3f) + tang * tk;
                 a.vel -= nh * spinPushB / ma * (1.5f - a.st.grip * 0.3f) + tang * tk;
                 float pop = Mathf.Min(3.2f, 1f + vn * 0.1f);
-                float multA = (a.dashT > 0 ? 1.4f : 1f) * (aAir ? 2.4f * a.st.aerial : 1f) * (a.specialPhase == 2 ? 1.6f : 1f) * (a.specialPhase == 20 ? 1.35f : 1f);
-                float multB = (b.dashT > 0 ? 1.4f : 1f) * (bAir ? 2.4f * b.st.aerial : 1f) * (b.specialPhase == 2 ? 1.6f : 1f) * (b.specialPhase == 20 ? 1.35f : 1f);
+                float multA = (a.dashT > 0 ? 1.4f : 1f) * (aAir ? 2.4f * a.st.aerial * (a.pas == 1 ? 1.3f : 1f) : 1f) * (a.specialPhase == 2 ? 1.6f : 1f) * (a.specialPhase == 20 ? 1.35f : 1f);
+                float multB = (b.dashT > 0 ? 1.4f : 1f) * (bAir ? 2.4f * b.st.aerial * (b.pas == 1 ? 1.3f : 1f) : 1f) * (b.specialPhase == 2 ? 1.6f : 1f) * (b.specialPhase == 20 ? 1.35f : 1f);
                 float shareA = sa / (sa + sb + 0.01f);
                 float baseD = 1f + Mathf.Min(vn, 25f) * 0.25f;
                 float dmgToB = baseD * (0.5f + shareA) * a.st.atk / b.st.def * multA * 0.5f;
@@ -1220,8 +1265,14 @@ public class KomaBoot : MonoBehaviour
                 // 盾: 自分はほとんど弾かれず、相手を弾き返す
                 if (a.shieldT > 0) { a.vel = Vector3.Lerp(aV0, a.vel, 0.2f); b.vel += nh * 9f; }
                 if (b.shieldT > 0) { b.vel = Vector3.Lerp(bV0, b.vel, 0.2f); a.vel -= nh * 9f; }
+                // 逆鱗: 弾かれにくい／黒鉄の盾: 次の1発を無効に
+                if (a.rage) a.vel = Vector3.Lerp(aV0, a.vel, 0.6f);
+                if (b.rage) b.vel = Vector3.Lerp(bV0, b.vel, 0.6f);
+                if (dmgToA > 0 && PasGuard(a)) { dmgToA = 0; a.vel = Vector3.Lerp(aV0, a.vel, 0.3f); }
+                if (dmgToB > 0 && PasGuard(b)) { dmgToB = 0; b.vel = Vector3.Lerp(bV0, b.vel, 0.3f); }
                 Damage(a, b, dmgToB);
                 Damage(b, a, dmgToA);
+                PasOnHit(a, b, dmgToB > 0); PasOnHit(b, a, dmgToA > 0);
                 bool aSp = a.specialPhase == 2, bSp = b.specialPhase == 2;
                 if (aSp) SpecialImpact(a, a.pos);
                 if (bSp) SpecialImpact(b, b.pos);
@@ -1423,7 +1474,7 @@ public class KomaBoot : MonoBehaviour
               .Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
               .Append(",\"vx\":").Append(F(k.vel.x)).Append(",\"vz\":").Append(F(k.vel.z)).Append(",\"yaw\":").Append(F(camYaw)).Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
-              .Append(",\"lf\":").Append(k.left ? 1 : 0)
+              .Append(",\"ps\":").Append(k.pas).Append(",\"wg\":").Append(k.WingsOn ? 1 : 0).Append(",\"rg\":").Append(k.rage ? 1 : 0).Append(",\"sn\":").Append(k.stampN).Append(",\"lf\":").Append(k.left ? 1 : 0)
               .Append(",\"p\":[").Append(k.top).Append(',').Append(k.core).Append(',').Append(k.leg).Append("]")
               .Append(",\"why\":\"").Append(k.koWhy).Append("\"");
             if (debugState) sb.Append(",\"tl\":").Append(F(k.TiltDeg)).Append(",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]");

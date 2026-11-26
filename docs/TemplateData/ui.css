@@ -350,3 +350,19 @@ body.shk #fx{animation:shk .32s linear}
   .home-go{right:calc(10px + var(--sr))}
   .sel-side{right:calc(10px + var(--sr))}
 }
+
+/* パッシブの名前・名前入力 */
+#pasTag{position:absolute;left:50%;top:calc(var(--vh) * .17);transform:translateX(-50%);padding:5px 22px;font-weight:900;font-size:clamp(20px,3.2vw,34px);letter-spacing:.2em;color:#fff;background:rgba(10,11,16,.72);border:2px solid var(--pc,#fff);box-shadow:0 0 24px var(--pc,#fff);clip-path:var(--cut);text-shadow:0 0 14px var(--pc,#fff);opacity:0;white-space:nowrap}
+#pasTag.on{animation:pasA 1.5s ease-out}
+@keyframes pasA{0%{opacity:0;transform:translateX(-50%) scale(1.6)}12%{opacity:1;transform:translateX(-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-14px)}}
+.pl-name{cursor:pointer;text-decoration:underline dotted rgba(255,255,255,.4);text-underline-offset:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+.nm-row{gap:10px}
+.nm-box{display:flex;gap:8px;flex:1;justify-content:flex-end;min-width:0}
+#nameIn{flex:1;min-width:0;max-width:260px;height:44px;padding:0 12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.08);color:#fff;font:700 16px "M PLUS 1",system-ui,sans-serif;border-radius:0;-webkit-user-select:text;user-select:text}
+#nameIn:focus{outline:2px solid var(--gold);outline-offset:0}
+.nm{min-height:1.2em;font-size:12px;font-weight:800;margin-top:-6px}
+.nm.bad{color:#ff8f86}.nm.ok{color:#8fe3a0}
+.rs-name{font-size:13px;font-weight:900;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ladder li span{line-height:1.25}
+@media (max-aspect-ratio:4/5){.ladder{gap:3px}.ladder li{min-height:30px;padding:3px 8px;font-size:12px;grid-template-columns:3em 1fr auto}.ladder li b{font-size:13px}.grow-card{overflow-y:auto}}
+@media (max-height:520px){#pasTag{top:14%;font-size:18px;padding:3px 14px}.ladder li{min-height:28px}}

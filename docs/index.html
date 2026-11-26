@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@500;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="TemplateData/ui.css?v=18">
+<link rel="stylesheet" href="TemplateData/ui.css?v=19">
 </head>
 <body>
 <canvas id="unity-canvas" tabindex="-1"></canvas>
@@ -95,6 +95,8 @@
 
   <section class="pg" id="pgSet" data-pg="set">
     <div class="set-card">
+      <div class="set-row nm-row"><span>なまえ</span><div class="nm-box"><input id="nameIn" type="text" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="あなた" aria-label="なまえ"><button id="btnName" class="btn-sub">決定</button></div></div>
+      <div class="nm" id="nameMsg"></div>
       <div class="set-row"><span>音</span><button id="btnSound" class="btn-sub">オン</button></div>
       <div class="set-how" id="how"></div>
       <div class="set-row small"><span>記録</span><button id="btnWipe" class="btn-sub">レベルと戦績を消す</button></div>
@@ -119,6 +121,7 @@
   <div id="onoma"></div>
   <div id="angTag"></div>
   <div id="banner"><span></span></div>
+  <div id="pasTag"></div>
 </div>
 
 <div id="touch" hidden>
@@ -143,7 +146,7 @@
     <div class="rs-line" id="rsLine"></div>
     <div class="rs-xp" id="rsXpBox">
       <div class="rs-lv"><small>Lv</small><b id="rsLv">1</b></div>
-      <div class="rs-bar"><i class="xpbar"><u id="rsXp"></u></i><span id="rsGain"></span></div>
+      <div class="rs-bar"><div class="rs-name" id="rsName"></div><i class="xpbar"><u id="rsXp"></u></i><span id="rsGain"></span></div>
     </div>
     <div class="rs-up" id="rsUp" hidden></div>
     <div class="rs-btns">
@@ -189,7 +192,8 @@
 })();
 window.KB_BUILD = { loader: "Build/docs.loader.js", data: "Build/docs.data.unityweb", framework: "Build/docs.framework.js.unityweb", code: "Build/docs.wasm.unityweb", company: "tom3games", product: "GYRO RAGNAROK", version: "1.0" };
 </script>
-<script src="TemplateData/sfx.js?v=18"></script>
-<script src="TemplateData/ui.js?v=18"></script>
+<script src="TemplateData/sfx.js?v=19"></script>
+<script src="TemplateData/ng-words.js?v=19"></script>
+<script src="TemplateData/ui.js?v=19"></script>
 </body>
 </html>

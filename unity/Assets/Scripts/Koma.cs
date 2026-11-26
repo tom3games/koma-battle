@@ -63,8 +63,13 @@ public class Koma
     public float lossWall, lossHit, lossDash, lastHitT = -99;
     public int diveTarget = -1;
     public bool left;   // 左回転（逆回り）
+    // パッシブ（-1 なし / 0 逆鱗 1 天翔 2 魂喰らい 3 雷鳴の刻印 4 不屈 5 紅蓮の轍 6 影分身 7 黒鉄の盾）
+    public int pas = -1; public float baseAtk = 1f, pasCd;
+    public bool rage, gutsUsed, guard, rescueSet, wasAir; public int stampN, hitsTaken; public Koma stampBy; public Vector3 rescue;
+    Transform wings, hex; Transform[] stampObj = new Transform[3]; Material wingMat, hexMat, stampMat;
     float landAmp, landT = 99f, landAng, landSq;
     float auraT; Color auraC = Color.white; Transform aura, auraRing; Material auraMat, auraRingMat;
+    public bool WingsOn => wings != null && wings.gameObject.activeSelf;
     public float TiltDeg => tilt ? Quaternion.Angle(Quaternion.identity, tilt.localRotation) : 0f;
 
     public GameObject root; Transform tilt, spinner, ghost, shadow, marker, arrow, shield, funnel;
@@ -82,7 +87,7 @@ public class Koma
     {
         this.left = left;
         this.idx = idx; this.top = top; this.core = core; this.leg = leg; this.color = color; mats = m;
-        st = Parts.Compute(top, core, leg);
+        st = Parts.Compute(top, core, leg); baseAtk = st.atk;
         spinMax = 160f * st.stamina; spin = spinMax;
         BuildVisual(m);
     }
@@ -91,7 +96,7 @@ public class Koma
     {
         left = leftSpin;
         top = Mathf.Clamp(t, 0, Parts.Count - 1); core = Mathf.Clamp(c, 0, Parts.Count - 1); leg = Mathf.Clamp(l, 0, Parts.Count - 1);
-        st = Parts.Compute(top, core, leg);
+        st = Parts.Compute(top, core, leg); baseAtk = st.atk;
         spinMax = 160f * st.stamina; spin = spinMax;
         var p = root.transform.position;
         // 作り直す前に、このコマだけの形と素材を捨てる（WebGL のメモリが増え続けないように）
@@ -248,6 +253,31 @@ public class Koma
         auraRingMat = auraRing.GetComponent<MeshRenderer>().material;
         auraRing.gameObject.SetActive(false);
 
+        // パッシブの見た目: 光の羽・六角の盾・紋章
+        var wb = new MeshKit.Builder { twoSided = true }; Vector2 z0 = Vector2.zero;
+        for (int sd = -1; sd <= 1; sd += 2)
+            for (int i = 0; i < 4; i++)
+            {
+                float ang = (18f + i * 17f) * Mathf.Deg2Rad, len = 2.7f - i * 0.4f;
+                Vector3 b0 = new Vector3(sd * 0.3f, 0.7f, 0), tip = b0 + new Vector3(sd * Mathf.Cos(ang), Mathf.Sin(ang) * 0.9f, -0.15f * i) * len;
+                Vector3 nz = new Vector3(0, 0, 1);
+                wb.Quad(b0 + nz * 0.3f, b0 - nz * 0.3f, tip - nz * 0.1f, tip + nz * 0.1f, z0, z0, z0, z0);
+            }
+        wingMat = m.AddGlow(Color.white);
+        wings = MeshKit.Obj("wings", root.transform, wb.Mesh(), wingMat).transform;
+        wings.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        wingMat = wings.GetComponent<MeshRenderer>().material; wings.gameObject.SetActive(false);
+        hex = MeshKit.Obj("hex", root.transform, MeshKit.Frustum(1.15f, 1.15f, 1.1f, 6, false, false), m.AddGlow(Color.white)).transform;
+        hex.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        hexMat = hex.GetComponent<MeshRenderer>().material; hex.gameObject.SetActive(false);
+        for (int i = 0; i < 3; i++)
+        {
+            stampObj[i] = MeshKit.Obj("stamp", root.transform, MeshKit.Ring(0.22f, 0.36f, 6), m.AddGlow(Color.white)).transform;
+            stampObj[i].GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (i == 0) stampMat = stampObj[i].GetComponent<MeshRenderer>().material; else stampObj[i].GetComponent<MeshRenderer>().sharedMaterial = stampMat;
+            stampObj[i].gameObject.SetActive(false);
+        }
+
         trail = root.AddComponent<TrailRenderer>();
         trail.material = m.Alpha(Color.white, Texture2D.whiteTexture);
         trail.time = 0.22f;
@@ -340,6 +370,7 @@ public class Koma
         padCd = 0; hitFlash = 0; lastVy = 0; lastHitT = -99; specialT = 0;
         superT = 0; superCd = 0; boardT = 0; fireT = 0; fireCd = 0; hiT = 0; burnSnd = 0; lastShiftT = -9; jumpReq = false; lastFire = new Vector3(0, -999, 0);
         tilt.localRotation = Quaternion.identity; tilt.localScale = Vector3.one; landT = 99f; landAmp = 0; auraT = 0;
+        rage = false; gutsUsed = false; guard = false; rescueSet = false; wasAir = false; stampN = 0; stampBy = null; hitsTaken = 0; pasCd = 0; st.atk = baseAtk;
         root.SetActive(true);
         root.transform.position = pos;
         trail.Clear();
@@ -439,6 +470,28 @@ public class Koma
             float grow = Mathf.Clamp01((3.5f - tornadoT) / 0.4f) * Mathf.Clamp01(tornadoT / 0.3f);
             funnel.localScale = new Vector3(grow, Mathf.Max(0.05f, grow), grow);
         }
+        // 光の羽（空中・天翔）／六角の盾（黒鉄）／紋章（雷鳴を受けている間）
+        bool wOn = alive && pas == 1 && !grounded && gh > -100 && pos.y - gh > 0.7f;
+        wings.gameObject.SetActive(wOn);
+        if (wOn)
+        {
+            Vector3 hv = new Vector3(vel.x, 0, vel.z); if (hv.sqrMagnitude < 0.5f) hv = new Vector3(0, 0, 1);
+            wings.position = pos; wings.rotation = Quaternion.LookRotation(hv.normalized);
+            float fl = 1f + 0.18f * Mathf.Sin(Time.unscaledTime * 16f);
+            wings.localScale = new Vector3(1f, fl, 1f);
+            wingMat.SetColor("_TintColor", new Color(1f, 0.75f, 0.25f) * 0.5f);
+        }
+        hex.gameObject.SetActive(alive && guard);
+        if (alive && guard) { hex.position = pos + Vector3.up * 0.15f; hex.rotation = Quaternion.Euler(0, Time.unscaledTime * 90f, 0); hexMat.SetColor("_TintColor", new Color(0.4f, 0.9f, 1f) * (0.22f + 0.08f * Mathf.Sin(Time.unscaledTime * 9f))); }
+        for (int si = 0; si < 3; si++)
+        {
+            bool on = alive && si < stampN; stampObj[si].gameObject.SetActive(on);
+            if (!on) continue;
+            float aa = Time.unscaledTime * 3f + si * 2.094f;
+            stampObj[si].position = pos + new Vector3(Mathf.Cos(aa) * 0.95f, 1.1f + 0.1f * si, Mathf.Sin(aa) * 0.95f);
+            stampObj[si].rotation = Quaternion.Euler(90f, Time.unscaledTime * 200f, 0);
+        }
+        if (stampMat != null) stampMat.SetColor("_TintColor", new Color(0.7f, 0.35f, 1f) * 0.9f);
         bool auraOn = alive && (auraT > 0 || specialPhase > 0 || tornadoT > 0);
         if (auraT > 0) auraT -= realDt;
         aura.gameObject.SetActive(auraOn); auraRing.gameObject.SetActive(auraOn);

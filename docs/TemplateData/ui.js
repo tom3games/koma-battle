@@ -30,9 +30,21 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       { n: 'テンペスト・ヴォルテックス', d: '竜巻で引き寄せて巻き上げ、吹き飛ばす' },
       { n: 'ファントム・レイド', d: '近い相手へ3連続の突進' },
       { n: 'イージス・リバース', d: '3秒の盾。弾き返し、回転を戻す' }] },
+    { key: 'pas', name: 'パッシブ', parts: [
+      { n: 'なし', d: 'パッシブなし' },
+      { n: '逆鱗', d: '回転が3割を切ると赤黒いオーラ。攻撃+25%・弾かれにくい' },
+      { n: '天翔', d: '空中で光の羽。急降下+30%・着地で衝撃波' },
+      { n: '魂喰らい', d: '当てた相手の回転を吸い取って自分に戻す' },
+      { n: '雷鳴の刻印', d: '同じ相手に3回当てると雷の予告。円の外へ逃げれば外れる' },
+      { n: '不屈', d: '1試合1度、倒れる所で踏みとどまり回転5%で復活' },
+      { n: '紅蓮の轍', d: '回転7割以上で通った跡に炎。踏んだ相手を削る' },
+      { n: '影分身', d: 'ダッシュの後に残像が残り、触れた相手を弾く' },
+      { n: '黒鉄の盾', d: '3回当てられると光の盾。次の1発を無効にする' }] },
   ]
   const NAMES = ['あなた', 'クリムゾン・ガルム', 'アイアン・ゴーレム', 'ミラージュ・ヴァイパー']
   const COLORS = ['#c8432f', '#3d6aa8', '#5f8a4e', '#b8902e']
+  const PAS_RGB = ['255,40,30', '255,220,110', '100,255,150', '180,90,255', '255,255,255', '255,130,30', '100,150,255', '100,230,255']
+  const PAS_HEX = ['#ff2a22', '#ffdc6e', '#64ff96', '#b45aff', '#ffffff', '#ff821e', '#6496ff', '#64e6ff']
   const SPECIALS = SLOTS.find(x => x.key === 'sp').parts.map(p => p.n)
   const isTouch = matchMedia('(pointer: coarse)').matches
   const DEBUG = /debug/.test(location.search)
@@ -40,6 +52,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   // パーツの横からの絵（自前の SVG・金属の灰と塗装の色）
   const cM = '#9aa1ab', cMD = '#555b64', cP = '#b8402e', cR = '#1c1e22', cB = '#b08a4a'
   const ART = {
+    pas: [`<circle cx="40" cy="20" r="12" fill="none" stroke="#8a8f98" stroke-width="3" stroke-dasharray="4 4"/>`].concat(['#ff2a22', '#ffdc6e', '#64ff96', '#b45aff', '#ffffff', '#ff821e', '#6496ff', '#64e6ff'].map(c => `<circle cx="40" cy="20" r="15" fill="none" stroke="${c}" stroke-width="2.5" opacity=".6"/><circle cx="40" cy="20" r="8" fill="${c}"/><path d="M40 2v7M40 31v7M22 20h7M51 20h7" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`)),
     dir: [
       `<path d="M40 6a14 14 0 1 1-12 21" fill="none" stroke="#d9a441" stroke-width="4" stroke-linecap="round"/><path d="M22 24l5 8 8-5z" fill="#d9a441"/>`,
       `<path d="M40 6a14 14 0 1 0 12 21" fill="none" stroke="#2fd6c0" stroke-width="4" stroke-linecap="round"/><path d="M58 24l-5 8-8-5z" fill="#2fd6c0"/>`],
@@ -90,22 +103,26 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     set(k, v) { try { localStorage.setItem(k, v) } catch (e) {} },
   }
   // ---------- レベル（試合の結果で経験値。保存は localStorage） ----------
-  const LV_XP = [0, 80, 200, 360, 560, 800, 1100]   // そのレベルに届く累計の経験値
+  const LV_XP = [0, 80, 200, 360, 560, 800, 1100, 1400, 1700, 2000]   // そのレベルに届く累計の経験値
   const MAXLV = LV_XP.length
   // レベルで解放される物（[段の名前, 何番目]）。Lv1 では右回転・必殺は1つ・パーツは一部だけ
-  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1]], 4: [['top', 4], ['leg', 3]], 5: [['sp', 2]], 6: [['core', 3], ['core', 4]], 7: [['sp', 3]] }
+  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1], ['pas', 1]], 4: [['top', 4], ['leg', 3], ['pas', 2]], 5: [['sp', 2], ['pas', 3]], 6: [['core', 3], ['core', 4], ['pas', 4]], 7: [['sp', 3], ['pas', 5]], 8: [['pas', 6]], 9: [['pas', 7]], 10: [['pas', 8]] }
   const needLv = (key, i) => { for (const lv in UNLOCKS) if (UNLOCKS[lv].some(u => u[0] === key && u[1] === i)) return +lv; return 1 }
   const slotOf = key => SLOTS.find(x => x.key === key)
-  const unlockName = ([k, i]) => k === 'dir' ? '左回転のコマ' : k === 'sp' ? `必殺「${slotOf(k).parts[i].n}」` : `${slotOf(k).name}パーツ「${slotOf(k).parts[i].n}」`
+  const unlockName = ([k, i]) => k === 'dir' ? '左回転のコマ' : k === 'pas' ? `パッシブ「${slotOf(k).parts[i].n}」` : k === 'sp' ? `必殺「${slotOf(k).parts[i].n}」` : `${slotOf(k).name}パーツ「${slotOf(k).parts[i].n}」`
   const levelOf = xp => { let l = 1; for (let i = 1; i < MAXLV; i++) if (xp >= LV_XP[i]) l = i + 1; return l }
   const fracOf = xp => { const l = levelOf(xp); return l >= MAXLV ? 1 : (xp - LV_XP[l - 1]) / (LV_XP[l] - LV_XP[l - 1]) }
-  const prof = { xp: 0, win: 0, lose: 0, seen: 1 }
+  const prof = { xp: 0, win: 0, lose: 0, seen: 1, name: '' }
   try { const s = JSON.parse(store.get('koma-prof', 'null')); if (s) Object.assign(prof, s) } catch (e) {}
   { const m = /[?&]lv=(\d+)/.exec(location.search); if (m) { prof.xp = Math.max(prof.xp, LV_XP[Math.min(Math.max(+m[1], 1), MAXLV) - 1]); prof.seen = levelOf(prof.xp) } }
+  // プレイヤー名（全角8文字まで・NGワードは保存しない）
+  const cleanName = n => (window.NG ? NG.clean(n) : String(n || '').trim().slice(0, 8))
+  if (prof.name && (cleanName(prof.name) !== prof.name || (window.NG && NG.bad(prof.name)))) prof.name = ''
+  const myName = () => prof.name || 'あなた'
   const saveProf = () => store.set('koma-prof', JSON.stringify(prof))
   const myLv = () => levelOf(prof.xp)
 
-  const pick = { top: 0, core: 0, leg: 0, dir: 0, sp: 0 }
+  const pick = { top: 0, core: 0, leg: 0, dir: 0, sp: 0, pas: 0 }
   try { const s = JSON.parse(store.get('koma-pick2', 'null')); if (s) Object.assign(pick, s) } catch (e) {}
   const fixPick = () => { for (const sl of SLOTS) if (!(pick[sl.key] >= 0 && pick[sl.key] < sl.parts.length) || needLv(sl.key, pick[sl.key]) > myLv()) pick[sl.key] = 0 }
   fixPick()
@@ -114,6 +131,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   // ---------- Unity ----------
   let unity = null, progress = 0
   const KB = window.KB = { state: null, events: [], ready: false, send, onUnity, screen: 'title' }
+  KB.pick = pick; KB.startMatch = () => startMatch()
   const pending = []
   // Unity の準備前に送った命令はためておき、準備ができたら流す
   function send(cmd) { if (unity) unity.SendMessage('KomaBoot', 'Cmd', cmd); else if (pending.length < 50) pending.push(cmd) }
@@ -218,6 +236,31 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         Snd.play('boom', { vol: 1, rate: 0.62 }); Snd.play('clang', { vol: 0.6, rate: 0.55 }); Snd.play('hit', { vol: 0.8, rate: 0.5 })
         break
       }
+      case 'pas': {
+        // パッシブの発動: 名前は自分のだけ出す（見た目と音は全員）
+        const me = m.i === 0, i = m.p | 0
+        if (me) pasTag(i)
+        tint2(PAS_RGB[i], me ? 0.6 : 0.3)
+        Snd.play('whoosh', { vol: me ? 0.7 : 0.35, rate: 0.9 }); Snd.play('clang', { vol: me ? 0.55 : 0.3, rate: 0.8 })
+        break
+      }
+      case 'pasfx': {
+        const t = m.p | 0
+        if (t === 0) Snd.play('clang', { vol: 0.5, rate: 1.2 })
+        if (t === 1) Snd.play('boom', { vol: 0.6, rate: 0.9 })
+        if (t === 2) Snd.play('clang', { vol: 0.35, rate: 1.7 })
+        if (t === 3) { Snd.play('clang', { vol: 0.8, rate: 0.9 }); Snd.play('hit', { vol: 0.6, rate: 1.3 }) }
+        if (t === 4) { Snd.play('boom', { vol: 1, rate: 0.5 }); Snd.play('spring', { vol: 0.7, rate: 1.4 }); ring(m.x, m.y); if (m.i === 0) { flash(); shakeScreen() } }
+        break
+      }
+      case 'warn':
+        // 雷の予告: ゴロゴロ。円の外へ逃げれば外れる
+        Snd.play('boom', { vol: 0.5, rate: 0.45 }); Snd.play('whoosh', { vol: 0.45, rate: 0.5 }); tint2(PAS_RGB[3], 0.35)
+        break
+      case 'thunder':
+        Snd.play('boom', { vol: 1, rate: 0.55 }); Snd.play('clang', { vol: 0.8, rate: 0.6 })
+        flash(); ring(m.x, m.y); tint2(PAS_RGB[3], 0.8); if (m.hit || m.i === 0) shakeScreen()
+        break
       case 'land': {
         // 着地: 高いほど低く重い音。先端の金属が床に当たる高い音を少し重ねる
         if (m.p < 8) break
@@ -260,6 +303,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   function renderHeader() {
     const l = myLv()
     $('plLv').textContent = l
+    document.querySelector('.pl-name').textContent = myName()
     $('plXp').style.width = Math.round(fracOf(prof.xp) * 100) + '%'
     $('plXpTxt').textContent = l >= MAXLV ? '最高レベル' : `次のレベルまで ${LV_XP[l] - prof.xp}`
     $('dotGear').hidden = prof.seen >= l
@@ -272,6 +316,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (l >= MAXLV) $('homeNext').innerHTML = '<h3>育成</h3>すべて解放済み。'
     else $('homeNext').innerHTML = `<h3>次の解放</h3><b>Lv${l + 1}</b>　${UNLOCKS[l + 1].map(unlockName).join('、')}<br>あと ${LV_XP[l] - prof.xp} EXP（勝つと多くもらえる）`
   }
+  const shortName = ([k, i]) => k === 'dir' ? '左回転' : k === 'pas' ? `パッシブ ${slotOf(k).parts[i].n}` : k === 'sp' ? `必殺 ${slotOf(k).parts[i].n}` : slotOf(k).parts[i].n
   function renderGrow() {
     const l = myLv()
     $('grLv').textContent = l
@@ -281,11 +326,12 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     let h = `<li class="${l === 1 ? 'cur' : 'done'}"><b>Lv1</b><span>右回転のコマ・基本のパーツ</span><em>${l === 1 ? 'いま' : '解放済み'}</em></li>`
     for (let lv = 2; lv <= MAXLV; lv++) {
       const st = lv < l ? 'done' : lv === l ? 'cur' : 'lock'
-      h += `<li class="${st}"><b>Lv${lv}</b><span>${UNLOCKS[lv].map(unlockName).join('、')}</span><em>${lv <= l ? (lv === l ? 'いま' : '解放済み') : LOCK_SVG}</em></li>`
+      h += `<li class="${st}"><b>Lv${lv}</b><span>${UNLOCKS[lv].map(shortName).join('、')}</span><em>${lv <= l ? (lv === l ? 'いま' : '解放済み') : LOCK_SVG}</em></li>`
     }
     $('ladder').innerHTML = h
   }
   function renderSet() {
+    if (document.activeElement !== $('nameIn')) $('nameIn').value = prof.name
     $('btnSound').textContent = muted ? 'オフ' : 'オン'
     $('how').innerHTML = isTouch
       ? '<span><b>左</b>スティックで動く（外をなぞると視点）</span><span><b>右</b>倒して離すとダッシュ（空中なら急降下）</span><span><b>星</b>光ったら必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
@@ -332,7 +378,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   }
   const ARROW_L = '<svg viewBox="0 0 24 24"><path d="M15 4L7 12l8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg>'
   const ARROW_R = '<svg viewBox="0 0 24 24"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg>'
-  function sendLoadout() { send(`loadout|${pick.top},${pick.core},${pick.leg},${pick.sp},${pick.dir}`) }
+  function sendLoadout() { send(`loadout|${pick.top},${pick.core},${pick.leg},${pick.sp},${pick.dir},${pick.pas - 1}`) }
   let loadoutT = 0
   function sendLoadoutSoon() { clearTimeout(loadoutT); loadoutT = setTimeout(sendLoadout, 140) }
   document.querySelectorAll('#vsPick button').forEach(b => {
@@ -359,7 +405,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     show('hud')
     if (isTouch && store.get('koma-hint', '') !== '1') showHint()
     send('move|0,0')
-    send(`start|${pick.top},${pick.core},${pick.leg},${nCpu},${pick.sp},${pick.dir}`)
+    send(`start|${pick.top},${pick.core},${pick.leg},${nCpu},${pick.sp},${pick.dir},${pick.pas - 1}`)
     lockMouse()
   }
 
@@ -391,7 +437,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         el = tagEls[k.i] = document.createElement('div')
         el.className = 'tag' + (k.i === 0 ? ' me' : '')
         el.style.setProperty('--c', COLORS[k.i])
-        el.innerHTML = `<span>${NAMES[k.i]}</span>`
+        { const sp = document.createElement('span'); sp.textContent = k.i === 0 ? myName() : NAMES[k.i]; el.appendChild(sp) }
         $('tags').appendChild(el)
       }
       el.classList.toggle('out', k.a === 0)
@@ -443,6 +489,14 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     b.style.setProperty('--bc', SP_RGB[kind | 0] || SP_RGB[0])
     b.classList.remove('on'); void b.offsetWidth; b.classList.add('on')
   }
+  function pasTag(i) {
+    const t = $('pasTag'); t.textContent = slotOf('pas').parts[i + 1].n; t.style.setProperty('--pc', PAS_HEX[i])
+    t.classList.remove('on'); void t.offsetWidth; t.classList.add('on')
+  }
+  function tint2(rgb, power) {
+    const t = $('tint'); t.style.setProperty('--tc', `rgba(${rgb},${(0.85 * power).toFixed(2)})`)
+    t.classList.remove('on'); void t.offsetWidth; t.classList.add('on')
+  }
   function tint(kind, power) {
     const t = $('tint'); t.style.setProperty('--tc', `rgba(${SP_RGB[kind | 0] || SP_RGB[0]},${(0.85 * power).toFixed(2)})`)
     t.classList.remove('on'); void t.offsetWidth; t.classList.add('on')
@@ -476,7 +530,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     const lv1 = levelOf(prof.xp)
     m.gain = gain; m.lvBefore = lv0; m.lvAfter = lv1
     $('rsUp').hidden = true
-    $('rsLv').textContent = lv0
+    $('rsLv').textContent = lv0; $('rsName').textContent = myName()
     $('rsGain').textContent = `+${gain} EXP`
     const bar = $('rsXp'), box = bar.parentNode
     box.classList.remove('anim'); bar.style.width = Math.round(fracOf(before) * 100) + '%'
@@ -530,6 +584,18 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   applyMute()
   $('btnMute').onclick = () => { muted = !muted; Snd.init(); applyMute(); store.set('koma-mute', muted ? '1' : '0') }
   $('btnSound').onclick = () => { $('btnMute').onclick() }
+  // 名前: 全角8文字まで。NGは保存せず「その名前は使えません」（言葉は出さない）
+  function saveName() {
+    const v = cleanName($('nameIn').value); const msg = $('nameMsg')
+    if (v && window.NG && NG.bad(v)) { msg.textContent = 'その名前は使えません'; msg.className = 'nm bad'; return false }
+    prof.name = v; saveProf(); $('nameIn').value = v
+    msg.textContent = v ? '保存しました' : '「あなた」のままです'; msg.className = 'nm ok'
+    renderHeader(); return true
+  }
+  $('btnName').onclick = () => { Snd.play('ui', { vol: 0.4 }); saveName() }
+  $('nameIn').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); saveName(); $('nameIn').blur() } })
+  $('nameIn').addEventListener('input', () => { const c = cleanName($('nameIn').value); if (c !== $('nameIn').value.trim()) $('nameIn').value = c; $('nameMsg').textContent = '' })
+  document.querySelector('.pl-name').onclick = () => { go('set'); setTimeout(() => $('nameIn').focus(), 50) }
   let wipeT = 0
   $('btnWipe').onclick = () => {
     const b = $('btnWipe')
