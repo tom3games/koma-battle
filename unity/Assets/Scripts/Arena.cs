@@ -144,6 +144,7 @@ public static class Arena
         CollapseR = 1e9f; SafeR = 1e9f; colT = -1; nextRing = RingR.Length - 2;
         foreach (var p in pieces) { p.go.SetActive(true); p.go.transform.localPosition = Vector3.zero; p.go.transform.localRotation = Quaternion.identity; p.falling = false; p.vel = Vector3.zero; }
         if (warnRing) warnRing.SetActive(false);
+        BoardOn = false; if (boardObj) boardObj.SetActive(false);
         if (baseObj) baseObj.SetActive(true);
     }
 
@@ -200,6 +201,56 @@ public static class Arena
         return dropped;
     }
 
+    // ---------- 周回加速板（試合の途中で外周が光る板に変わる） ----------
+    // 2026-11-26 本人「時間が経ったらステージの外側が円を描くように1周の加速する板に変わる」
+    public const float BoardR0 = 19.3f, BoardR1 = 21.9f, BoardRc = 20.6f;
+    public static bool BoardOn;
+    static GameObject boardObj; static Material boardMat;
+    public static bool OnBoard(float x, float z)
+    {
+        if (!BoardOn || Collapsing) return false;
+        float r = Mathf.Sqrt(x * x + z * z);
+        return r >= BoardR0 && r <= BoardR1 && r <= CollapseR - 0.3f;
+    }
+    // warn: 板になる直前の点滅（0..1）。on: 光らせる
+    public static void SetBoard(bool on, float t, float warn)
+    {
+        BoardOn = on;
+        if (!boardObj) return;
+        bool show = (on || warn > 0) && CollapseR > 1e8f && !Collapsing;
+        boardObj.SetActive(show);
+        if (!show) return;
+        float pulse = on ? 0.55f + 0.2f * Mathf.Sin(t * 7f) : 0.25f * (0.5f + 0.5f * Mathf.Sin(t * 22f)) * warn;
+        boardMat.SetColor("_TintColor", new Color(1f, 0.62f, 0.18f, 1f) * pulse);
+    }
+    static Mesh BoardMesh()
+    {
+        int seg = 144, nr = 2;
+        var v = new List<Vector3>(); var uv = new List<Vector2>(); var t = new List<int>();
+        for (int i = 0; i <= nr; i++)
+        {
+            float rr = Mathf.Lerp(BoardR0, BoardR1, i / (float)nr);
+            for (int j = 0; j <= seg; j++)
+            {
+                float a = j * Mathf.PI * 2 / seg;
+                float x = Mathf.Cos(a) * rr, z = Mathf.Sin(a) * rr;
+                v.Add(new Vector3(x, FloorH(x, z) + 0.04f, z));
+                uv.Add(new Vector2(i / (float)nr, j / (float)seg * 64f));
+            }
+        }
+        int W = seg + 1;
+        for (int i = 0; i < nr; i++)
+            for (int j = 0; j < seg; j++)
+            {
+                int a = i * W + j, b = a + 1, cc = a + W, d = cc + 1;
+                t.Add(a); t.Add(cc); t.Add(b); t.Add(b); t.Add(cc); t.Add(d);
+            }
+        var m = new Mesh();
+        m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(t, 0);
+        m.RecalculateNormals(); m.RecalculateBounds();
+        return m;
+    }
+
     // ---------- 見た目 ----------
     public static GameObject BuildVisual(Materials m)
     {
@@ -219,6 +270,10 @@ public static class Arena
         warnRing = MeshKit.Obj("WarnRing", root.transform, MeshKit.Ring(0.985f, 1.03f, 160), m.Warn);
         warnRing.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         warnRing.SetActive(false);
+        boardMat = m.AddGlow(new Color(1f, 0.62f, 0.18f, 1f), m.Chevron);
+        boardObj = MeshKit.Obj("Board", root.transform, BoardMesh(), boardMat);
+        boardObj.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        boardObj.SetActive(false);
         var basePlate = MeshKit.Obj("Base", root.transform, MeshKit.Frustum(Edge + 4f, Edge + 2.2f, 3.4f, 128, true), m.Base);
         basePlate.transform.localPosition = new Vector3(0, -6.4f, 0);
         baseObj = basePlate;

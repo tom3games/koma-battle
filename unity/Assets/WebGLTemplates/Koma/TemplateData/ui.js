@@ -171,6 +171,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'dive': Snd.play('whoosh', { vol: m.i === 0 ? 0.8 : 0.4, rate: 1.4 }); if (m.i === 0 && !m.p) lines(m.x, m.y, 0.5); break
       case 'boost': if (m.i === 0) { Snd.play('swish', { vol: 0.8, rate: 0.8 }); lines(m.x, m.y, 0.35) } break
       case 'jump': Snd.play('spring', { vol: m.i === 0 ? 0.7 : 0.3 }); break
+      case 'super': Snd.play('whoosh', { vol: m.i === 0 ? 0.8 : 0.35, rate: 1.6 }); if (m.i === 0) lines(m.x, m.y, 0.6); break
+      case 'miracle': Snd.play('boom', { vol: m.i === 0 ? 0.6 : 0.3, rate: 1.5 }); Snd.play('whoosh', { vol: 0.5, rate: 0.8 }); break
+      case 'burn': Snd.play('hit', { vol: m.i === 0 ? 0.3 : 0.15, rate: 1.7 }); break
+      case 'board': Snd.play('boom', { vol: 0.5, rate: 1.25 }); break
       case 'special':
         banner(m.i, m.p); lines(m.x, m.y, 1); Snd.play('whoosh', { vol: 0.9 }); Snd.duck(0.35, 1.2)
         break

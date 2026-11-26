@@ -27,6 +27,11 @@ public class KomaBoot : MonoBehaviour
     readonly List<long> keyBuf = new List<long>();
     Vector2 lastAimDir; float lastAimT = -99;
     float testScale = 1f;
+    bool boardAnnounced;
+    class Fire { public Vector3 pos; public Koma owner; public float t; }
+    readonly List<Fire> fires = new List<Fire>();
+    ParticleSystem fireP;
+    float BoardAt = 40f; const float FireLife = 2.5f;
     bool paused;
     Vector2 touchMove;
     bool touchMode, touchAimOn, stickDash; Vector2 touchAimDir;
@@ -54,7 +59,7 @@ public class KomaBoot : MonoBehaviour
     class Brain
     {
         public int target = -1; public float retarget, react, padGoal = -1, think;
-        public Vector2 jitter;
+        public Vector2 jitter; public float boardT;
     }
 
     static string F(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
@@ -118,6 +123,8 @@ public class KomaBoot : MonoBehaviour
 
         sparks = MakeParticles("Sparks", 0.32f, true);
         dust = MakeParticles("Dust", 0.5f, false);
+        fireP = MakeParticles("Fire", 0.5f, true);
+        { var fm = fireP.main; fm.gravityModifier = -0.25f; fm.maxParticles = 900; var fr = fireP.GetComponent<ParticleSystemRenderer>(); fr.material.SetColor("_TintColor", new Color(1f, 1f, 1f, 1f)); fr.velocityScale = 0.02f; fr.lengthScale = 1f; }
 
         for (int i = 0; i < 6; i++)
         {
@@ -194,6 +201,10 @@ public class KomaBoot : MonoBehaviour
             case "cpuoff": cpuOff = N(0) > 0; break;
             case "debugstate": debugState = N(0) > 0; break;
             case "timescale": testScale = Mathf.Clamp(N(0), 0.05f, 8f); break;
+            case "boardat": BoardAt = N(0); break;
+            case "fightt": fightT = N(0); break;
+            case "jump": player.jumpReq = true; break;
+            case "super": StartSuper(player); break;
             case "pause": paused = N(0) > 0; break;
             case "move": touchMove = new Vector2(N(0), N(1)); if (touchMove.sqrMagnitude > 1) touchMove.Normalize(); break;
             case "dash": touchDash = true; break;
@@ -262,14 +273,14 @@ public class KomaBoot : MonoBehaviour
         foreach (var k in komas) if (!k.isPlayer) k.root.SetActive(false);
         player.Place(new Vector3(0, Arena.H(0, 0), 0));
         player.grounded = true; player.SetArrow(Vector2.zero);
-        sudden = false; Arena.ResetCollapse();
+        sudden = false; Arena.ResetCollapse(); boardAnnounced = false; fires.Clear();
     }
 
     void StartMatch()
     {
         phase = "count"; phaseT = 0; fightT = 0; sudden = false; endWin = -1; endT = 0;
         touchMove = Vector2.zero; touchAimOn = false; touchDash = false; touchSpecial = false;
-        camInit = true; Arena.ResetCollapse();
+        camInit = true; Arena.ResetCollapse(); boardAnnounced = false; fires.Clear();
         pairCd.Clear();
         int n = 1 + nCpu;
         for (int i = 0; i < 4; i++)
@@ -332,6 +343,14 @@ public class KomaBoot : MonoBehaviour
 
         // fight / end
         if (phase == "fight") fightT += dt;
+        // 周回加速板: 40秒で外周が光る板になる（直前の3秒は点滅で知らせる）
+        if (phase == "fight")
+        {
+            bool bon = fightT >= BoardAt;
+            Arena.SetBoard(bon, fightT, fightT > BoardAt - 3f && !bon ? 1f : 0f);
+            if (bon && !boardAnnounced && !Arena.Collapsing) { boardAnnounced = true; Emit("{\"t\":\"e\",\"k\":\"board\"}"); }
+        }
+        UpdateFires(dt);
         // 最終局面: 100秒たつか、4人の試合で50秒を過ぎて残り2人になったら外から床が崩れる
         if (phase == "fight" && !sudden)
         {
@@ -357,11 +376,18 @@ public class KomaBoot : MonoBehaviour
                 if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) move.x += 1;
                 if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) move.x -= 1;
                 sprint = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                // シフトを0.3秒以内に2回: 一時的な超加速
+                if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift))
+                {
+                    if (Time.unscaledTime - player.lastShiftT < 0.3f) { StartSuper(player); player.lastShiftT = -9; }
+                    else player.lastShiftT = Time.unscaledTime;
+                }
+                if (Input.GetKeyDown(KeyCode.Space)) player.jumpReq = true;
                 if (touchMove.sqrMagnitude > 0.01f) move = touchMove;
                 if (move.sqrMagnitude > 1) move.Normalize();
                 move = CamRel(move);
                 dash = (!touchMode && Input.GetMouseButtonDown(0)) || touchDash;
-                special = (!touchMode && Input.GetMouseButtonDown(1)) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || touchSpecial;
+                special = (!touchMode && Input.GetMouseButtonDown(1)) || Input.GetKeyDown(KeyCode.E) || touchSpecial;
                 if (touchDash && Input.touchCount == 0 && !Input.GetMouseButtonDown(0))
                 {
                     // 画面のボタンのダッシュ: 動かしている向き、なければ近い相手へ
@@ -407,12 +433,37 @@ public class KomaBoot : MonoBehaviour
             if (k.dashCd > 0) k.dashCd -= dt;
             if (k.padCd > 0) k.padCd -= dt;
             if (k.boostCd > 0) k.boostCd -= dt;
+            if (k.superT > 0) k.superT -= dt;
+            if (k.superCd > 0) k.superCd -= dt;
+            if (k.boardT > 0) k.boardT -= dt;
+            if (k.fireCd > 0) k.fireCd -= dt;
+            if (k.burnSnd > 0) k.burnSnd -= dt;
+            k.jumpReq = false;
             UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
                 k.spin -= (0.75f * k.st.decay + (sudden ? 1.2f : 0f)) * dt;
                 k.gauge = Mathf.Min(100f, k.gauge + 2.2f * k.st.gaugeRate * dt);
                 if (k.spin <= 0) { k.spin = 0; KO(k, "spin"); }
+                // 奇跡: 回転数が上限近くを保つと、数秒だけ通り道に炎が残る（本人は無傷）
+                if (k.alive)
+                {
+                    k.hiT = k.SpinRatio >= 0.97f ? k.hiT + dt : 0f;
+                    if (k.fireT <= 0 && k.fireCd <= 0 && k.hiT >= 2f && fightT > 10f)
+                    {
+                        k.fireT = 4f; k.fireCd = 14f; k.hiT = 0; k.lastFire = new Vector3(0, -999, 0);
+                        EmitEv("miracle", k, 0); Spark(k.Center, Vector3.up, 40, 1.3f);
+                    }
+                    if (k.fireT > 0)
+                    {
+                        k.fireT -= dt;
+                        if (k.grounded && (k.pos - k.lastFire).sqrMagnitude > 0.8f)
+                        {
+                            k.lastFire = k.pos; fires.Add(new Fire { pos = k.pos, owner = k, t = FireLife });
+                            FireBurst(k.pos, 6);
+                        }
+                    }
+                }
             }
             k.Visual(dt, realDt);
         }
@@ -512,6 +563,7 @@ public class KomaBoot : MonoBehaviour
                 float sc = (o.pos - k.pos).magnitude + o.SpinRatio * 6f + (float)rng.NextDouble() * 3f;
                 if (sc < best) { best = sc; b.target = o.idx; }
             }
+            b.boardT = Arena.BoardOn && !Arena.Collapsing && rng.NextDouble() < 0.15 ? 1.5f + (float)rng.NextDouble() * 1.5f : 0f;
             b.padGoal = rng.NextDouble() < 0.12 ? rng.Next(Arena.Pads.Length + Arena.Mounds.Length) : -1;
             b.jitter = new Vector2((float)rng.NextDouble() - 0.5f, (float)rng.NextDouble() - 0.5f) * 2f;
         }
@@ -520,7 +572,12 @@ public class KomaBoot : MonoBehaviour
         Vector3 to = t.pos - k.pos; to.y = 0;
         float dist = to.magnitude;
         Vector2 want = new Vector2(to.x, to.z).normalized + b.jitter * 0.15f;
-        if (b.padGoal >= 0 && dist > 6f)
+        b.boardT -= dt;
+        if (Arena.Collapsing) b.boardT = 0;
+        float rk = new Vector2(k.pos.x, k.pos.z).magnitude;
+        bool riding = b.boardT > 0 && dist > 7f;
+        if (riding) want = rk < Arena.BoardRc ? new Vector2(k.pos.x, k.pos.z).normalized : Vector2.zero;
+        if (!riding && b.padGoal >= 0 && dist > 6f)
         {
             var p = b.padGoal < Arena.Pads.Length ? Arena.Pads[(int)b.padGoal] : Arena.Mounds[(int)b.padGoal - Arena.Pads.Length];
             want = (p - new Vector2(k.pos.x, k.pos.z)).normalized;
@@ -529,7 +586,7 @@ public class KomaBoot : MonoBehaviour
         // 端に寄りすぎたら内へ
         float r = new Vector2(k.pos.x, k.pos.z).magnitude;
         float lim = Mathf.Min(Arena.R, Arena.SafeR) - 3.5f;
-        if (r > lim) want += -new Vector2(k.pos.x, k.pos.z).normalized * (r - lim) * 1.2f;
+        if (!riding && r > lim) want += -new Vector2(k.pos.x, k.pos.z).normalized * (r - lim) * 1.2f;
         move = want.sqrMagnitude > 1 ? want.normalized : want;
         // 2026-11-25「白熱」: 遠くからでも突っ込む・間を短く
         if (k.grounded && k.dashCd <= 0 && dist < 10f && b.react <= 0)
@@ -675,6 +732,51 @@ public class KomaBoot : MonoBehaviour
         }
     }
 
+    void StartSuper(Koma k)
+    {
+        if (!k.alive || phase != "fight" || k.superCd > 0 || k.superT > 0) return;
+        k.superT = 1f; k.superCd = 6f; k.dashes++;
+        fovKick = Mathf.Max(fovKick, 7f);
+        Spark(k.Center, Vector3.up * 0.3f, 24, 1.1f);
+        EmitEv("super", k, 0);
+    }
+
+    void FireBurst(Vector3 at, int n)
+    {
+        var ep = new ParticleSystem.EmitParams();
+        for (int i = 0; i < n; i++)
+        {
+            Vector2 c = Random.insideUnitCircle * 0.75f;
+            ep.position = at + new Vector3(c.x, 0.15f, c.y);
+            ep.velocity = new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(2.5f, 4.5f), Random.Range(-0.6f, 0.6f));
+            ep.startSize = Random.Range(0.8f, 1.3f);
+            ep.startLifetime = Random.Range(0.35f, 0.6f);
+            float q = Random.value;
+            ep.startColor = q < 0.35f ? new Color(1f, 0.85f, 0.35f) : q < 0.75f ? new Color(1f, 0.5f, 0.12f) : new Color(0.95f, 0.25f, 0.08f);
+            fireP.Emit(ep, 1);
+        }
+    }
+
+    void UpdateFires(float dt)
+    {
+        for (int i = fires.Count - 1; i >= 0; i--)
+        {
+            var f = fires[i];
+            f.t -= dt;
+            if (f.t <= 0 || phase == "end") { fires.RemoveAt(i); continue; }
+            if (Random.value < 0.5f * Mathf.Min(1f, f.t / 0.8f)) FireBurst(f.pos, 1);
+            if (phase != "fight") continue;
+            foreach (var o in komas)
+            {
+                if (o == f.owner || !o.alive || !o.root.activeSelf) continue;
+                float dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z;
+                if (dx * dx + dz * dz > 1.3f * 1.3f || o.pos.y - f.pos.y > 1.2f) continue;
+                Damage(f.owner, o, 12f * dt);
+                if (o.burnSnd <= 0) { o.burnSnd = 0.45f; o.hitFlash = 0.08f; EmitEv("burn", o, 0); }
+            }
+        }
+    }
+
     void KO(Koma k, string why)
     {
         if (!k.alive || phase == "end") return;
@@ -692,11 +794,20 @@ public class KomaBoot : MonoBehaviour
         Vector3 p = k.pos, v = k.vel;
         bool ctrl = k.alive && phase == "fight" && k.specialPhase == 0;
         k.lockT -= dt;
+        // スペース: 小さく跳ぶ。高さは足の跳躍と重さで変わる（重いほど低い）
+        if (k.jumpReq && ctrl && k.grounded)
+        {
+            v.y = 7.2f * k.st.jump * Mathf.Pow(k.st.mass, -0.4f);
+            k.grounded = false; k.jumpReq = false; k.lastVy = 0;
+            Dust(p, 5); EmitEv("jump", k, 2);
+        }
         if (ctrl && k.lockT <= 0)
         {
             // 2026-11-25 本人「シフトボタン押しながらの移動で少し早くなるように」: Shift で加速と上限を少し上げる
-            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.isPlayer && sprint ? 2.2f : 1f);   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
-            v.x += move.x * acc * dt; v.z += move.y * acc * dt;
+            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.superT > 0 ? 4.5f : (k.isPlayer && sprint ? 2.2f : 1f));   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
+            Vector2 mv = move;
+            if (k.superT > 0 && mv.sqrMagnitude < 0.04f) { var hv0 = new Vector2(v.x, v.z); if (hv0.magnitude > 1f) mv = hv0.normalized; }
+            v.x += mv.x * acc * dt; v.z += mv.y * acc * dt;
         }
         if (k.specialPhase == 1)
         {
@@ -721,8 +832,21 @@ public class KomaBoot : MonoBehaviour
             if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
             float fr = Mathf.Exp(-0.9f * k.st.grip * dt);
             v.x *= fr; v.z *= fr;
-            float maxS = 9.5f * k.st.speed * (k.isPlayer && sprint ? 1.35f : 1f), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
-            if (hs > maxS && k.dashT <= 0 && k.boostCd < 0.35f)
+            // 周回加速板: 回る向き（反時計回り）に強く押され、帯に沿って1周流れる。回転数が少しだけ戻る
+            if (k.alive && phase == "fight" && Arena.OnBoard(p.x, p.z))
+            {
+                float rr = Mathf.Max(0.1f, Mathf.Sqrt(p.x * p.x + p.z * p.z));
+                Vector2 rad = new Vector2(p.x, p.z) / rr, tan = new Vector2(-rad.y, rad.x);
+                float vr = v.x * rad.x + v.z * rad.y, vt = v.x * tan.x + v.z * tan.y;
+                if (vt < 21f) vt = Mathf.Min(21f, vt + 48f * dt);
+                vr += ((Arena.BoardRc - rr) * 3f - vr) * (1f - Mathf.Exp(-8f * dt));
+                v.x = rad.x * vr + tan.x * vt; v.z = rad.y * vr + tan.y * vt;
+                if (k.boardT <= 0) EmitEv("boost", k, vt);
+                k.boardT = 0.8f;
+                k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.01f * dt);
+            }
+            float maxS = 9.5f * k.st.speed * (k.superT > 0 ? 2.3f : (k.isPlayer && sprint ? 1.35f : 1f)), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+            if (hs > maxS && k.dashT <= 0 && k.boostCd < 0.35f && k.boardT <= 0)
             {
                 float f = Mathf.Max(maxS / hs, Mathf.Exp(-3.2f * dt));
                 v.x *= f; v.z *= f;
@@ -966,6 +1090,10 @@ public class KomaBoot : MonoBehaviour
                 dmgToB *= facA; dmgToA *= facB;
                 // 芯・背後は大きく弾く。かすりは弾きが弱い
                 b.vel += nh * (facA - 1f) * 2.5f / mb; a.vel -= nh * (facB - 1f) * 2.5f / ma;
+                // 板で出した速さのまま当てると大きく弾く
+                { float hA = Mathf.Sqrt(aV0.x * aV0.x + aV0.z * aV0.z), hB = Mathf.Sqrt(bV0.x * bV0.x + bV0.z * bV0.z);
+                  if (a.boardT > 0 && hA > 13f && Vector3.Dot(aV0, nh) > 0.3f * hA) b.vel += nh * Mathf.Min(hA, 26f) * 0.55f / mb;
+                  if (b.boardT > 0 && hB > 13f && Vector3.Dot(bV0, -nh) > 0.3f * hB) a.vel -= nh * Mathf.Min(hB, 26f) * 0.55f / ma; }
                 if (aAir) { b.vel += nh * 9f; b.vel.y = Mathf.Min(b.vel.y, 1f); a.vel.y = 8f; a.vel.x *= 0.4f; a.vel.z *= 0.4f; a.airDashUsed = 1; a.aerialHits++; }
                 else if (!bAir) { b.vel.y += pop; b.grounded = false; }
                 if (bAir) { a.vel -= nh * 9f; a.vel.y = Mathf.Min(a.vel.y, 1f); b.vel.y = 8f; b.vel.x *= 0.4f; b.vel.z *= 0.4f; b.airDashUsed = 1; b.aerialHits++; }

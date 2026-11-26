@@ -54,6 +54,7 @@ public class Koma
     public float dashCd, dashT, lockT, airDashUsed, padCd, boostCd, hitFlash;
     public float specialT; public int specialPhase; public Vector3 specialTarget; public int rushLeft;
     public float shieldT, tornadoT;
+    public float superT, superCd, boardT, fireT, fireCd, hiT, burnSnd, lastShiftT = -9; public bool jumpReq; public Vector3 lastFire;
     public string koWhy = "";
     public float koTime;
     public bool lastGroundRamp; public float lastVy;
@@ -318,6 +319,7 @@ public class Koma
         spin = spinMax; gauge = 0; dashCd = 0; dashT = 0; airDashUsed = 0; specialPhase = 0; koWhy = ""; shieldT = 0; tornadoT = 0; rushLeft = 0;
         dealt = 0; aerialHits = 0; specials = 0; dashes = 0; lossWall = 0; lossHit = 0; lossDash = 0; diveTarget = -1; boostCd = 0;
         padCd = 0; hitFlash = 0; lastVy = 0; lastHitT = -99; specialT = 0;
+        superT = 0; superCd = 0; boardT = 0; fireT = 0; fireCd = 0; hiT = 0; burnSnd = 0; lastShiftT = -9; jumpReq = false; lastFire = new Vector3(0, -999, 0);
         tilt.localRotation = Quaternion.identity;
         root.SetActive(true);
         root.transform.position = pos;
@@ -394,6 +396,6 @@ public class Koma
             float grow = Mathf.Clamp01((3.5f - tornadoT) / 0.4f) * Mathf.Clamp01(tornadoT / 0.3f);
             funnel.localScale = new Vector3(grow, Mathf.Max(0.05f, grow), grow);
         }
-        trail.emitting = alive && (dashT > 0 || specialPhase > 0 || boostCd > 0.5f || (!grounded && vel.magnitude > 6f));
+        trail.emitting = alive && (dashT > 0 || specialPhase > 0 || boostCd > 0.5f || superT > 0 || boardT > 0.3f || fireT > 0 || (!grounded && vel.magnitude > 6f));
     }
 }
