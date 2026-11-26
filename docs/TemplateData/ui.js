@@ -160,8 +160,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         Snd.play('hit', { vol: Math.min(1, 0.5 + m.p / 20), rate: big ? 0.8 : 0.9 })
         if (big || m.vn > 14) Snd.play('clang', { vol: Math.min(1, 0.4 + m.p / 22), rate: 0.85 })
         // 2026-11-26 本人「芯とか掠りとか出すのやめて」: 当たりの角度は数値だけに効かせ、文字は出さない
-        if (air) { lines(m.x, m.y, 1); onoma('ドゴォッ', m.x, m.y); flash(); Snd.duck(0.5, 0.8) }
-        else if (big) { lines(m.x, m.y, 0.7); onoma('ガギィン', m.x, m.y) }
+        // 2026-11-26 本人「他の人の効果音まで文字で出さなくていい」: 擬音の文字は自分が当てた・当てられた時だけ
+        { const me = m.a === 0 || m.b === 0
+          if (air) { lines(m.x, m.y, 1); if (me) { onoma('ドゴォッ', m.x, m.y); flash() } Snd.duck(0.5, 0.8) }
+          else if (big) { lines(m.x, m.y, 0.7); if (me) onoma('ガギィン', m.x, m.y) } }
         break
       }
       case 'wall': Snd.play('hit', { vol: 0.35 }); break
@@ -172,7 +174,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'special':
         banner(m.i, m.p); lines(m.x, m.y, 1); Snd.play('whoosh', { vol: 0.9 }); Snd.duck(0.35, 1.2)
         break
-      case 'boom': lines(m.x, m.y, 1); flash(); onoma('ズドン', m.x, m.y); Snd.play('boom', { vol: 1 }); break
+      case 'boom': lines(m.x, m.y, 1); if (m.i === 0) { flash(); onoma('ズドン', m.x, m.y) } Snd.play('boom', { vol: 1 }); break
       case 'ko':
         Snd.play('down', { vol: m.i === 0 ? 1 : 0.7 })
         onoma(m.why === 'out' ? '場外' : 'ダウン', m.x, Math.max(0.25, m.y))

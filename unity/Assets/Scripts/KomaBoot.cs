@@ -695,7 +695,7 @@ public class KomaBoot : MonoBehaviour
         if (ctrl && k.lockT <= 0)
         {
             // 2026-11-25 本人「シフトボタン押しながらの移動で少し早くなるように」: Shift で加速と上限を少し上げる
-            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.isPlayer && sprint ? 1.3f : 1f);
+            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.isPlayer && sprint ? 2.2f : 1f);   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
             v.x += move.x * acc * dt; v.z += move.y * acc * dt;
         }
         if (k.specialPhase == 1)
@@ -721,7 +721,7 @@ public class KomaBoot : MonoBehaviour
             if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
             float fr = Mathf.Exp(-0.9f * k.st.grip * dt);
             v.x *= fr; v.z *= fr;
-            float maxS = 9.5f * k.st.speed * (k.isPlayer && sprint ? 1.25f : 1f), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+            float maxS = 9.5f * k.st.speed * (k.isPlayer && sprint ? 1.35f : 1f), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
             if (hs > maxS && k.dashT <= 0 && k.boostCd < 0.35f)
             {
                 float f = Mathf.Max(maxS / hs, Mathf.Exp(-3.2f * dt));
