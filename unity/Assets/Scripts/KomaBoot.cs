@@ -832,14 +832,15 @@ public class KomaBoot : MonoBehaviour
             if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
             float fr = Mathf.Exp(-0.9f * k.st.grip * dt);
             v.x *= fr; v.z *= fr;
-            // 周回加速板: 回る向き（反時計回り）に強く押され、帯に沿って1周流れる。回転数が少しだけ戻る
+            // 周回加速板: 矢印の向き（時計回り）に強く押され、帯に沿って1周流れる。回転数が少しだけ戻る
+            // 2026-11-26 本人「降りられない・加速が矢印と反対」: 向きを矢印に合わせ、中央へ引き戻すのは外へはみ出した時だけ（内側へはハンドルで降りられる）
             if (k.alive && phase == "fight" && Arena.OnBoard(p.x, p.z))
             {
                 float rr = Mathf.Max(0.1f, Mathf.Sqrt(p.x * p.x + p.z * p.z));
-                Vector2 rad = new Vector2(p.x, p.z) / rr, tan = new Vector2(-rad.y, rad.x);
+                Vector2 rad = new Vector2(p.x, p.z) / rr, tan = new Vector2(rad.y, -rad.x);
                 float vr = v.x * rad.x + v.z * rad.y, vt = v.x * tan.x + v.z * tan.y;
                 if (vt < 21f) vt = Mathf.Min(21f, vt + 48f * dt);
-                vr += ((Arena.BoardRc - rr) * 3f - vr) * (1f - Mathf.Exp(-8f * dt));
+                if (rr > Arena.BoardRc) vr += ((Arena.BoardRc - rr) * 3f - vr) * (1f - Mathf.Exp(-8f * dt));
                 v.x = rad.x * vr + tan.x * vt; v.z = rad.y * vr + tan.y * vt;
                 if (k.boardT <= 0) EmitEv("boost", k, vt);
                 k.boardT = 0.8f;
