@@ -3,7 +3,9 @@ import { open, wait, state, send } from './lib.mjs'
 const url = process.argv[2] || 'http://localhost:5393/'
 const { b, p, errs } = await open(url, { w: 640, h: 360 })
 await p.click('#btnPlay'); await wait(200)
-await p.click('.slot[data-slot="leg"] .arw[data-d="-1"]').catch(() => {})
+await p.click('#nav button[data-pg="gear"]'); await wait(300)
+await p.click('.slot[data-slot="leg"] .arw[data-d="-1"]'); await wait(300)
+await p.click('#nav button[data-pg="home"]'); await wait(300)
 await p.evaluate(() => document.querySelector('#vsPick button[data-n="1"]').click()); await p.click('#btnFight')
 await p.waitForFunction(() => window.KB.state && window.KB.state.ph === 'fight', null, { timeout: 60000 })
 await send(p, 'cpuoff|1')

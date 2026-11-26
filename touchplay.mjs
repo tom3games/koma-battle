@@ -14,7 +14,9 @@ for (const [W, H] of sizes) {
   const tap = async sel => { const bb = await p.locator(sel).boundingBox(); const x = bb.x + bb.width / 2, y = bb.y + bb.height / 2; await T('touchStart', 9, x, y); await wait(60); await T('touchEnd', 9, x, y) }
   await wait(600); await shot('1_title'); const o1 = await over()
   await tap('#btnPlay'); await wait(900); await shot('2_select'); const o2 = await over()
+  await tap('#nav button[data-pg="gear"]'); await wait(400)
   await tap('.slot[data-slot="leg"] .arw[data-d="1"]'); await wait(300); await shot('2b_select_long'); const o3 = await over()
+  await tap('#nav button[data-pg="home"]'); await wait(400)
   await tap('#btnFight'); await wait(1500); await shot('3_hint')
   await wait(3000)
   // ボット: 左の親指で相手へ寄り、右の親指で相手の向きへはじく

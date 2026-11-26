@@ -62,6 +62,10 @@ public class Koma
     public float dealt; public int aerialHits, specials, dashes;
     public float lossWall, lossHit, lossDash, lastHitT = -99;
     public int diveTarget = -1;
+    public bool left;   // 左回転（逆回り）
+    float landAmp, landT = 99f, landAng, landSq;
+    float auraT; Color auraC = Color.white; Transform aura, auraRing; Material auraMat, auraRingMat;
+    public float TiltDeg => tilt ? Quaternion.Angle(Quaternion.identity, tilt.localRotation) : 0f;
 
     public GameObject root; Transform tilt, spinner, ghost, shadow, marker, arrow, shield, funnel;
     TrailRenderer trail;
@@ -74,16 +78,18 @@ public class Koma
     public float Radius => st.radius;
     public Vector3 Center => pos + Vector3.up * 0.42f;
 
-    public Koma(int idx, int top, int core, int leg, Color color, Materials m)
+    public Koma(int idx, int top, int core, int leg, Color color, Materials m, bool left = false)
     {
+        this.left = left;
         this.idx = idx; this.top = top; this.core = core; this.leg = leg; this.color = color; mats = m;
         st = Parts.Compute(top, core, leg);
         spinMax = 160f * st.stamina; spin = spinMax;
         BuildVisual(m);
     }
 
-    public void Rebuild(int t, int c, int l, Materials m)
+    public void Rebuild(int t, int c, int l, Materials m, bool leftSpin = false)
     {
+        left = leftSpin;
         top = Mathf.Clamp(t, 0, Parts.Count - 1); core = Mathf.Clamp(c, 0, Parts.Count - 1); leg = Mathf.Clamp(l, 0, Parts.Count - 1);
         st = Parts.Compute(top, core, leg);
         spinMax = 160f * st.stamina; spin = spinMax;
@@ -231,6 +237,17 @@ public class Koma
         funnel.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         funnel.gameObject.SetActive(false);
 
+        // 必殺技のオーラ（光の柱＋足元の輪）。色は技ごと
+        auraMat = m.AddGlow(Color.white, m.Funnel);
+        aura = MeshKit.Obj("aura", root.transform, MeshKit.Frustum(1.15f, 0.55f, 3.6f, 28, false), auraMat).transform;
+        aura.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        auraMat = aura.GetComponent<MeshRenderer>().material;
+        aura.gameObject.SetActive(false);
+        auraRing = MeshKit.Obj("auraRing", root.transform, MeshKit.Ring(0.9f, 1.25f, 40), m.AddGlow(Color.white)).transform;
+        auraRing.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        auraRingMat = auraRing.GetComponent<MeshRenderer>().material;
+        auraRing.gameObject.SetActive(false);
+
         trail = root.AddComponent<TrailRenderer>();
         trail.material = m.Alpha(Color.white, Texture2D.whiteTexture);
         trail.time = 0.22f;
@@ -270,6 +287,8 @@ public class Koma
 
     void Blade(Vector3 size, Material mat, float y, float yaw, float dist, float sweep, float pitch, float stretch)
     {
+        // 回る向きに合わせて刃の向きを鏡写しにする（右回りは鏡写し、左回りはもとの形）
+        float mir = left ? 1f : -1f; yaw *= mir; sweep *= mir; pitch *= mir;
         var f = Put(MeshKit.Box(size), mat, y);
         var rot = Quaternion.Euler(0, yaw, 0);
         f.transform.localRotation = rot;
@@ -320,7 +339,7 @@ public class Koma
         dealt = 0; aerialHits = 0; specials = 0; dashes = 0; lossWall = 0; lossHit = 0; lossDash = 0; diveTarget = -1; boostCd = 0;
         padCd = 0; hitFlash = 0; lastVy = 0; lastHitT = -99; specialT = 0;
         superT = 0; superCd = 0; boardT = 0; fireT = 0; fireCd = 0; hiT = 0; burnSnd = 0; lastShiftT = -9; jumpReq = false; lastFire = new Vector3(0, -999, 0);
-        tilt.localRotation = Quaternion.identity;
+        tilt.localRotation = Quaternion.identity; tilt.localScale = Vector3.one; landT = 99f; landAmp = 0; auraT = 0;
         root.SetActive(true);
         root.transform.position = pos;
         trail.Clear();
@@ -344,6 +363,19 @@ public class Koma
         arrow.rotation = Quaternion.LookRotation(new Vector3(dir.x, 0, dir.y));
     }
 
+    // 着地: 先端で当たって傾き、首を振りながら（歳差）だんだん収まる。強いほど大きく傾き、少し潰れる
+    public void Land(float impactV, Vector3 hvel)
+    {
+        float s = Mathf.Clamp01((impactV - 6f) / 24f);
+        landAmp = Mathf.Lerp(4f, 20f, s);
+        landT = 0f; landSq = Mathf.Lerp(0.04f, 0.11f, s);
+        // 進んでいる向きへまず傾く（先端が止まって上が前へ倒れる）
+        landAng = hvel.sqrMagnitude > 1f ? Mathf.Atan2(hvel.x, hvel.z) : Random.value * 6.28f;
+    }
+
+    // 必殺技のオーラ（power 0 で消す）
+    public void SetAura(Color c, float seconds) { auraC = c; auraT = Mathf.Max(auraT, seconds); }
+
     // 見た目の更新（体力は数字でなく、回転の速さ・残像の濃さ・首振りで見せる）
     public void Visual(float dt, float realDt)
     {
@@ -352,7 +384,7 @@ public class Koma
         float w = alive ? Mathf.Lerp(7f, 46f, Mathf.Sqrt(sr)) : (down ? Mathf.Max(0, 8f - downT * 10f) : 30f);
         if (specialPhase > 0 || tornadoT > 0) w = 70f;
         spinAngle += w * dt * Mathf.Rad2Deg;
-        spinner.localRotation = Quaternion.Euler(0, -spinAngle, 0);
+        spinner.localRotation = Quaternion.Euler(0, left ? -spinAngle : spinAngle, 0);
         wobblePhase += dt * Mathf.Lerp(2f, 8f, 1 - sr);
         float wob = alive ? Mathf.Lerp(0f, 22f, Mathf.Pow(1 - sr, 1.6f)) : 0;
         if (down)
@@ -368,11 +400,22 @@ public class Koma
             if (lean.magnitude > 12f) lean = lean.normalized * 12f;
             tilt.localRotation = Quaternion.Euler(Mathf.Sin(wobblePhase) * wob + lean.x, 0, Mathf.Cos(wobblePhase) * wob + lean.z);
         }
+        // 着地の揺れ（歳差）と一瞬の潰れ
+        if (landT < 3f)
+        {
+            landT += dt;
+            float amp = landAmp * Mathf.Exp(-landT * 3.3f);
+            float a = landAng + landT * 15f;   // 最初は進行方向へ倒れ、首が回りながら収まる
+            tilt.localRotation = tilt.localRotation * Quaternion.Euler(Mathf.Cos(a) * amp, 0, -Mathf.Sin(a) * amp);
+            float sq = landSq * Mathf.Exp(-landT * 16f);
+            tilt.localScale = new Vector3(1 + sq * 0.5f, 1 - sq, 1 + sq * 0.5f);
+            if (amp < 0.25f) { landT = 99f; tilt.localScale = Vector3.one; }
+        }
         float ga = alive ? Mathf.Lerp(0.0f, 0.55f, sr * sr) * (specialPhase > 0 ? 1.4f : 1f) : 0;
         if (hitFlash > 0) { ga = 0.9f; hitFlash -= realDt; }
         var gc = Color.Lerp(color, Color.white, 0.3f); gc.a = Mathf.Clamp01(ga);
         ghostMat.SetColor("_TintColor", gc * 0.5f);
-        ghost.localRotation = Quaternion.Euler(0, -spinAngle * 0.37f, 0);
+        ghost.localRotation = Quaternion.Euler(0, (left ? -1f : 1f) * spinAngle * 0.37f, 0);
 
         float gh = Arena.H(pos.x, pos.z);
         if (gh > -100)
@@ -395,6 +438,21 @@ public class Koma
             funnel.rotation = Quaternion.Euler(0, -spinAngle * 0.6f, 0);
             float grow = Mathf.Clamp01((3.5f - tornadoT) / 0.4f) * Mathf.Clamp01(tornadoT / 0.3f);
             funnel.localScale = new Vector3(grow, Mathf.Max(0.05f, grow), grow);
+        }
+        bool auraOn = alive && (auraT > 0 || specialPhase > 0 || tornadoT > 0);
+        if (auraT > 0) auraT -= realDt;
+        aura.gameObject.SetActive(auraOn); auraRing.gameObject.SetActive(auraOn);
+        if (auraOn)
+        {
+            float pu = 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 24f);
+            float grow = Mathf.Clamp01(auraT > 0 ? 1f : 0.6f) * pu;
+            aura.position = new Vector3(pos.x, pos.y - 0.1f, pos.z);
+            aura.rotation = Quaternion.Euler(0, Time.unscaledTime * 420f, 0);
+            aura.localScale = new Vector3(1f + 0.25f * pu, 1f, 1f + 0.25f * pu);
+            auraMat.SetColor("_TintColor", auraC * (0.55f * grow));
+            auraRing.position = new Vector3(pos.x, (gh > -100 ? gh : pos.y) + 0.12f, pos.z);
+            auraRing.localScale = Vector3.one * (1.1f + 0.35f * Mathf.Sin(Time.unscaledTime * 18f));
+            auraRingMat.SetColor("_TintColor", auraC * (0.7f * pu));
         }
         trail.emitting = alive && (dashT > 0 || specialPhase > 0 || boostCd > 0.5f || superT > 0 || boardT > 0.3f || fireT > 0 || (!grounded && vel.magnitude > 6f));
     }

@@ -22,6 +22,9 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       { n: 'ヘヴンズスプリング', d: '高く跳ぶ。上からの一撃が重い' },
       { n: 'ファントムホイール', d: '最速。そのぶん回転が減りやすい' },
       { n: 'クレイモアスパイク', d: '踏ん張りと跳びの両方' }] },
+    { key: 'dir', name: '回転', parts: [
+      { n: '右回転', d: 'ふつうの回り。クセがなく扱いやすい' },
+      { n: '左回転', d: '逆回り。右回りの相手を1割強く削り、当たると相手が横へ流れる' }] },
     { key: 'sp', name: '必殺', parts: [
       { n: 'メテオ・ジャッジメント', d: '真上へ跳んで相手へ落ちる。衝撃波' },
       { n: 'テンペスト・ヴォルテックス', d: '竜巻で引き寄せて巻き上げ、吹き飛ばす' },
@@ -30,13 +33,16 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   ]
   const NAMES = ['あなた', 'クリムゾン・ガルム', 'アイアン・ゴーレム', 'ミラージュ・ヴァイパー']
   const COLORS = ['#c8432f', '#3d6aa8', '#5f8a4e', '#b8902e']
-  const SPECIALS = SLOTS[3].parts.map(p => p.n)
+  const SPECIALS = SLOTS.find(x => x.key === 'sp').parts.map(p => p.n)
   const isTouch = matchMedia('(pointer: coarse)').matches
   const DEBUG = /debug/.test(location.search)
 
   // パーツの横からの絵（自前の SVG・金属の灰と塗装の色）
   const cM = '#9aa1ab', cMD = '#555b64', cP = '#b8402e', cR = '#1c1e22', cB = '#b08a4a'
   const ART = {
+    dir: [
+      `<path d="M40 6a14 14 0 1 1-12 21" fill="none" stroke="#d9a441" stroke-width="4" stroke-linecap="round"/><path d="M22 24l5 8 8-5z" fill="#d9a441"/>`,
+      `<path d="M40 6a14 14 0 1 0 12 21" fill="none" stroke="#2fd6c0" stroke-width="4" stroke-linecap="round"/><path d="M58 24l-5 8-8-5z" fill="#2fd6c0"/>`],
     top: [
       `<path d="M14 25h52l-3 7H17z" fill="${cP}"/><path d="M3 23l15-4v7zM77 23l-15-4v7z" fill="${cM}"/><rect x="14" y="22" width="52" height="3" fill="${cMD}"/>`,
       `<path d="M5 21h70l-7 13H12z" fill="${cP}"/><rect x="3" y="19" width="74" height="3" fill="${cM}"/><path d="M14 18h6v3h-6zM60 18h6v3h-6z" fill="${cMD}"/>`,
@@ -83,9 +89,26 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v } catch (e) { return d } },
     set(k, v) { try { localStorage.setItem(k, v) } catch (e) {} },
   }
-  const pick = { top: 0, core: 0, leg: 0, sp: 0 }
+  // ---------- レベル（試合の結果で経験値。保存は localStorage） ----------
+  const LV_XP = [0, 80, 200, 360, 560, 800, 1100]   // そのレベルに届く累計の経験値
+  const MAXLV = LV_XP.length
+  // レベルで解放される物（[段の名前, 何番目]）。Lv1 では右回転・必殺は1つ・パーツは一部だけ
+  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1]], 4: [['top', 4], ['leg', 3]], 5: [['sp', 2]], 6: [['core', 3], ['core', 4]], 7: [['sp', 3]] }
+  const needLv = (key, i) => { for (const lv in UNLOCKS) if (UNLOCKS[lv].some(u => u[0] === key && u[1] === i)) return +lv; return 1 }
+  const slotOf = key => SLOTS.find(x => x.key === key)
+  const unlockName = ([k, i]) => k === 'dir' ? '左回転のコマ' : k === 'sp' ? `必殺「${slotOf(k).parts[i].n}」` : `${slotOf(k).name}パーツ「${slotOf(k).parts[i].n}」`
+  const levelOf = xp => { let l = 1; for (let i = 1; i < MAXLV; i++) if (xp >= LV_XP[i]) l = i + 1; return l }
+  const fracOf = xp => { const l = levelOf(xp); return l >= MAXLV ? 1 : (xp - LV_XP[l - 1]) / (LV_XP[l] - LV_XP[l - 1]) }
+  const prof = { xp: 0, win: 0, lose: 0, seen: 1 }
+  try { const s = JSON.parse(store.get('koma-prof', 'null')); if (s) Object.assign(prof, s) } catch (e) {}
+  { const m = /[?&]lv=(\d+)/.exec(location.search); if (m) { prof.xp = Math.max(prof.xp, LV_XP[Math.min(Math.max(+m[1], 1), MAXLV) - 1]); prof.seen = levelOf(prof.xp) } }
+  const saveProf = () => store.set('koma-prof', JSON.stringify(prof))
+  const myLv = () => levelOf(prof.xp)
+
+  const pick = { top: 0, core: 0, leg: 0, dir: 0, sp: 0 }
   try { const s = JSON.parse(store.get('koma-pick2', 'null')); if (s) Object.assign(pick, s) } catch (e) {}
-  for (const sl of SLOTS) if (!(pick[sl.key] >= 0 && pick[sl.key] < sl.parts.length)) pick[sl.key] = 0
+  const fixPick = () => { for (const sl of SLOTS) if (!(pick[sl.key] >= 0 && pick[sl.key] < sl.parts.length) || needLv(sl.key, pick[sl.key]) > myLv()) pick[sl.key] = 0 }
+  fixPick()
   let nCpu = +store.get('koma-ncpu', 2) || 2
 
   // ---------- Unity ----------
@@ -125,7 +148,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
 
   // ---------- 画面の切り替え ----------
   function show(id) {
-    for (const s of ['title', 'select', 'hud', 'result']) $(s).hidden = s !== id
+    for (const s of ['title', 'hub', 'hud', 'result']) $(s).hidden = s !== id
     document.body.classList.toggle('playing', id === 'hud')
     document.body.classList.toggle('on-title', id === 'title')
     $('touch').hidden = !(id === 'hud' && isTouch)
@@ -136,7 +159,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   function fightBtn() {
     const b = $('btnFight')
     b.disabled = !KB.ready
-    b.textContent = KB.ready ? '試合開始' : `準備中 ${Math.round(progress * 100)}%`
+    b.textContent = KB.ready ? '出撃' : `準備中 ${Math.round(progress * 100)}%`
   }
 
   function ev(m) {
@@ -146,7 +169,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         $('ldMini').classList.add('done'); $('load').classList.add('gone')
         if (isTouch) { send('touchmode|1'); send('quality|0') }
         sendLoadout()
-        send(KB.screen === 'select' ? 'select' : 'title')
+        send(camFor())
         fightBtn()
         break
       case 'count': countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
@@ -175,10 +198,35 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'miracle': Snd.play('boom', { vol: m.i === 0 ? 0.6 : 0.3, rate: 1.5 }); Snd.play('whoosh', { vol: 0.5, rate: 0.8 }); break
       case 'burn': Snd.play('hit', { vol: m.i === 0 ? 0.3 : 0.15, rate: 1.7 }); break
       case 'board': Snd.play('boom', { vol: 0.5, rate: 1.25 }); break
-      case 'special':
-        banner(m.i, m.p); lines(m.x, m.y, 1); Snd.play('whoosh', { vol: 0.9 }); Snd.duck(0.35, 1.2)
+      case 'special': {
+        // 発動の瞬間: 技の色の縁取り・輪・集中線・重い音。技の名前は自分が使った時だけ出す
+        const me = m.i === 0, kind = m.p | 0
+        if (me) banner(kind)
+        tint(kind, me ? 1 : 0.5); ring(m.x, m.y); lines(m.x, m.y, 1)
+        if (me) { flash(); shakeScreen() }
+        Snd.play('whoosh', { vol: me ? 1 : 0.6, rate: 0.7 })
+        Snd.play('boom', { vol: me ? 0.8 : 0.45, rate: 0.6 })
+        Snd.play('clang', { vol: me ? 0.7 : 0.35, rate: 0.7 })
+        Snd.duck(0.3, 1.5)
         break
-      case 'boom': lines(m.x, m.y, 1); if (m.i === 0) { flash(); onoma('ズドン', m.x, m.y) } Snd.play('boom', { vol: 1 }); break
+      }
+      case 'boom': {
+        // 当たりの瞬間: 閃光・輪・画面の揺れ・低い爆発音（自分の技・近くの技は大きく）
+        const me = m.i === 0
+        lines(m.x, m.y, 1); ring(m.x, m.y); tint(0, me ? 0.9 : 0.4)
+        if (me) { flash(); onoma('ズドォン', m.x, m.y); shakeScreen() }
+        Snd.play('boom', { vol: 1, rate: 0.62 }); Snd.play('clang', { vol: 0.6, rate: 0.55 }); Snd.play('hit', { vol: 0.8, rate: 0.5 })
+        break
+      }
+      case 'land': {
+        // 着地: 高いほど低く重い音。先端の金属が床に当たる高い音を少し重ねる
+        if (m.p < 8) break
+        const v = (m.i === 0 ? 1 : 0.5) * Math.min(1, 0.16 + m.p / 34)
+        Snd.play('hit', { vol: v, rate: 0.62 })
+        if (m.p > 12) Snd.play('clang', { vol: v * 0.45, rate: 1.3 })
+        if (m.p > 20) Snd.play('boom', { vol: v * 0.5, rate: 1.5 })
+        break
+      }
       case 'ko':
         Snd.play('down', { vol: m.i === 0 ? 1 : 0.7 })
         onoma(m.why === 'out' ? '場外' : 'ダウン', m.x, Math.max(0.25, m.y))
@@ -189,26 +237,83 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     }
   }
 
-  // ---------- タイトル（読み込み中から触れる） ----------
-  $('btnPlay').onclick = () => { Snd.init(); Snd.play('ui', { vol: 0.6 }); toSelect() }
+  // ---------- タイトル → ハブ（読み込み中から触れる） ----------
+  $('btnPlay').onclick = () => { Snd.init(); Snd.play('ui', { vol: 0.6 }); toHub(curPg) }
 
-  // ---------- パーツ選び ----------
-  // パーツ選び: 1段に1つ、左右で切り替える（並べすぎない）
+  // ---------- ハブ: ホーム / 装備 / 育成 / 設定 ----------
+  let curPg = 'home'
+  const LOCK_SVG = '<svg viewBox="0 0 10 12"><rect x="0.5" y="5" width="9" height="7" fill="currentColor"/><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>'
+  const camFor = () => (KB.screen === 'hub' && curPg === 'gear') ? 'select' : 'title'
+  function toHub(pg) { show('hub'); go(pg || curPg) }
+  function go(pg) {
+    curPg = pg; KB.page = pg
+    document.querySelectorAll('.pg').forEach(e => e.classList.toggle('on', e.dataset.pg === pg))
+    document.querySelectorAll('#nav button').forEach(e => e.classList.toggle('on', e.dataset.pg === pg))
+    if (pg === 'gear') { prof.seen = myLv(); saveProf(); buildSlots() }
+    renderHome(); renderGrow(); renderSet(); renderHeader()
+    send(camFor()); sendLoadout(); fightBtn()
+  }
+  document.querySelectorAll('#nav button').forEach(b => {
+    b.onpointerdown = e => { if (e.button > 0) return; e.preventDefault(); if (curPg !== b.dataset.pg) { Snd.init(); Snd.play('ui', { vol: 0.4 }); go(b.dataset.pg) } }
+    b.onclick = e => { if (e.detail === 0 && curPg !== b.dataset.pg) go(b.dataset.pg) }
+  })
+  function renderHeader() {
+    const l = myLv()
+    $('plLv').textContent = l
+    $('plXp').style.width = Math.round(fracOf(prof.xp) * 100) + '%'
+    $('plXpTxt').textContent = l >= MAXLV ? '最高レベル' : `次のレベルまで ${LV_XP[l] - prof.xp}`
+    $('dotGear').hidden = prof.seen >= l
+  }
+  const partArt = (key, i) => ART[key] ? `<svg viewBox="0 0 80 40">${ART[key][i]}</svg>` : '<svg viewBox="0 0 80 40"><path d="M40 6l7 14 15 1-11 10 3 15-14-8-14 8 3-15L18 21l15-1z" fill="#d9a441"/></svg>'
+  function renderHome() {
+    $('homeLoad').innerHTML = '<h3>いまの編成</h3>' + SLOTS.map(sl => `<button class="ld-row" data-go="gear">${'<span class="ln">' + sl.name + '</span>'}${partArt(sl.key, pick[sl.key])}<span class="lv">${sl.parts[pick[sl.key]].n}</span></button>`).join('')
+    $('homeLoad').querySelectorAll('.ld-row').forEach(b => b.onclick = () => { Snd.play('ui', { vol: 0.4 }); go('gear') })
+    const l = myLv()
+    if (l >= MAXLV) $('homeNext').innerHTML = '<h3>育成</h3>すべて解放済み。'
+    else $('homeNext').innerHTML = `<h3>次の解放</h3><b>Lv${l + 1}</b>　${UNLOCKS[l + 1].map(unlockName).join('、')}<br>あと ${LV_XP[l] - prof.xp} EXP（勝つと多くもらえる）`
+  }
+  function renderGrow() {
+    const l = myLv()
+    $('grLv').textContent = l
+    $('grXp').style.width = Math.round(fracOf(prof.xp) * 100) + '%'
+    $('grXpTxt').textContent = l >= MAXLV ? `累計 ${prof.xp} EXP　最高レベル` : `${prof.xp - LV_XP[l - 1]} / ${LV_XP[l] - LV_XP[l - 1]} EXP`
+    $('grRec').textContent = `${prof.win}勝 ${prof.lose}敗`
+    let h = `<li class="${l === 1 ? 'cur' : 'done'}"><b>Lv1</b><span>右回転のコマ・基本のパーツ</span><em>${l === 1 ? 'いま' : '解放済み'}</em></li>`
+    for (let lv = 2; lv <= MAXLV; lv++) {
+      const st = lv < l ? 'done' : lv === l ? 'cur' : 'lock'
+      h += `<li class="${st}"><b>Lv${lv}</b><span>${UNLOCKS[lv].map(unlockName).join('、')}</span><em>${lv <= l ? (lv === l ? 'いま' : '解放済み') : LOCK_SVG}</em></li>`
+    }
+    $('ladder').innerHTML = h
+  }
+  function renderSet() {
+    $('btnSound').textContent = muted ? 'オフ' : 'オン'
+    $('how').innerHTML = isTouch
+      ? '<span><b>左</b>スティックで動く（外をなぞると視点）</span><span><b>右</b>倒して離すとダッシュ（空中なら急降下）</span><span><b>星</b>光ったら必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
+      : '<span><b>WASD</b>移動</span><span><b>Shift</b>速く</span><span><b>Shift2回</b>超加速</span><span><b>Space</b>ジャンプ</span><span><b>マウス</b>視点</span><span><b>左クリック</b>ダッシュ</span><span><b>右クリック</b>必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
+  }
+
+  // ---------- 装備 ----------
+  // 1段に1つ、左右で切り替える。まだ解放されていない物は飛ばし、残りの数を鍵で出す
+  const usable = sl => sl.parts.map((p, i) => i).filter(i => needLv(sl.key, i) <= myLv())
   function slotBody(sl) {
-    const i = pick[sl.key], p = sl.parts[i], n = sl.parts.length
-    const art = ART[sl.key] ? `<svg viewBox="0 0 80 40">${ART[sl.key][i]}</svg>` : ''
-    return `${art}<div class="slot-txt"><b>${p.n}</b><small>${p.d}</small></div><i class="slot-no">${i + 1}/${n}</i>`
+    const i = pick[sl.key], p = sl.parts[i], us = usable(sl)
+    const locked = sl.parts.length - us.length
+    const art = partArt(sl.key, i).replace('<svg viewBox="0 0 80 40"><path d="M40 6l7', '<svg viewBox="0 0 80 40"><path d="M40 6l7')
+    return `${art}<div class="slot-txt"><b>${p.n}</b><small>${p.d}</small></div><i class="slot-no">${us.indexOf(i) + 1}/${us.length}</i>${locked ? `<i class="slot-lk">${LOCK_SVG}${locked}</i>` : ''}`
   }
   function buildSlots() {
     const box = $('slots'); box.innerHTML = ''
     SLOTS.forEach(sl => {
-      const n = sl.parts.length
       const d = document.createElement('div'); d.className = 'slot' + (sl.key === 'sp' ? ' sp' : '')
       d.innerHTML = `<div class="slot-name">${sl.name}</div><button class="arw" data-d="-1" aria-label="前">${ARROW_L}</button><div class="slot-body">${slotBody(sl)}</div><button class="arw" data-d="1" aria-label="次">${ARROW_R}</button>`
       d.dataset.slot = sl.key
       // 2026-11-25 本人「左右のボタンが反応が悪い」: click を待たず押した瞬間に切り替え、段は作り直さず中身だけ書き換える。
       // Unity への送信（コマの作り直し）は連打をまとめて1回
-      const step = dd => { pick[sl.key] = (pick[sl.key] + dd + n) % n; d.querySelector('.slot-body').innerHTML = slotBody(sl); renderStats(); sendLoadoutSoon() }
+      const step = dd => {
+        const us = usable(sl); if (us.length < 2) return
+        pick[sl.key] = us[(us.indexOf(pick[sl.key]) + dd + us.length) % us.length]
+        d.querySelector('.slot-body').innerHTML = slotBody(sl); renderStats(); sendLoadoutSoon()
+      }
       d.querySelectorAll('.arw').forEach(b => {
         b.onpointerdown = e => { if (e.button > 0) return; e.preventDefault(); step(+b.dataset.d); Snd.play('ui', { vol: 0.4 }) }
         b.onclick = e => { if (e.detail === 0) step(+b.dataset.d) }
@@ -227,10 +332,9 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   }
   const ARROW_L = '<svg viewBox="0 0 24 24"><path d="M15 4L7 12l8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg>'
   const ARROW_R = '<svg viewBox="0 0 24 24"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg>'
-  function sendLoadout() { send(`loadout|${pick.top},${pick.core},${pick.leg},${pick.sp}`) }
+  function sendLoadout() { send(`loadout|${pick.top},${pick.core},${pick.leg},${pick.sp},${pick.dir}`) }
   let loadoutT = 0
   function sendLoadoutSoon() { clearTimeout(loadoutT); loadoutT = setTimeout(sendLoadout, 140) }
-  function toSelect() { buildSlots(); show('select'); send('select'); sendLoadout(); fightBtn() }
   document.querySelectorAll('#vsPick button').forEach(b => {
     b.classList.toggle('on', +b.dataset.n === nCpu)
     b.onclick = () => {
@@ -255,7 +359,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     show('hud')
     if (isTouch && store.get('koma-hint', '') !== '1') showHint()
     send('move|0,0')
-    send(`start|${pick.top},${pick.core},${pick.leg},${nCpu},${pick.sp}`)
+    send(`start|${pick.top},${pick.core},${pick.leg},${nCpu},${pick.sp},${pick.dir}`)
     lockMouse()
   }
 
@@ -274,7 +378,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (me) {
       // 2026-11-25 本人「左上に残り回転数みたいなの出すのやめて」: 数字は出さない。回転は名札の細い線とコマの揺れで見せる
       const full = me.g >= 1 && me.a === 1
-      $('spReady').classList.toggle('on', full)
+      $('spChip').classList.toggle('full', full); $('spFill').style.width = Math.min(100, me.g * 100).toFixed(0) + '%'
       $('tSpBtn').classList.toggle('full', full)
       $('tSpBtn').style.setProperty('--g', (me.g * 100).toFixed(0) + '%')
       $('flickArrow').classList.toggle('cd', me.cd > 0)
@@ -287,17 +391,12 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         el = tagEls[k.i] = document.createElement('div')
         el.className = 'tag' + (k.i === 0 ? ' me' : '')
         el.style.setProperty('--c', COLORS[k.i])
-        el.innerHTML = `<span>${NAMES[k.i]}</span><i><u></u></i>` + (k.i === 0 ? '<i class="g"><u></u></i>' : '')
+        el.innerHTML = `<span>${NAMES[k.i]}</span>`
         $('tags').appendChild(el)
-        tagParts[k.i] = { u: el.querySelector('u'), g: el.querySelector('.g u') }
       }
       el.classList.toggle('out', k.a === 0)
       el.style.display = k.z > 0 && k.h > -6 ? '' : 'none'
       el.style.transform = `translate(${(k.x * W).toFixed(0)}px,${((1 - k.y) * H).toFixed(0)}px) translate(-50%,-100%)`
-      const tp = tagParts[k.i]
-      tp.u.style.width = (k.sp * 100).toFixed(0) + '%'
-      el.classList.toggle('low', k.sp < 0.3)
-      if (tp.g) tp.g.style.width = (k.g * 100).toFixed(0) + '%'
     })
   }
 
@@ -335,18 +434,31 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     o.style.top = Math.min(82, Math.max(16, (1 - y) * 100 + 9)) + '%'
     o.className = cls; void o.offsetWidth; o.classList.add('on')
   }
-  function banner(i, kind) {
+  // 技ごとの色（メテオ=橙 / テンペスト=水色 / ファントム=紫 / イージス=金）
+  const SP_RGB = ['255,110,40', '60,190,240', '170,90,240', '240,180,50']
+  // 2026-11-26 本人「他の人が使ってる必殺技の名前は出さなくていい」: 名前の帯は自分の技だけ
+  function banner(kind) {
     const b = $('banner')
     b.querySelector('span').textContent = SPECIALS[kind | 0] || SPECIALS[0]
-    b.style.filter = i === 0 ? '' : 'hue-rotate(200deg) saturate(.7)'
+    b.style.setProperty('--bc', SP_RGB[kind | 0] || SP_RGB[0])
     b.classList.remove('on'); void b.offsetWidth; b.classList.add('on')
   }
+  function tint(kind, power) {
+    const t = $('tint'); t.style.setProperty('--tc', `rgba(${SP_RGB[kind | 0] || SP_RGB[0]},${(0.85 * power).toFixed(2)})`)
+    t.classList.remove('on'); void t.offsetWidth; t.classList.add('on')
+  }
+  function ring(x, y) {
+    const r = $('ring'); r.style.left = Math.min(90, Math.max(10, x * 100)) + '%'; r.style.top = Math.min(85, Math.max(15, (1 - y) * 100)) + '%'
+    r.classList.remove('on'); void r.offsetWidth; r.classList.add('on')
+  }
+  function shakeScreen() { const b = document.body; b.classList.remove('shk'); void b.offsetWidth; b.classList.add('shk'); setTimeout(() => b.classList.remove('shk'), 360) }
   function countdown(text, go) {
     const c = $('count'); c.textContent = text
     c.className = 'count' + (go ? ' go' : ''); void c.offsetWidth; c.classList.add('pop')
   }
 
   // ---------- 結果 ----------
+  let resTok = 0
   function result(m) {
     if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock()
     Snd.loop('bgm', null)
@@ -357,14 +469,48 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     $('rsWhy').textContent = m.win ? '最後まで回り切った' : m.why === 'out' ? '場外に落ちた' : '回転が尽きた'
     $('rsLine').textContent = `${Math.floor(m.time)}秒　削った回転 ${Math.round(m.dealt)}　上からの一撃 ${m.aerial}回　必殺 ${m.specials}回`
     $('onoma').classList.remove('on'); $('banner').classList.remove('on')
+    // 経験値: 勝てば多い。相手が多いほど・上から当てた回数・必殺の回数で少し増える
+    const gain = (m.win ? 70 + 30 * nCpu : 25 + 10 * nCpu) + Math.min(40, m.aerial * 8) + Math.min(30, m.specials * 10)
+    const before = prof.xp, lv0 = levelOf(before)
+    prof.xp += gain; if (m.win) prof.win++; else prof.lose++; saveProf()
+    const lv1 = levelOf(prof.xp)
+    m.gain = gain; m.lvBefore = lv0; m.lvAfter = lv1
+    $('rsUp').hidden = true
+    $('rsLv').textContent = lv0
+    $('rsGain').textContent = `+${gain} EXP`
+    const bar = $('rsXp'), box = bar.parentNode
+    box.classList.remove('anim'); bar.style.width = Math.round(fracOf(before) * 100) + '%'
     show('result')
     KB.result = m
+    const tok = ++resTok, W = ms => new Promise(r => setTimeout(r, ms))
+    ;(async () => {
+      await W(700); if (tok !== resTok) return
+      box.classList.add('anim')
+      let lv = lv0
+      while (lv < lv1) {
+        bar.style.width = '100%'; await W(750); if (tok !== resTok) return
+        lv++; box.classList.remove('anim'); bar.style.width = '0%'; $('rsLv').textContent = lv; void bar.offsetWidth; box.classList.add('anim')
+        Snd.play('spring', { vol: 0.8, rate: 1.2 }); Snd.play('win', { vol: 0.5, rate: 1.3 })
+      }
+      bar.style.width = Math.round(fracOf(prof.xp) * 100) + '%'
+      if (lv1 > lv0) {
+        await W(450); if (tok !== resTok) return
+        const names = []
+        for (let l = lv0 + 1; l <= lv1; l++) for (const u of UNLOCKS[l]) names.push(unlockName(u))
+        const up = $('rsUp')
+        up.innerHTML = `<b>LEVEL UP　Lv${lv0} → Lv${lv1}</b>解放: ${names.join('、')}`
+        up.hidden = false
+      }
+      renderHeader()
+    })()
   }
-  $('btnAgain').onclick = () => { Snd.play('ui', { vol: 0.6 }); startMatch() }
-  $('btnParts').onclick = () => { Snd.play('ui', { vol: 0.4 }); toSelect() }
+  $('btnAgain').onclick = () => { Snd.play('ui', { vol: 0.6 }); resTok++; fixPick(); startMatch() }
+  $('btnParts').onclick = () => { Snd.play('ui', { vol: 0.4 }); resTok++; toHub('gear') }
+  $('btnHome').onclick = () => { Snd.play('ui', { vol: 0.4 }); resTok++; toHub('home') }
 
   // ---------- 音 ----------
   const S = n => 'TemplateData/snd/' + n + '.mp3'
+  Snd.sfxGain = 1.7   // 2026-11-26 本人「効果音もうちょっと大きく」: 効果音の道だけ1.0→1.7倍（BGM は 0.3 のまま）。割れないよう出口にコンプレッサー
   Snd.def({
     hit: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_hit_01'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_hit_02'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_hit_03'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_hit_04'), S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_hit_01')],
     clang: [S('100-cc0-sfx_100-CC0-SFX_0_metal_04'), S('100-cc0-sfx_100-CC0-SFX_0_metal_12')],
@@ -380,9 +526,18 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     ui: [S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_hit_01')],
   })
   let muted = store.get('koma-mute', '0') === '1'
-  function applyMute() { Snd.setMute(muted); $('muteX').hidden = !muted; $('muteWave').style.display = muted ? 'none' : '' }
+  function applyMute() { Snd.setMute(muted); $('muteX').hidden = !muted; $('muteWave').style.display = muted ? 'none' : ''; $('btnSound').textContent = muted ? 'オフ' : 'オン' }
   applyMute()
   $('btnMute').onclick = () => { muted = !muted; Snd.init(); applyMute(); store.set('koma-mute', muted ? '1' : '0') }
+  $('btnSound').onclick = () => { $('btnMute').onclick() }
+  let wipeT = 0
+  $('btnWipe').onclick = () => {
+    const b = $('btnWipe')
+    if (!wipeT) { b.textContent = 'もう一度押すと消えます'; wipeT = setTimeout(() => { wipeT = 0; b.textContent = 'レベルと戦績を消す' }, 3500); return }
+    clearTimeout(wipeT); wipeT = 0; b.textContent = 'レベルと戦績を消す'
+    prof.xp = 0; prof.win = 0; prof.lose = 0; prof.seen = 1; saveProf(); fixPick(); renderEverything()
+  }
+  function renderEverything() { renderHome(); renderGrow(); renderSet(); renderHeader(); if (curPg === 'gear') buildSlots(); sendLoadout() }
 
   // ---------- スマホの操作 ----------
   // 2026-11-26 本人「右スティックも固定して、カメラのスワイプできるように」: 左右とも場所を固定。左で動く。右は倒して離すとその向きへダッシュ（空中なら急降下）、タップだけなら近くの相手へ。
@@ -509,5 +664,5 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   }
 
   show('title')
-  fightBtn()
+  renderHeader(); fightBtn()
 })()

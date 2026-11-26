@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@500;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="TemplateData/ui.css?v=13">
+<link rel="stylesheet" href="TemplateData/ui.css?v=17">
 </head>
 <body>
 <canvas id="unity-canvas" tabindex="-1"></canvas>
@@ -43,34 +43,70 @@
     <p class="tt-lead">自分がコマになる。跳んで、上から落とせ。</p>
     <button id="btnPlay" class="btn-main">はじめる</button>
   </div>
-  <div class="tt-keys pc-only">
-    <span><b>WASD</b>移動</span><span><b>Shift</b>速く</span><span><b>Shift2回</b>超加速</span><span><b>Space</b>ジャンプ</span><span><b>マウス</b>視点</span><span><b>左クリック</b>ダッシュ</span><span><b>右クリック</b>必殺</span>
-  </div>
 </div>
 
-<div id="select" class="scr" hidden>
-  <div class="sel-panel">
-    <div class="sel-head">コマを組む</div>
-    <div id="slots"></div>
+<div id="hub" class="scr" hidden>
+  <div id="hdr">
+    <div class="pl-badge"><small>Lv</small><b id="plLv">1</b></div>
+    <div class="pl-info"><span class="pl-name">あなた</span><i class="xpbar"><u id="plXp"></u></i><small id="plXpTxt"></small></div>
   </div>
-  <div class="sel-side">
-    <div class="sel-stats" id="stats"></div>
-    <div class="sel-row">
+  <nav id="nav" aria-label="メニュー">
+    <button data-pg="home" class="on"><svg viewBox="0 0 24 24"><path d="M13.5 2L5 13.5h6L10 22l9-12h-6.2z" fill="currentColor"/></svg><span>バトル</span></button>
+    <button data-pg="gear"><svg viewBox="0 0 24 24"><path d="M12 2.5l8 4.6v9.8l-8 4.6-8-4.6V7.1z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2.2"/></svg><span>装備</span><i class="dot" id="dotGear" hidden></i></button>
+    <button data-pg="grow"><svg viewBox="0 0 24 24"><path d="M5 18l7-7 7 7M5 11l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"/></svg><span>育成</span></button>
+    <button data-pg="set"><svg viewBox="0 0 24 24"><path d="M3 7h11M18 7h3M3 17h3M10 17h11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/><circle cx="16" cy="7" r="2.4" fill="currentColor"/><circle cx="8" cy="17" r="2.4" fill="currentColor"/></svg><span>設定</span></button>
+  </nav>
+
+  <section class="pg on" id="pgHome" data-pg="home">
+    <div class="home-l">
+      <div class="h-logo">GYRO RAGNAROK</div>
+      <div class="card" id="homeLoad"></div>
+      <div class="card next" id="homeNext"></div>
+    </div>
+    <div class="home-go">
       <div class="sel-vs">
         <div class="vs-label">相手</div>
         <div class="vs-pick" id="vsPick">
           <button data-n="1">1</button><button data-n="2" class="on">2</button><button data-n="3">3</button>
         </div>
       </div>
-      <button id="btnFight" class="btn-main">試合開始</button>
+      <button id="btnFight" class="btn-main big">出撃</button>
     </div>
-  </div>
+  </section>
+
+  <section class="pg" id="pgGear" data-pg="gear">
+    <div class="sel-panel">
+      <div class="sel-head">コマを組む</div>
+      <div id="slots"></div>
+    </div>
+    <div class="sel-side"><div class="sel-stats" id="stats"></div></div>
+  </section>
+
+  <section class="pg" id="pgGrow" data-pg="grow">
+    <div class="grow-card">
+      <div class="gr-top">
+        <div class="gr-lv"><small>Lv</small><b id="grLv">1</b></div>
+        <div class="gr-xp"><i class="xpbar"><u id="grXp"></u></i><span id="grXpTxt"></span></div>
+        <div class="gr-rec" id="grRec"></div>
+      </div>
+      <ol class="ladder" id="ladder"></ol>
+    </div>
+  </section>
+
+  <section class="pg" id="pgSet" data-pg="set">
+    <div class="set-card">
+      <div class="set-row"><span>音</span><button id="btnSound" class="btn-sub">オン</button></div>
+      <div class="set-how" id="how"></div>
+      <div class="set-row small"><span>記録</span><button id="btnWipe" class="btn-sub">レベルと戦績を消す</button></div>
+      <div class="set-credit">効果音: CC0（Kenney ほか）／BGM: Suno で作成</div>
+    </div>
+  </section>
 </div>
 
 <div id="hud" class="scr" hidden>
   <div id="tags"></div>
   <div class="hud-time" id="hudTime"></div>
-  <div id="spReady" class="pc-only">必殺　右クリック</div>
+  <div id="spChip" class="pc-only"><i id="spFill"></i><span id="spTxt">必殺　右クリック</span></div>
   <div id="count" class="count"></div>
   <div id="sudden" class="sudden" hidden>最終局面　外側の床が崩れる</div>
 </div>
@@ -78,6 +114,8 @@
 <div id="fx" aria-hidden="true">
   <svg id="lines" viewBox="-50 -50 100 100" preserveAspectRatio="xMidYMid slice"></svg>
   <div id="flash"></div>
+  <div id="tint"></div>
+  <div id="ring"></div>
   <div id="onoma"></div>
   <div id="angTag"></div>
   <div id="banner"><span></span></div>
@@ -103,9 +141,15 @@
     <div class="rs-big" id="rsBig">勝ち</div>
     <div class="rs-why" id="rsWhy"></div>
     <div class="rs-line" id="rsLine"></div>
+    <div class="rs-xp" id="rsXpBox">
+      <div class="rs-lv"><small>Lv</small><b id="rsLv">1</b></div>
+      <div class="rs-bar"><i class="xpbar"><u id="rsXp"></u></i><span id="rsGain"></span></div>
+    </div>
+    <div class="rs-up" id="rsUp" hidden></div>
     <div class="rs-btns">
       <button id="btnAgain" class="btn-main">もう一回</button>
-      <button id="btnParts" class="btn-sub">パーツを変える</button>
+      <button id="btnParts" class="btn-sub">装備を変える</button>
+      <button id="btnHome" class="btn-sub">ホームへ</button>
     </div>
   </div>
 </div>
@@ -116,7 +160,6 @@
   <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#fff"/><path id="muteWave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path id="muteX" d="M16 9l5 6M21 9l-5 6" stroke="#fff" stroke-width="2" stroke-linecap="round" hidden/></svg>
 </button>
 
-<div class="credit" id="credit">効果音: CC0（Kenney ほか）／BGM: Suno で作成</div>
 
 <script>
 (function(){
@@ -146,7 +189,7 @@
 })();
 window.KB_BUILD = { loader: "Build/{{{ LOADER_FILENAME }}}", data: "Build/{{{ DATA_FILENAME }}}", framework: "Build/{{{ FRAMEWORK_FILENAME }}}", code: "Build/{{{ CODE_FILENAME }}}", company: "{{{ COMPANY_NAME }}}", product: "{{{ PRODUCT_NAME }}}", version: "{{{ PRODUCT_VERSION }}}" };
 </script>
-<script src="TemplateData/sfx.js?v=13"></script>
-<script src="TemplateData/ui.js?v=16"></script>
+<script src="TemplateData/sfx.js?v=17"></script>
+<script src="TemplateData/ui.js?v=17"></script>
 </body>
 </html>

@@ -21,7 +21,7 @@ public class KomaBoot : MonoBehaviour
     string phase = "title";
     float phaseT, fightT, emitT;
     bool sudden;
-    int pTop = 0, pCore = 0, pLeg = 0, pSp = 0, nCpu = 2;
+    int pTop = 0, pCore = 0, pLeg = 0, pSp = 0, nCpu = 2; bool pLeft;
     bool autoPlayer, cpuOff, debugState;
     readonly Vector2[] movesBuf = new Vector2[4];
     readonly List<long> keyBuf = new List<long>();
@@ -185,13 +185,14 @@ public class KomaBoot : MonoBehaviour
         switch (c)
         {
             case "loadout":
-                pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); if (nums.Length >= 4) pSp = (int)N(3);
-                if (phase == "title" || phase == "select") { player.Rebuild(pTop, pCore, pLeg, mats); player.sp = pSp; Showcase(); }
+                pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); if (nums.Length >= 4) pSp = (int)N(3); if (nums.Length >= 5) pLeft = N(4) > 0;
+                if (phase == "title" || phase == "select") { player.Rebuild(pTop, pCore, pLeg, mats, pLeft); player.sp = pSp; Showcase(); }
                 break;
             case "select": phase = "select"; phaseT = 0; Showcase(); break;
             case "title": phase = "title"; phaseT = 0; Showcase(); break;
             case "start":
-                if (nums.Length >= 3) { pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); player.Rebuild(pTop, pCore, pLeg, mats); }
+                if (nums.Length >= 6) pLeft = N(5) > 0;
+                if (nums.Length >= 3) { pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); player.Rebuild(pTop, pCore, pLeg, mats, pLeft); }
                 if (nums.Length >= 4) nCpu = Mathf.Clamp((int)N(3), 1, 3);
                 if (nums.Length >= 5) pSp = Mathf.Clamp((int)N(4), 0, 3);
                 player.sp = pSp;
@@ -287,7 +288,7 @@ public class KomaBoot : MonoBehaviour
         {
             var k = komas[i];
             if (i >= n) { k.root.SetActive(false); k.alive = false; continue; }
-            if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats); k.sp = rng.Next(4); }
+            if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = rng.Next(4); }
             float ang = -Mathf.PI / 2 + Mathf.PI / 8 + i * Mathf.PI * 2 / n;
             float r = 11f;
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
@@ -312,11 +313,11 @@ public class KomaBoot : MonoBehaviour
             player.spin = player.spinMax;
             player.Visual(Time.unscaledDeltaTime, realDt);
             float a = Time.unscaledTime * (phase == "title" ? 0.15f : 0.35f);
-            float dist = phase == "title" ? 24f : 5.2f, hgt = phase == "title" ? 13f : 2.4f;
-            Vector3 look = phase == "title" ? new Vector3(0, 0.5f, 0) : new Vector3(0, 0.7f, 0);
+            float dist = phase == "title" ? 15f : 5.2f, hgt = phase == "title" ? 7.5f : 2.4f;
+            Vector3 look = phase == "title" ? new Vector3(0, 0.5f + (cam.aspect < 1f ? 2.6f : 0f), 0) : new Vector3(0, 0.7f, 0);
             camRig.position = new Vector3(Mathf.Sin(a) * dist, hgt, -Mathf.Cos(a) * dist);
             cam.transform.localPosition = Vector3.zero;
-            if (phase == "title") look -= Vector3.Cross(Vector3.up, (look - camRig.position).normalized) * 7f * Mathf.Clamp01(cam.aspect - 0.6f);
+            if (phase == "title") look -= Vector3.Cross(Vector3.up, (look - camRig.position).normalized) * 4.2f * Mathf.Clamp01(cam.aspect - 0.6f);
             cam.transform.rotation = Quaternion.LookRotation(look - camRig.position);
             reticle.gameObject.SetActive(false); aimLine.enabled = false;
             EmitState(realDt, false);
@@ -498,6 +499,7 @@ public class KomaBoot : MonoBehaviour
 
         FightCamera(realDt);
         UpdateWaves(realDt);
+        UpdateFxLight(realDt); UpdateScorches(realDt);
         EmitState(realDt, true);
     }
 
@@ -653,21 +655,22 @@ public class KomaBoot : MonoBehaviour
         {
             // テンペスト・ヴォルテックス: 竜巻で周りを引き寄せて巻き上げ、最後に吹き飛ばす
             k.tornadoT = 3.5f; k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.15f);
-            EmitEv("special", k, 1); shake = Mathf.Max(shake, 0.2f);
+            EmitEv("special", k, 1); SpecialFx(k, 3.6f);
             return;
         }
         if (k.sp == 2)
         {
             // ファントム・レイド: 近い相手へ3連続の突進
             k.specialPhase = 20; k.rushLeft = 3; k.specialT = 0f;
-            EmitEv("special", k, 2);
+            EmitEv("special", k, 2); SpecialFx(k, 2.0f);
             return;
         }
         if (k.sp == 3)
         {
             // イージス・リバース: 3秒の盾（受ける回転減りと弾かれを抑え、ぶつかった相手を弾き返す）＋回転を大きく戻す
             k.shieldT = 3.2f; k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.35f);
-            EmitEv("special", k, 3);
+            EmitEv("special", k, 3); SpecialFx(k, 3.2f);
+            Wave(k.pos, 9f); Pulse(k.pos, SpColors[3], 8f, 18f);
             return;
         }
         k.specialPhase = 1; k.specialT = 0.55f;
@@ -684,7 +687,7 @@ public class KomaBoot : MonoBehaviour
         }
         k.specialTarget = best != null ? new Vector3(best.idx, -999, 0) : aim;
         EmitEv("special", k, 0);
-        shake = Mathf.Max(shake, 0.25f);
+        SpecialFx(k, 1.3f);
     }
 
     // 必殺技の続き（毎フレーム）
@@ -714,8 +717,17 @@ public class KomaBoot : MonoBehaviour
                     Damage(k, o, 9f * k.st.atk / o.st.def);
                 }
             }
-            if (k.tornadoT <= 0) { Wave(k.pos, 6f); shake = Mathf.Max(shake, 0.3f); var sp = cam.WorldToViewportPoint(k.pos); Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}"); }
+            if (k.tornadoT <= 0)
+            {
+                Wave(k.pos, 6f); Wave(k.pos, 9.5f); Wave(k.pos, 13f);
+                shake = Mathf.Max(shake, 0.9f); fovKick = Mathf.Max(fovKick, 12f);
+                Spark(k.Center, Vector3.up, 110, 1.9f); Dust(k.pos, 36); Scorch(k.pos, 4.5f);
+                Pulse(k.pos, SpColors[1], 10f, 20f);
+                var sp = cam.WorldToViewportPoint(k.pos); Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
+            }
             if (Random.value < 0.5f) Dust(k.pos + new Vector3(Random.Range(-3f, 3f), 0, Random.Range(-3f, 3f)), 1);
+            if (Random.value < 0.6f) Spark(k.pos + new Vector3(Random.Range(-2.5f, 2.5f), Random.Range(0.3f, 3.5f), Random.Range(-2.5f, 2.5f)), Vector3.up, 4, 0.6f);
+            if (k.isPlayer) shake = Mathf.Max(shake, 0.12f);
         }
         if (k.specialPhase == 20)
         {
@@ -728,6 +740,9 @@ public class KomaBoot : MonoBehaviour
                 k.vel = new Vector3(dir.x * 27f, k.grounded ? 1.5f : k.vel.y, dir.z * 27f);
                 k.dashT = 0.36f; k.rushLeft--; k.specialT = 0.42f; k.dashes++;
                 EmitEv("dash", k, 2);
+                k.SetAura(SpColors[2], 0.5f); Spark(k.Center, -new Vector3(dir.x, 0, dir.z) + Vector3.up * 0.3f, 36, 1.3f); Wave(k.pos, 3f);
+                Pulse(k.pos, SpColors[2], 4f, 12f);
+                if (k.isPlayer) { fovKick = Mathf.Max(fovKick, 8f); shake = Mathf.Max(shake, 0.3f); }
             }
         }
     }
@@ -950,7 +965,19 @@ public class KomaBoot : MonoBehaviour
                 SpecialImpact(k, np);
                 v = new Vector3(v.x * 0.2f, 6f, v.z * 0.2f);
             }
-            else if (impactV > 11f && k.alive) { v.y = impactV * 0.3f; k.grounded = false; Dust(np, 14); }
+            else if (impactV > 6.5f && k.alive)
+            {
+                // 着地: 床の向きに跳ね返る（反発 約0.28）。先端がこすれて水平の速さが少し落ち、回転が少し減る。傾きは Koma.Land が受け持つ
+                Vector2 lg = Vector2.ClampMagnitude(Arena.Grad(np.x, np.z), 1.2f);
+                Vector3 ln = Vector3.Lerp(Vector3.up, new Vector3(-lg.x, 1f, -lg.y).normalized, 0.4f).normalized;   // 先端が床をつかむので、斜面でも横へは半分以下しか流れない
+                float e = impactV > 14f ? 0.28f : 0.2f;
+                float vn = Vector3.Dot(v, ln);
+                if (vn < 0) v -= (1f + e) * vn * ln;
+                float fr = Mathf.Exp(-impactV * 0.008f * k.st.grip);
+                v.x *= fr; v.z *= fr;
+                k.grounded = false;
+                Landed(k, np, impactV, v);
+            }
             else { v.y = 0; k.grounded = true; k.airDashUsed = 0; if (impactV > 6f) Dust(np, 8); }
             if (k.specialPhase == 0 && k.dashT > 0 && impactV > 10f) k.dashT = 0.15f;
         }
@@ -958,6 +985,90 @@ public class KomaBoot : MonoBehaviour
         if (k.alive && (np.y < -5f || (new Vector2(np.x, np.z).magnitude > Arena.Edge + 0.4f && np.y < Arena.Bowl(Arena.R)))) KO(k, "out");
         if (np.y < -40f) { np.y = -40f; v = Vector3.zero; }
         k.pos = np; k.vel = v;
+    }
+
+    // 着地の演出（強さに比例: 土ぼこり・先端の火花・輪・音・自分の画面の揺れ）と回転の減り
+    void Landed(Koma k, Vector3 at, float impactV, Vector3 v)
+    {
+        float s = Mathf.Clamp01((impactV - 6f) / 24f);
+        k.Land(impactV, new Vector3(v.x, 0, v.z));
+        Dust(at, Mathf.RoundToInt(6 + 26 * s));
+        Spark(at + Vector3.up * 0.1f, Vector3.up, Mathf.RoundToInt(6 + 46 * s), 0.6f + 0.8f * s);
+        if (impactV > 12f) Wave(at, 1.8f + 4f * s);
+        if (fightT > 2f && impactV > 8f && phase == "fight")
+        {
+            float loss = Mathf.Min(4f, 0.08f * impactV);
+            k.spin -= loss; k.lossHit += loss;
+            if (k.spin <= 0) { k.spin = 0; KO(k, "spin"); }
+        }
+        if (k.isPlayer && impactV > 10f) shake = Mathf.Max(shake, 0.08f + 0.4f * s);
+        EmitEv("land", k, impactV);
+    }
+
+    // 光（必殺の発動・当たりの瞬間に周りを一瞬照らす）
+    Light fxLight; float fxLightT, fxLightI;
+    void Pulse(Vector3 at, Color c, float intensity, float range = 14f)
+    {
+        if (fxLight == null)
+        {
+            fxLight = new GameObject("FxLight").AddComponent<Light>();
+            fxLight.type = LightType.Point; fxLight.shadows = LightShadows.None; fxLight.renderMode = LightRenderMode.ForceVertex;
+        }
+        fxLight.transform.position = at + Vector3.up * 1.6f; fxLight.color = c; fxLight.range = range;
+        fxLightI = intensity; fxLightT = 0f; fxLight.intensity = intensity; fxLight.enabled = true;
+    }
+    void UpdateFxLight(float realDt)
+    {
+        if (fxLight == null || !fxLight.enabled) return;
+        fxLightT += realDt;
+        float k = 1f - fxLightT / 0.42f;
+        if (k <= 0) { fxLight.enabled = false; return; }
+        fxLight.intensity = fxLightI * k * k;
+    }
+
+    // 焦げ跡（衝撃で床に残る暗い円。しばらくして消える）
+    readonly List<Transform> scorches = new List<Transform>(); readonly List<float> scorchT = new List<float>(); readonly List<Material> scorchMats = new List<Material>();
+    void Scorch(Vector3 at, float r)
+    {
+        int idx = -1;
+        for (int i = 0; i < scorchT.Count; i++) if (scorchT[i] < 0) { idx = i; break; }
+        if (idx < 0 && scorches.Count < 4)
+        {
+            var t = MeshKit.Obj("Scorch", null, MeshKit.Disc(1f, 40), mats.Alpha(new Color(0.02f, 0.02f, 0.03f, 1f), mats.Dot)).transform;
+            t.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            scorches.Add(t); scorchT.Add(-1); scorchMats.Add(t.GetComponent<MeshRenderer>().material); idx = scorches.Count - 1;
+        }
+        if (idx < 0) return;
+        float gh = Arena.H(at.x, at.z);
+        scorches[idx].position = new Vector3(at.x, (gh > -100 ? gh : at.y) + 0.04f, at.z);
+        scorches[idx].localScale = Vector3.one * r; scorches[idx].gameObject.SetActive(true); scorchT[idx] = 0;
+    }
+    void UpdateScorches(float realDt)
+    {
+        for (int i = 0; i < scorchT.Count; i++)
+        {
+            if (scorchT[i] < 0) continue;
+            scorchT[i] += realDt;
+            float a = scorchT[i] < 0.15f ? scorchT[i] / 0.15f : Mathf.Clamp01(1f - (scorchT[i] - 0.15f) / 3.2f);
+            scorchMats[i].SetColor("_TintColor", new Color(0.02f, 0.02f, 0.03f, 0.8f * a) * 0.5f);
+            if (scorchT[i] > 3.4f) { scorchT[i] = -1; scorches[i].gameObject.SetActive(false); }
+        }
+    }
+
+    static readonly Color[] SpColors = {
+        new Color(1f, 0.55f, 0.2f), new Color(0.55f, 0.9f, 1f), new Color(0.75f, 0.45f, 1f), new Color(1f, 0.82f, 0.4f) };
+
+    // 必殺技を出した瞬間の演出（溜めのオーラ・光・輪・火花・ズーム）
+    void SpecialFx(Koma k, float charge)
+    {
+        var c = SpColors[Mathf.Clamp(k.sp, 0, 3)];
+        k.SetAura(c, charge);
+        Pulse(k.pos, c, 6f);
+        Spark(k.Center, Vector3.up, 70, 1.5f);
+        Wave(k.pos, 3.5f); Wave(k.pos, 7f);
+        bool me = k.isPlayer;
+        fovKick = Mathf.Max(fovKick, me ? 12f : 4f);
+        shake = Mathf.Max(shake, me ? 0.45f : 0.15f);
     }
 
     // 急降下の追尾（上から当てるのを人でもできるように）
@@ -975,26 +1086,30 @@ public class KomaBoot : MonoBehaviour
     void SpecialImpact(Koma k, Vector3 at)
     {
         k.specialPhase = 0; k.dashT = 0;
-        Wave(at, 5.5f);
-        Spark(at + Vector3.up * 0.3f, Vector3.up, 60, 1.6f);
-        Dust(at, 30);
+        Wave(at, 5.5f); Wave(at, 9f); Wave(at, 13f);
+        Spark(at + Vector3.up * 0.3f, Vector3.up, 130, 2.0f);
+        Dust(at, 54); Scorch(at, 5.5f);
+        Pulse(at, SpColors[0], 12f, 22f);
+        k.SetAura(SpColors[0], 0.35f);
         foreach (var o in komas)
         {
             if (o == k || !o.alive || !o.root.activeSelf) continue;
             Vector3 d = o.pos - at; d.y = 0;
             float dist = d.magnitude;
-            if (dist > 5f) continue;
+            if (dist > 6f) continue;
             Vector3 n = dist > 0.01f ? d / dist : Vector3.forward;
-            float f = 1f - dist / 5f * 0.5f;
-            o.vel += n * 13f * f / Mathf.Sqrt(o.st.mass) * (1.6f - o.st.grip * 0.35f);
-            o.vel.y = Mathf.Max(o.vel.y, 5f * f);
+            float f = 1f - dist / 6f * 0.5f;
+            o.vel += n * 16.5f * f / Mathf.Sqrt(o.st.mass) * (1.6f - o.st.grip * 0.35f);
+            o.vel.y = Mathf.Max(o.vel.y, 6.5f * f);
             o.grounded = false;
             float dmg = 10f * f * k.st.atk / o.st.def;
             Damage(k, o, dmg);
-            o.hitFlash = 0.15f;
+            o.hitFlash = 0.2f;
+            Spark(o.Center, n + Vector3.up * 0.5f, 40, 1.4f);
         }
         Slow(0.15f, 0.6f);
-        shake = Mathf.Max(shake, 0.9f);
+        float near = k.isPlayer ? 1f : Mathf.Clamp(1.1f - Vector3.Distance(player.pos, at) / 18f, 0.25f, 1f);
+        shake = Mathf.Max(shake, 1.5f * near); fovKick = Mathf.Max(fovKick, 16f * near);
         var sp = cam.WorldToViewportPoint(at);
         Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
     }
@@ -1075,8 +1190,10 @@ public class KomaBoot : MonoBehaviour
                 float sa = Mathf.Max(0, Vector3.Dot(a.vel + n * J / ma, n)), sb = Mathf.Max(0, Vector3.Dot(b.vel - n * J / mb, -n));
                 float spinPushA = 4f * a.st.atk * (0.4f + 0.6f * a.SpinRatio), spinPushB = 4f * b.st.atk * (0.4f + 0.6f * b.SpinRatio);
                 Vector3 tang = Vector3.Cross(Vector3.up, nh);
-                b.vel += nh * spinPushA / mb * (1.5f - b.st.grip * 0.3f) + tang * 1.5f;
-                a.vel -= nh * spinPushB / ma * (1.5f - a.st.grip * 0.3f) + tang * 1.5f;
+                // 逆回り（左回転）どうしは接点が同じ向きに動いてかみ合わず、横へ大きく流れる
+                bool opp = a.left != b.left; float tk = opp ? 4.2f : 1.5f;
+                b.vel += nh * spinPushA / mb * (1.5f - b.st.grip * 0.3f) + tang * tk;
+                a.vel -= nh * spinPushB / ma * (1.5f - a.st.grip * 0.3f) + tang * tk;
                 float pop = Mathf.Min(3.2f, 1f + vn * 0.1f);
                 float multA = (a.dashT > 0 ? 1.4f : 1f) * (aAir ? 2.4f * a.st.aerial : 1f) * (a.specialPhase == 2 ? 1.6f : 1f) * (a.specialPhase == 20 ? 1.35f : 1f);
                 float multB = (b.dashT > 0 ? 1.4f : 1f) * (bAir ? 2.4f * b.st.aerial : 1f) * (b.specialPhase == 2 ? 1.6f : 1f) * (b.specialPhase == 20 ? 1.35f : 1f);
@@ -1084,6 +1201,7 @@ public class KomaBoot : MonoBehaviour
                 float baseD = 1f + Mathf.Min(vn, 25f) * 0.25f;
                 float dmgToB = baseD * (0.5f + shareA) * a.st.atk / b.st.def * multA * 0.5f;
                 float dmgToA = baseD * (1.5f - shareA) * b.st.atk / a.st.def * multB * 0.5f;
+                if (opp) { if (a.left) dmgToB *= 1.12f; else dmgToA *= 1.12f; }   // 左回転は右回りの相手を1割強く削る
                 // 2026-11-26 本人「攻撃の入った角度とかも計算できるように」: 芯・かすり × 正面・横・背後。空中からの突撃と必殺の落下は角度を見ない
                 int angA = 0, angB = 0;
                 float facA = aAir || a.specialPhase == 2 ? 1f : AngleFactor(aV0, bV0, nh, out angA);
@@ -1305,9 +1423,10 @@ public class KomaBoot : MonoBehaviour
               .Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
               .Append(",\"vx\":").Append(F(k.vel.x)).Append(",\"vz\":").Append(F(k.vel.z)).Append(",\"yaw\":").Append(F(camYaw)).Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
+              .Append(",\"lf\":").Append(k.left ? 1 : 0)
               .Append(",\"p\":[").Append(k.top).Append(',').Append(k.core).Append(',').Append(k.leg).Append("]")
               .Append(",\"why\":\"").Append(k.koWhy).Append("\"");
-            if (debugState) sb.Append(",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]");
+            if (debugState) sb.Append(",\"tl\":").Append(F(k.TiltDeg)).Append(",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]");
             sb.Append('}');
         }
         sb.Append("]}");

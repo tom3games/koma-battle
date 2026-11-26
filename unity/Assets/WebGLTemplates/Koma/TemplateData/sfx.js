@@ -11,7 +11,7 @@
 // 戻ってきても（bfcache の pageshow を含む）勝手に鳴らさない。次に本人が画面に触った時だけ鳴らし直す
 // （2026-11-11 練り消し: 横丁に戻っても iPhone で BGM が鳴り続けた。止める処理が無かった）
 const Snd = {
-  ctx: null, muted: false, files: {}, bufs: {}, last: {}, played: {}, loops: {}, away: false, life: { hide: 0, wake: 0 },
+  ctx: null, sfxGain: 1, muted: false, files: {}, bufs: {}, last: {}, played: {}, loops: {}, away: false, life: { hide: 0, wake: 0 },
   def(map) { for (const k in map) this.files[k] = [].concat(map[k]); if (this.ctx) this.load() },
   init() {
     if (this.ctx) { if (this.away) this.wake(); else if (this.ctx.state === 'suspended') this.ctx.resume(); return }
@@ -19,8 +19,8 @@ const Snd = {
     try {
       const c = this.ctx = new AC()
       this.master = c.createGain(); this.master.gain.value = this.muted ? 0 : 0.9
-      this.an = c.createAnalyser(); this.an.fftSize = 2048; this.master.connect(this.an); this.an.connect(c.destination)
-      this.sfxBus = c.createGain(); this.sfxBus.connect(this.master)
+      this.an = c.createAnalyser(); this.an.fftSize = 2048; this.comp = c.createDynamicsCompressor(); this.comp.threshold.value = -9; this.comp.knee.value = 6; this.comp.ratio.value = 10; this.comp.attack.value = 0.003; this.comp.release.value = 0.18; this.master.connect(this.comp); this.comp.connect(this.an); this.an.connect(c.destination)
+      this.sfxBus = c.createGain(); this.sfxBus.gain.value = this.sfxGain || 1; this.sfxBus.connect(this.master)
       this.bed = c.createGain(); this.bed.gain.value = 1; this.bed.connect(this.master)   // 環境音と BGM（duck で下げる）
       // こもらせる道（壁の向こう・ほかの音にかき消された時）
       this.muf = c.createBiquadFilter(); this.muf.type = 'lowpass'; this.muf.frequency.value = 420; this.muf.connect(this.sfxBus)
