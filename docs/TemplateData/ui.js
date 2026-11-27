@@ -29,7 +29,11 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       { n: 'メテオ・ジャッジメント', d: '真上から落下', f: '真上へ跳んで相手めがけて落ちる。着地で衝撃波が広がる。', x: '範囲6m ダメージ10（攻撃÷防御）' },
       { n: 'テンペスト・ヴォルテックス', d: '竜巻で巻き上げ', f: '竜巻で周りを引き寄せて巻き上げ、最後に吹き飛ばす。', x: '3.5秒 範囲8.5m 自分の回転+15%' },
       { n: 'ファントム・レイド', d: '3連続の突進', f: '近い相手へ3回続けて突進する。', x: '突進3回 威力×1.35' },
-      { n: 'イージス・リバース', d: '盾で弾き返す', f: '3秒の盾。受けるダメージを大きく減らし、触れた相手を弾き返し、回転を戻す。', x: '3.2秒 ダメージ-80% 回転+35%' } ] },
+      { n: 'イージス・リバース', d: '盾で弾き返す', f: '3秒の盾。受けるダメージを大きく減らし、触れた相手を弾き返し、回転を戻す。', x: '3.2秒 ダメージ-80% 回転+35%' },
+      { n: 'グラビティ・アンカー', d: '重くなって動かない', f: '5秒だけ超重量になって地面に刺さる。当てられても動かず、当てた相手の方が吹っ飛ぶ。縁の攻防で強い。', x: '5秒 重さ×14 受けるダメージ-65% 移動が遅くなる' },
+      { n: 'ラスト・スパイラル', d: 'ピンチの逆転の一撃', f: '回転が残り3割を切った時だけ撃てる。回転が少ないほど威力が上がる。撃てる時だけゲージが光る。', x: '残り30%で威力×1.0、0%に近いほど最大×2.4 範囲5.5m' },
+      { n: 'グレイシャル・アロー', d: '氷の矢で突進', f: '狙った向きに輪が並び、開き終わると氷の矢になって一直線に突進する。当たった相手は弾かれて凍える。輪が開いている間に避けられる。', x: '展開0.95秒 突進約16m 凍え2秒（速さ・加速が半分）' },
+      { n: 'チェイン・バインド', d: '鎖で振り回して投げる', f: '一番近い相手と鎖でつながる。自分が回るほど相手を振り回し、最後に狙いの向きへ放り投げる。つながれた側もダッシュで引っ張り返せる。', x: '4秒 鎖の長さ6.8m 回した数だけ遠くへ' } ] },
     { key: 'pas', name: 'パッシブ', parts: [
       { n: 'なし', d: 'なし', f: 'パッシブを使わない。', x: '' },
       { n: '逆鱗', d: 'ピンチで強化', f: '回転が3割を切ると赤黒いオーラが噴き出し、芯が赤く光る。', x: '回転30%以下で発動 攻撃+25% 弾かれにくい' },
@@ -106,7 +110,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   const LV_XP = [0, 80, 200, 360, 560, 800, 1100, 1400, 1700, 2000]   // そのレベルに届く累計の経験値
   const MAXLV = LV_XP.length
   // レベルで解放される物（[段の名前, 何番目]）。Lv1 では右回転・必殺は1つ・パーツは一部だけ
-  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1], ['pas', 1]], 4: [['top', 4], ['leg', 3], ['pas', 2]], 5: [['sp', 2], ['pas', 3]], 6: [['core', 3], ['core', 4], ['pas', 4]], 7: [['sp', 3], ['pas', 5]], 8: [['pas', 6]], 9: [['pas', 7]], 10: [['pas', 8]] }
+  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1], ['pas', 1]], 4: [['top', 4], ['leg', 3], ['pas', 2], ['sp', 4]], 5: [['sp', 2], ['pas', 3]], 6: [['core', 3], ['core', 4], ['pas', 4], ['sp', 5]], 7: [['sp', 3], ['pas', 5]], 8: [['pas', 6], ['sp', 6]], 9: [['pas', 7], ['sp', 7]], 10: [['pas', 8]] }
   const needLv = (key, i) => { for (const lv in UNLOCKS) if (UNLOCKS[lv].some(u => u[0] === key && u[1] === i)) return +lv; return 1 }
   const slotOf = key => SLOTS.find(x => x.key === key)
   const unlockName = ([k, i]) => k === 'dir' ? '左回転のコマ' : k === 'pas' ? `パッシブ「${slotOf(k).parts[i].n}」` : k === 'sp' ? `必殺「${slotOf(k).parts[i].n}」` : `${slotOf(k).name}パーツ「${slotOf(k).parts[i].n}」`
@@ -208,6 +212,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         break
       }
       case 'wall': Snd.play('hit', { vol: 0.35 }); break
+      case 'wallsoft': Snd.play('hit', { vol: Math.min(0.2, 0.06 + m.p * 0.03), rate: 1.3 }); break
       case 'dash': if (m.p === 2) { Snd.play('whoosh', { vol: 0.5, rate: 1.2 + (rush = (rush + 1) % 3) * 0.25 }); if (m.i === 0) lines(m.x, m.y, 0.4) } if (m.i === 0) Snd.play('swish', { vol: 0.7 }); else Snd.play('swish', { vol: 0.25 }); break
       case 'dive': Snd.play('whoosh', { vol: m.i === 0 ? 0.8 : 0.4, rate: 1.4 }); if (m.i === 0 && !m.p) lines(m.x, m.y, 0.5); break
       case 'boost': if (m.i === 0) { Snd.play('swish', { vol: 0.8, rate: 0.8 }); lines(m.x, m.y, 0.35) } break
@@ -238,7 +243,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'boom': {
         // 当たりの瞬間: 閃光・輪・画面の揺れ・低い爆発音（自分の技・近くの技は大きく）
         const me = m.i === 0
-        lines(m.x, m.y, 1); ring(m.x, m.y); tint(0, me ? 0.9 : 0.4)
+        lines(m.x, m.y, 1); ring(m.x, m.y); tint(m.s | 0, me ? 0.9 : 0.4)
         if (me) { flash(); onoma('ズドォン', m.x, m.y); shakeScreen() }
         Snd.play('boom', { vol: 1, rate: 0.62 }); Snd.play('clang', { vol: 0.6, rate: 0.55 }); Snd.play('hit', { vol: 0.8, rate: 0.5 })
         break
@@ -279,9 +284,24 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       }
       case 'ko':
         Snd.play('down', { vol: m.i === 0 ? 1 : 0.7 })
-        onoma(m.why === 'out' ? '場外' : 'ダウン', m.x, Math.max(0.25, m.y))
+        onoma(m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : 'ダウン', m.x, Math.max(0.25, m.y))
         break
       case 'sudden': $('sudden').hidden = false; Snd.play('down', { vol: 0.6, rate: 0.7 }); Snd.rate('bgm', 1.12); break
+      // 2026-11-28 必殺4つと中央の崩落
+      case 'arrowring': Snd.play('ice', { vol: m.i === 0 ? 0.55 : 0.4, rate: 0.9 + (m.p | 0) * 0.12 }); break
+      case 'arrowgo': Snd.play('whoosh', { vol: m.i === 0 ? 1 : 0.7, rate: 1.7 }); Snd.play('ice', { vol: 0.8, rate: 1.3 }); Snd.play('clang', { vol: 0.35, rate: 1.8 }); if (m.i === 0) { lines(m.x, m.y, 1); flash() } break
+      case 'freeze': Snd.play('shatter', { vol: m.i === 0 ? 0.9 : 0.7, rate: 0.9 }); Snd.play('ice', { vol: 0.8, rate: 0.8 }); tint2('180,238,255', m.i === 0 ? 0.7 : 0.3); if (m.i === 0) shakeScreen(); break
+      case 'melt': Snd.play('ice', { vol: m.i === 0 ? 0.7 : 0.35, rate: 1.4 }); break
+      case 'chain': Snd.play('chain', { vol: 0.9, rate: 0.9 }); Snd.play('chain', { vol: 0.6, rate: 1.2, delay: 0.08 }); Snd.play('clang', { vol: 0.5, rate: 1.4 }); break
+      case 'tug': Snd.play('chain', { vol: 0.9, rate: 0.8 }); Snd.play('hit', { vol: 0.5, rate: 1.2 }); if (m.i === 0) shakeScreen(); break
+      case 'chainhit': Snd.play('chain', { vol: 0.5, rate: 1.1 }); Snd.play('hit', { vol: 0.6, rate: 0.8 }); break
+      case 'chainthrow': Snd.play('whoosh', { vol: 0.9, rate: 0.9 }); Snd.play('chain', { vol: 0.9, rate: 0.7 }); Snd.play('boom', { vol: 0.7, rate: 0.8 }); lines(m.x, m.y, 0.9); if (m.i === 0) shakeScreen(); break
+      case 'anchorend': Snd.play('crack', { vol: 0.4, rate: 1.2 }); break
+      case 'spiralgo': Snd.play('whoosh', { vol: 1, rate: 1.1 }); Snd.play('clang', { vol: 0.6, rate: 0.9 }); if (m.i === 0) { lines(m.x, m.y, 1); flash() } break
+      case 'deny': { const e = [$('spChip'), $('tSpBtn')]; e.forEach(x => { x.classList.remove('deny'); void x.offsetWidth; x.classList.add('deny') }); Snd.play('clang', { vol: 0.3, rate: 0.6 }); break }
+      case 'pitstart': Snd.play('creak', { vol: 0.8, rate: 0.7 }); Snd.play('crack', { vol: 0.9, rate: 0.8 }); break
+      case 'crackstep': Snd.play('crack', { vol: 0.55 + 0.45 * (m.p || 0), rate: 0.85 + 0.3 * (m.p || 0) }); if (m.p > 0.5) Snd.play('creak', { vol: 0.5, rate: 0.6 }); break
+      case 'pitfall': Snd.play('crumble', { vol: 1, rate: 0.9 }); Snd.play('boom', { vol: 0.9, rate: 0.5 }); Snd.play('down', { vol: 0.7, rate: 0.6 }); shakeScreen(); break
       case 'collapse': Snd.play('down', { vol: 0.9, rate: 0.6 }); Snd.play('boom', { vol: 0.7, rate: 0.7 }); break
       case 'end': result(m); break
     }
@@ -436,7 +456,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     const me = m.k.find(k => k.i === 0)
     if (me) {
       // 2026-11-25 本人「左上に残り回転数みたいなの出すのやめて」: 数字は出さない。回転は名札の細い線とコマの揺れで見せる
-      const full = me.g >= 1 && me.a === 1
+      const full = me.g >= 1 && me.a === 1 && me.ok === 1
+      $('spChip').classList.toggle('wait', me.g >= 1 && me.a === 1 && me.ok === 0); $('tSpBtn').classList.toggle('wait', me.g >= 1 && me.a === 1 && me.ok === 0)
       $('spChip').classList.toggle('full', full); $('spFill').style.width = Math.min(100, me.g * 100).toFixed(0) + '%'
       $('tSpBtn').classList.toggle('full', full)
       $('tSpBtn').style.setProperty('--g', (me.g * 100).toFixed(0) + '%')
@@ -493,8 +514,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     o.style.top = Math.min(82, Math.max(16, (1 - y) * 100 + 9)) + '%'
     o.className = cls; void o.offsetWidth; o.classList.add('on')
   }
-  // 技ごとの色（メテオ=橙 / テンペスト=水色 / ファントム=紫 / イージス=金）
-  const SP_RGB = ['255,110,40', '60,190,240', '170,90,240', '240,180,50']
+  // 技ごとの色（メテオ=橙 / テンペスト=水色 / ファントム=紫 / イージス=金 / アンカー=赤紫 / スパイラル=赤 / アロー=氷の白 / チェイン=黄緑）
+  const SP_RGB = ['255,110,40', '60,190,240', '170,90,240', '240,180,50', '230,70,190', '255,40,64', '180,238,255', '150,255,76']
   // 2026-11-26 本人「他の人が使ってる必殺技の名前は出さなくていい」: 名前の帯は自分の技だけ
   function banner(kind) {
     const b = $('banner')
@@ -534,7 +555,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     const big = $('rsBig')
     big.textContent = m.win ? '勝ち' : '負け'
     big.className = 'rs-big ' + (m.win ? 'win' : 'lose')
-    $('rsWhy').textContent = m.win ? '最後まで回り切った' : m.why === 'out' ? '場外に落ちた' : '回転が尽きた'
+    $('rsWhy').textContent = m.win ? '最後まで回り切った' : m.why === 'out' ? '場外に落ちた' : m.why === 'pit' ? '穴に落ちた' : '回転が尽きた'
     $('rsLine').textContent = `${Math.floor(m.time)}秒　削った回転 ${Math.round(m.dealt)}　上からの一撃 ${m.aerial}回　必殺 ${m.specials}回`
     $('onoma').classList.remove('on'); $('banner').classList.remove('on')
     // 経験値: 勝てば多い。相手が多いほど・上から当てた回数・必殺の回数で少し増える
@@ -594,6 +615,12 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     win: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL00')],
     lose: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL09')],
     ui: [S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_hit_01')],
+    // 2026-11-28 氷（ガラス）・鎖（金属）・ひび割れ（岩）の録音素材
+    ice: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_hit_01'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_hit_02'), S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_glass_01')],
+    shatter: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_breaking_05'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_breaking_02')],
+    chain: [S('100-cc0-sfx_100-CC0-SFX_0_metal_05'), S('100-cc0-sfx_100-CC0-SFX_0_metal_07'), S('100-cc0-sfx_100-CC0-SFX_0_metal_09'), S('50-rpg-sound-effects_RPGsounds_Kenney_OGG_metalLatch')],
+    crack: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_hit_01'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_falling_04'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_breaking_03')],
+    crumble: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_breaking_01'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_falling_01')],
   })
   let muted = store.get('koma-mute', '0') === '1'
   function applyMute() { Snd.setMute(muted); $('muteX').hidden = !muted; $('muteWave').style.display = muted ? 'none' : ''; $('btnSound').textContent = muted ? 'オフ' : 'オン' }

@@ -52,7 +52,7 @@ public static class Arena
     public static float BaseH(float x, float z)
     {
         float r = Mathf.Sqrt(x * x + z * z);
-        if (r > Edge || r > CollapseR) return -1000f;
+        if (r > Edge || r > CollapseR || r < PitR) return -1000f;
         if (r <= R) return Bowl(r) - Dip(r);
         float ang = Mathf.Atan2(z, x);
         float t = Mathf.Clamp01((r - R) / 0.36f);
@@ -146,6 +146,7 @@ public static class Arena
         if (warnRing) warnRing.SetActive(false);
         BoardOn = false; if (boardObj) boardObj.SetActive(false);
         if (baseObj) baseObj.SetActive(true);
+        ResetPit();
     }
 
     public static void StartCollapse() { if (colT < 0) { colT = 0; nextRing = RingR.Length - 2; } }
@@ -199,6 +200,146 @@ public static class Arena
             if (t.localPosition.y < -60f) p.go.SetActive(false);
         }
         return dropped;
+    }
+
+    // ---------- 中央の崩落（2026-11-28 本人「かなり時間が経ったら、ど真ん中の凹みにヒビが入っていって、最終そこは崩れる。最後は落とし穴」） ----------
+    // 中央のくぼみ（半径 DipR）にヒビが PitCrackSec 秒かけて広がり、最後の1.6秒は床が震えて、崩れて穴になる。落ちたら理由は "pit"
+    public const float PitCrackSec = 9f;
+    public static float PitR = 0f;           // ここより内は奈落（穴が開いてから）
+    static float pitT = -1; static int pitStep;
+    static GameObject pitPiece, pitWall, pitGlow, crackDark, crackGlow;
+    static Mesh crackDarkMesh, crackGlowMesh; static int crackSegs; static Material crackGlowMat;
+    static bool pitFalling; static Vector3 pitVel, pitSpin;
+    public static bool PitActive => pitT >= 0;
+    public static bool PitCracking => pitT >= 0 && PitR <= 0f;
+    public static bool PitOpen => PitR > 0f;
+    public static float PitProgress => pitT < 0 ? 0f : Mathf.Clamp01(pitT / PitCrackSec);
+    public static void StartPit() { if (pitT < 0) { pitT = 0; pitStep = 0; } }
+
+    static void ResetPit()
+    {
+        PitR = 0f; pitT = -1; pitStep = 0; pitFalling = false;
+        if (pitPiece) { pitPiece.SetActive(true); pitPiece.transform.localPosition = Vector3.zero; pitPiece.transform.localRotation = Quaternion.identity; }
+        if (pitWall) pitWall.SetActive(false);
+        if (pitGlow) pitGlow.SetActive(false);
+        if (crackDark) crackDark.SetActive(false);
+        if (crackGlow) crackGlow.SetActive(false);
+    }
+
+    // ひびの形（中心から枝分かれしながら外へ）。線は近い順に並べ、先頭から何本まで見せるかで「広がる」を表す
+    public static Mesh CrackMesh(float maxLen, float w, int seed, bool onFloor, out int segs, float lift = 0.045f)
+    {
+        var rnd = new System.Random(seed);
+        var list = new List<Vector4>();   // x,y = 始点 z,w = 終点
+        var wid = new List<float>();
+        System.Action<Vector2, float, float, float, int> branch = null;
+        branch = (p0, ang, len, width, depth) =>
+        {
+            float walked = 0; Vector2 p = p0;
+            while (walked < len)
+            {
+                float step = 0.45f + (float)rnd.NextDouble() * 0.45f;
+                ang += ((float)rnd.NextDouble() - 0.5f) * 0.85f;
+                Vector2 q = p + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * step;
+                list.Add(new Vector4(p.x, p.y, q.x, q.y)); wid.Add(width * (1f - walked / len * 0.65f));
+                if (depth < 2 && rnd.NextDouble() < 0.2) branch(q, ang + (rnd.NextDouble() < 0.5 ? 1f : -1f) * (0.6f + (float)rnd.NextDouble() * 0.5f), (len - walked) * 0.55f, width * 0.62f, depth + 1);
+                p = q; walked += step;
+            }
+        };
+        int n = 10;
+        for (int i = 0; i < n; i++) branch(Vector2.zero, i * Mathf.PI * 2 / n + ((float)rnd.NextDouble() - 0.5f) * 0.4f, maxLen * (0.8f + (float)rnd.NextDouble() * 0.35f), w, 0);
+        var order = new List<int>(); for (int i = 0; i < list.Count; i++) order.Add(i);
+        order.Sort((a, b) => new Vector2(list[a].x, list[a].y).magnitude.CompareTo(new Vector2(list[b].x, list[b].y).magnitude));
+        var mb = new MeshKit.Builder { twoSided = true };
+        foreach (int i in order)
+        {
+            var sg = list[i]; Vector2 a = new Vector2(sg.x, sg.y), b = new Vector2(sg.z, sg.w);
+            Vector2 d = (b - a).normalized, nrm = new Vector2(-d.y, d.x) * wid[i];
+            Vector2 a1 = a + nrm, a2 = a - nrm, b1 = b + nrm * 0.7f, b2 = b - nrm * 0.7f;
+            System.Func<Vector2, Vector3> P = q => new Vector3(q.x, onFloor ? FloorH(q.x * 0.99999f, q.y * 0.99999f) + lift : lift, q.y);
+            mb.Quad(P(a1), P(b1), P(b2), P(a2), new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0));
+        }
+        segs = order.Count;
+        var m = mb.Mesh(); return m;
+    }
+    // 先頭から n 本だけ見せる（1本は 四角2つ×表裏 = 12 インデックス）
+    public static void CrackShow(Mesh m, int n)
+    {
+        m.SetSubMesh(0, new UnityEngine.Rendering.SubMeshDescriptor(0, Mathf.Max(0, n) * 12), UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds);
+    }
+
+    static void BuildPit(Transform root, Materials m)
+    {
+        pitPiece = MeshKit.Obj("PitPiece", root, FloorMesh(0, DipR, 0, Mathf.PI * 2), m.Floor);
+        pitPiece.GetComponent<MeshRenderer>().receiveShadows = true;
+        // 穴の壁と底の赤い光
+        var wb = new MeshKit.Builder { twoSided = true };
+        int seg = 40; float top = BaseH(DipR + 0.01f, 0) , bot = -7.5f;
+        for (int j = 0; j < seg; j++)
+        {
+            float a0 = j * Mathf.PI * 2 / seg, a1 = (j + 1) * Mathf.PI * 2 / seg;
+            Vector3 t0 = new Vector3(Mathf.Cos(a0), 0, Mathf.Sin(a0)) * DipR, t1 = new Vector3(Mathf.Cos(a1), 0, Mathf.Sin(a1)) * DipR;
+            Vector3 u = Vector3.up * top, d = Vector3.up * bot;
+            wb.Quad(t0 + u, t1 + u, t1 + d, t0 + d, new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0), new Vector2(0, 0));
+        }
+        pitWall = MeshKit.Obj("PitWall", root, wb.Mesh(), m.Lit(new Color(0.05f, 0.05f, 0.06f), 0.2f, 0.3f));
+        pitWall.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        pitWall.SetActive(false);
+        pitGlow = MeshKit.Obj("PitGlow", root, MeshKit.Disc(DipR, 32), m.AddGlow(new Color(1f, 0.3f, 0.08f, 1f) * 1.6f));
+        pitGlow.transform.localPosition = new Vector3(0, bot + 0.2f, 0);
+        pitGlow.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        pitGlow.SetActive(false);
+        // ひび: 暗い太い線と、その上の細い光る線
+        crackDarkMesh = CrackMesh(DipR + 1.5f, 0.2f, 7, true, out crackSegs);
+        crackGlowMesh = CrackMesh(DipR + 1.5f, 0.1f, 7, true, out _, 0.075f);
+        crackDark = MeshKit.Obj("CrackDark", root, crackDarkMesh, m.Alpha(new Color(0.01f, 0.01f, 0.015f, 1f), Texture2D.whiteTexture));
+        crackGlowMat = m.AddGlow(new Color(1f, 0.5f, 0.15f, 1f));
+        crackGlowMat.renderQueue = 3100;
+        crackGlow = MeshKit.Obj("CrackGlow", root, crackGlowMesh, crackGlowMat);
+        crackDark.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        crackGlow.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        crackDark.SetActive(false); crackGlow.SetActive(false);
+    }
+
+    // 戻り値: 0 なにもなし / 1 ひびが進んだ（音） / 2 床が抜けた
+    public static int UpdatePit(float dt)
+    {
+        int ret = 0;
+        if (pitT >= 0)
+        {
+            pitT += dt;
+            if (PitR <= 0f)
+            {
+                float prog = Mathf.Clamp01(pitT / (PitCrackSec - 1.2f));
+                int show = Mathf.CeilToInt(crackSegs * prog * prog * (3f - 2f * prog) * 0.5f + crackSegs * prog * 0.5f);
+                if (!crackDark.activeSelf) { crackDark.SetActive(true); crackGlow.SetActive(true); }
+                CrackShow(crackDarkMesh, show); CrackShow(crackGlowMesh, show);
+                float left = PitCrackSec - pitT;
+                float pulse = 0.5f + 0.5f * Mathf.Sin(pitT * (left < 2.5f ? 24f : 9f));
+                crackGlowMat.SetColor("_TintColor", new Color(1f, 0.45f, 0.12f, 1f) * (0.4f + 0.6f * prog) * (0.65f + 0.35f * pulse));
+                // 抜ける直前は床が小刻みに震える
+                pitPiece.transform.localPosition = left < 1.8f ? Random.insideUnitSphere * 0.045f * (1.8f - left) : Vector3.zero;
+                int stepsNow = pitT < 5f ? (int)(pitT / 1.4f) : 3 + (int)((pitT - 5f) / 0.7f);
+                if (stepsNow > pitStep) { pitStep = stepsNow; ret = 1; }
+                if (pitT >= PitCrackSec)
+                {
+                    PitR = DipR; pitFalling = true; pitVel = new Vector3(0, -2f, 0); pitSpin = new Vector3(Random.Range(-25f, 25f), 0, Random.Range(-25f, 25f));
+                    pitPiece.transform.localPosition = Vector3.zero;
+                    pitWall.SetActive(true); pitGlow.SetActive(true);
+                    crackDark.SetActive(false); crackGlow.SetActive(false);
+                    ret = 2;
+                }
+            }
+        }
+        if (pitFalling && pitPiece.activeSelf)
+        {
+            pitVel.y -= 30f * dt;
+            var t = pitPiece.transform;
+            t.localPosition += pitVel * dt;
+            t.Rotate(pitSpin * dt, Space.Self);
+            if (t.localPosition.y < -45f) pitPiece.SetActive(false);
+        }
+        return ret;
     }
 
     // ---------- 周回加速板（試合の途中で外周が光る板に変わる） ----------
@@ -256,8 +397,9 @@ public static class Arena
     {
         var root = new GameObject("Arena");
         // 床: 崩れない中央と、最終局面で外から崩れ落ちる輪（1周を8つに分けた破片）
-        var floor = MeshKit.Obj("Floor", root.transform, FloorMesh(0, KeepR, 0, Mathf.PI * 2), m.Floor);
+        var floor = MeshKit.Obj("Floor", root.transform, FloorMesh(DipR, KeepR, 0, Mathf.PI * 2), m.Floor);
         floor.GetComponent<MeshRenderer>().receiveShadows = true;
+        BuildPit(root.transform, m);
         pieces.Clear();
         for (int ri = 0; ri < RingR.Length - 1; ri++)
             for (int sg = 0; sg < 8; sg++)

@@ -54,6 +54,10 @@ public class Koma
     public float dashCd, dashT, lockT, airDashUsed, padCd, boostCd, hitFlash;
     public float specialT; public int specialPhase; public Vector3 specialTarget; public int rushLeft;
     public float shieldT, tornadoT;
+    // 2026-11-28 必殺4つ追加: アンカー（重くなる）・凍え・氷の矢の溜め/突進・鎖
+    public Vector2 inputMv;   // いまの移動の入力（世界の向き。CPU は Think の move）
+    public float wallFxT; public float anchorT, frostT, arrowT, arrowDashT, chainSwing; public Vector3 arrowDir; public int arrowRings;
+    public Koma chainTo, chainFrom; public float chainT; public Vector3 arrowFrom; public float lsPow, thrownT;
     public float superT, superCd, boardT, fireT, fireCd, hiT, burnSnd, lastShiftT = -9; public bool jumpReq; public Vector3 lastFire;
     public string koWhy = "";
     public float koTime;
@@ -70,6 +74,8 @@ public class Koma
     public float leanT, leanCd; public Vector3 leanDir;
     public float clingT, clingCd, clingWin, cpuSaveAt; public bool clingHit; public Vector3 clingAt, clingOut;
     public bool rage, gutsUsed, guard, rescueSet, wasAir; public int stampN, hitsTaken; public Koma stampBy; public Vector3 rescue;
+    Transform frostShell, iceTail, iceHead, anchorRing, anchorGlowRing, anchorCrack, anchorCrackGlow; Material anchorCrackGlowMat; static Mesh anchorCrackGlowMesh; Material frostMat, tailMat, headMat, anchorMat, anchorGlowMat, anchorCrackMat;
+    static Mesh anchorCrackMesh; static int anchorCrackSegs;
     Transform wings, hex; Transform[] stampObj = new Transform[3]; Material wingMat, hexMat, stampMat;
     float landAmp, landT = 99f, landAng, landSq;
     float auraT; Color auraC = Color.white; Transform aura, auraRing; Material auraMat, auraRingMat;
@@ -246,6 +252,26 @@ public class Koma
         funnel.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         funnel.gameObject.SetActive(false);
 
+        // 氷: 凍えの殻・氷の矢の尾と先端
+        frostShell = MeshKit.Obj("frost", root.transform, Dome(1.05f), m.Alpha(new Color(0.6f, 0.9f, 1f, 0.38f), Texture2D.whiteTexture)).transform;
+        frostMat = frostShell.GetComponent<MeshRenderer>().material;
+        frostShell.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; frostShell.gameObject.SetActive(false);
+        iceTail = MeshKit.Obj("iceTail", root.transform, MeshKit.Frustum(0.95f, 0.06f, 8f, 20, false), m.AddGlow(new Color(0.6f, 0.9f, 1f, 1f), m.Funnel)).transform;
+        tailMat = iceTail.GetComponent<MeshRenderer>().material; iceTail.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; iceTail.gameObject.SetActive(false);
+        iceHead = MeshKit.Obj("iceHead", root.transform, MeshKit.Frustum(0.8f, 0.02f, 2.6f, 16, false), m.AddGlow(new Color(0.85f, 0.97f, 1f, 1f), m.Funnel)).transform;
+        headMat = iceHead.GetComponent<MeshRenderer>().material; iceHead.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; iceHead.gameObject.SetActive(false);
+        // グラビティ・アンカー: 足元の暗い輪・ひび・縁の光
+        anchorRing = MeshKit.Obj("anchorRing", root.transform, MeshKit.Disc(2.4f, 32), m.Alpha(new Color(0.02f, 0.01f, 0.03f, 1f), m.Dot)).transform;
+        anchorMat = anchorRing.GetComponent<MeshRenderer>().material; anchorRing.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; anchorRing.gameObject.SetActive(false);
+        anchorGlowRing = MeshKit.Obj("anchorGlow", root.transform, MeshKit.Ring(2.0f, 2.4f, 40), m.AddGlow(new Color(0.9f, 0.28f, 0.75f, 1f))).transform;
+        anchorGlowMat = anchorGlowRing.GetComponent<MeshRenderer>().material; anchorGlowRing.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; anchorGlowRing.gameObject.SetActive(false);
+        if (anchorCrackMesh == null) anchorCrackMesh = Arena.CrackMesh(2.5f, 0.11f, 21, false, out anchorCrackSegs, 0.02f);
+        if (anchorCrackGlowMesh == null) anchorCrackGlowMesh = Arena.CrackMesh(2.5f, 0.05f, 21, false, out _, 0.04f);
+        anchorCrackGlow = MeshKit.Obj("anchorCrackGlow", root.transform, anchorCrackGlowMesh, m.AddGlow(new Color(0.9f, 0.28f, 0.75f, 1f))).transform;
+        anchorCrackGlowMat = anchorCrackGlow.GetComponent<MeshRenderer>().material; anchorCrackGlow.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; anchorCrackGlow.gameObject.SetActive(false);
+        anchorCrack = MeshKit.Obj("anchorCrack", root.transform, anchorCrackMesh, m.Alpha(new Color(0.01f, 0.005f, 0.015f, 1f), Texture2D.whiteTexture)).transform;
+        anchorCrackMat = anchorCrack.GetComponent<MeshRenderer>().material; anchorCrack.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; anchorCrack.gameObject.SetActive(false);
+
         // 必殺技のオーラ（光の柱＋足元の輪）。色は技ごと
         auraMat = m.AddGlow(Color.white, m.Funnel);
         aura = MeshKit.Obj("aura", root.transform, MeshKit.Frustum(1.15f, 0.55f, 3.6f, 28, false), auraMat).transform;
@@ -375,6 +401,7 @@ public class Koma
         superT = 0; superCd = 0; boardT = 0; fireT = 0; fireCd = 0; hiT = 0; burnSnd = 0; lastShiftT = -9; jumpReq = false; lastFire = new Vector3(0, -999, 0);
         tilt.localRotation = Quaternion.identity; tilt.localScale = Vector3.one; landT = 99f; landAmp = 0; auraT = 0;
         leanT = 0; leanCd = 0;
+        anchorT = 0; frostT = 0; arrowT = 0; arrowDashT = 0; arrowRings = 0; chainTo = null; chainFrom = null; chainT = 0; chainSwing = 0; thrownT = 0; lsPow = 0;
         clingT = 0; clingCd = 0; clingHit = false; cpuSaveAt = -1;
         rage = false; gutsUsed = false; guard = false; rescueSet = false; wasAir = false; stampN = 0; stampBy = null; hitsTaken = 0; pasCd = 0; st.atk = baseAtk;
         root.SetActive(true);
@@ -385,7 +412,7 @@ public class Koma
     public void Knock(string why)
     {
         if (!alive) return;
-        alive = false; koWhy = why; shieldT = 0; tornadoT = 0;
+        alive = false; koWhy = why; shieldT = 0; tornadoT = 0; anchorT = 0; frostT = 0; arrowT = 0; arrowDashT = 0;
         if (why == "spin") { down = true; downAxis = new Vector3(Random.Range(-1f, 1f), 0, Random.Range(-1f, 1f)).normalized; if (downAxis == Vector3.zero) downAxis = Vector3.right; }
     }
 
@@ -465,10 +492,19 @@ public class Koma
         }
         float ga = alive ? Mathf.Lerp(0.0f, 0.55f, sr * sr) * (specialPhase > 0 ? 1.4f : 1f) : 0;
         if (hitFlash > 0) { ga = 0.9f; hitFlash -= realDt; }
-        var gc = Color.Lerp(color, Color.white, 0.3f); gc.a = Mathf.Clamp01(ga);
+        if (frostT > 0 && alive) ga = Mathf.Max(ga, 0.75f);
+        var gc = frostT > 0 && alive ? new Color(0.6f, 0.88f, 1f) : Color.Lerp(color, Color.white, 0.3f); gc.a = Mathf.Clamp01(ga);
         ghostMat.SetColor("_TintColor", gc * 0.5f);
         ghost.localRotation = Quaternion.Euler(0, (left ? -1f : 1f) * spinAngle * 0.37f, 0);
 
+        // 重くなる: 少し沈んで平たく潰れる
+        if (anchorT > 0 && alive)
+        {
+            float sink = Mathf.Clamp01((5f - anchorT) / 0.25f);
+            tilt.localPosition = new Vector3(0, -0.13f * sink, 0);
+            tilt.localScale = Vector3.Scale(tilt.localScale, new Vector3(1f + 0.12f * sink, 1f - 0.12f * sink, 1f + 0.12f * sink));
+        }
+        else tilt.localPosition = Vector3.zero;
         float gh = Arena.H(pos.x, pos.z);
         if (gh > -100)
         {
@@ -513,6 +549,46 @@ public class Koma
             stampObj[si].rotation = Quaternion.Euler(90f, Time.unscaledTime * 200f, 0);
         }
         if (stampMat != null) stampMat.SetColor("_TintColor", new Color(0.7f, 0.35f, 1f) * 0.9f);
+        // 凍え・氷の矢・アンカーの見た目
+        bool frozen = alive && frostT > 0;
+        frostShell.gameObject.SetActive(frozen);
+        if (frozen)
+        {
+            frostShell.position = pos + Vector3.up * 0.02f; frostShell.rotation = Quaternion.Euler(0, 30f, 0);
+            float fa = Mathf.Clamp01(frostT / 0.5f);
+            frostShell.localScale = Vector3.one * (1.0f + 0.04f * Mathf.Sin(Time.unscaledTime * 20f));
+            frostMat.SetColor("_TintColor", new Color(0.62f, 0.92f, 1f, 0.5f) * 0.5f * fa);
+        }
+        bool arrowOn = alive && arrowDashT > 0;
+        iceTail.gameObject.SetActive(arrowOn); iceHead.gameObject.SetActive(arrowOn);
+        if (arrowOn)
+        {
+            Vector3 hd = new Vector3(arrowDir.x, 0, arrowDir.z).normalized;
+            Vector3 c = pos + Vector3.up * 0.45f;
+            iceTail.position = c; iceTail.rotation = Quaternion.FromToRotation(Vector3.up, -hd + Vector3.up * 0.04f);
+            iceHead.position = c - hd * 0.1f; iceHead.rotation = Quaternion.FromToRotation(Vector3.up, hd);
+            float fl = 0.7f + 0.3f * Mathf.Sin(Time.unscaledTime * 50f);
+            tailMat.SetColor("_TintColor", new Color(0.62f, 0.92f, 1f, 1f) * 0.75f * fl);
+            headMat.SetColor("_TintColor", new Color(0.9f, 0.98f, 1f, 1f) * 0.8f);
+        }
+        bool anOn = alive && anchorT > 0 && gh > -100;
+        anchorRing.gameObject.SetActive(anOn); anchorGlowRing.gameObject.SetActive(anOn); anchorCrack.gameObject.SetActive(anOn); anchorCrackGlow.gameObject.SetActive(anOn);
+        if (anOn)
+        {
+            float inT = Mathf.Clamp01((5f - anchorT) / 0.18f), outT = Mathf.Clamp01(anchorT / 0.5f);
+            float ap = inT * outT; float pu = 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 6f);
+            Vector2 gg = Arena.Grad(pos.x, pos.z); Quaternion sl = Quaternion.FromToRotation(Vector3.up, new Vector3(-gg.x, 1f, -gg.y).normalized);
+            Vector3 fp = new Vector3(pos.x, gh + 0.08f, pos.z);
+            anchorRing.SetPositionAndRotation(fp, sl); anchorRing.localScale = Vector3.one * (0.4f + 0.6f * inT);
+            anchorGlowRing.SetPositionAndRotation(fp + Vector3.up * 0.02f, sl); anchorGlowRing.localScale = Vector3.one * (0.4f + 0.6f * inT);
+            anchorCrack.SetPositionAndRotation(fp + Vector3.up * 0.01f, sl); anchorCrack.localScale = Vector3.one * (0.5f + 0.5f * inT);
+            anchorCrackGlow.SetPositionAndRotation(fp + Vector3.up * 0.03f, sl); anchorCrackGlow.localScale = Vector3.one * (0.5f + 0.5f * inT);
+            anchorCrackGlowMat.renderQueue = 3100; anchorGlowMat.renderQueue = 3100;
+            anchorCrackGlowMat.SetColor("_TintColor", new Color(0.9f, 0.28f, 0.75f, 1f) * 0.9f * ap * pu);
+            anchorMat.SetColor("_TintColor", new Color(0.02f, 0.01f, 0.03f, 0.88f) * 0.5f * ap);
+            anchorGlowMat.SetColor("_TintColor", new Color(0.9f, 0.28f, 0.75f, 1f) * 0.6f * ap * pu);
+            anchorCrackMat.SetColor("_TintColor", new Color(0.01f, 0.005f, 0.015f, 1f) * 0.5f * ap);
+        }
         bool auraOn = alive && (auraT > 0 || specialPhase > 0 || tornadoT > 0);
         if (auraT > 0) auraT -= realDt;
         aura.gameObject.SetActive(auraOn); auraRing.gameObject.SetActive(auraOn);

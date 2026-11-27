@@ -22,3 +22,17 @@
 - snd/85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_HIT_jingles_HIT03.mp3: 85 Short music jingles / Kenney / CC0
 - snd/kenney-rpg_creak1.mp3: 50 RPG sound effects / Kenney / CC0
 - snd/kenney-rpg_creak3.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_hit_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_hit_02.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_breaking_05.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_breaking_02.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/100-cc0-sfx-2_sfx_100_v2_sfx100v2_glass_01.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/100-cc0-sfx_100-CC0-SFX_0_metal_05.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/100-cc0-sfx_100-CC0-SFX_0_metal_07.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/100-cc0-sfx_100-CC0-SFX_0_metal_09.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/50-rpg-sound-effects_RPGsounds_Kenney_OGG_metalLatch.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_hit_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_falling_04.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_breaking_03.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_breaking_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_falling_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
