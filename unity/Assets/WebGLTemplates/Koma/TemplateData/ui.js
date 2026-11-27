@@ -529,6 +529,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   function result(m) {
     if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock()
     Snd.loop('bgm', null)
+    Snd.hush(0.25)   // 鳴っている効果音を消してから結果の音
     Snd.play(m.win ? 'win' : 'lose', { vol: 0.9 })
     const big = $('rsBig')
     big.textContent = m.win ? '勝ち' : '負け'
@@ -585,7 +586,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     down: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_falling_01'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_metal_falling_02')],
     swish: [S('swishes-sound-pack_swishes_swishes_swish-7'), S('swishes-sound-pack_swishes_swishes_swish-9'), S('swishes-sound-pack_swishes_swishes_swish-3')],
     spring: [S('100-cc0-sfx_100-CC0-SFX_0_spring_03'), S('100-cc0-sfx_100-CC0-SFX_0_spring_05')],
-    whoosh: [S('air-whoosh_whoosh2_0')],
+    // 2026-11-27 本人「試合が終わっても風っぽい音がしばらく聞こえる」: 元の素材は「ヒュッ」が約1秒おきに5回入った5.2秒の音だった。最初の1回（0.85秒）だけを切り出した版を使う
+    whoosh: [S('air-whoosh_whoosh2_short')],
     creak: [S('kenney-rpg_creak1'), S('kenney-rpg_creak3')],
     tick: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_HIT_jingles_HIT03')],
     go: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL04')],

@@ -12,7 +12,8 @@
 - snd/swishes-sound-pack_swishes_swishes_swish-3.mp3: Swishes Sound Pack / artisticdude / CC0
 - snd/100-cc0-sfx_100-CC0-SFX_0_spring_03.mp3: 100 CC0 SFX / rubberduck / CC0
 - snd/100-cc0-sfx_100-CC0-SFX_0_spring_05.mp3: 100 CC0 SFX / rubberduck / CC0
-- snd/air-whoosh_whoosh2_0.mp3: Air whoosh / pyranostudios / CC0
+- snd/air-whoosh_whoosh2_0.mp3: Air whoosh / pyranostudios / CC0（今は使っていない元の素材）
+- snd/air-whoosh_whoosh2_short.mp3: Air whoosh / pyranostudios / CC0（最初の0.85秒を切り出し）
 - snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_hit_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
 - snd/gyro_ragnarok_bgm.mp3: BGM: Suno で作成（本人の有料プラン）
 - snd/85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL00.mp3: 85 Short music jingles / Kenney / CC0

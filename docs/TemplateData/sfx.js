@@ -65,7 +65,16 @@ const Snd = {
     s.buffer = buf; const j = o.jitter == null ? 0.05 : o.jitter; s.playbackRate.value = (o.rate || 1) * (1 + (Math.random() * 2 - 1) * j)
     g.gain.value = o.vol == null ? 1 : o.vol
     s.connect(g); const d = o.dest === 'muf' ? this.muf : this.sfxBus; g.connect(d); if (o.room) { const rg = c.createGain(); rg.gain.value = o.room; g.connect(rg); rg.connect(this.room) }
-    s.start(t, o.offset || 0); return s
+    s.start(t, o.offset || 0)
+    const rec = { s, g, name }; this.active.add(rec); s.onended = () => this.active.delete(rec)
+    return s
+  },
+  // 鳴っている効果音（ループ以外）を fade 秒で消す
+  active: new Set(),
+  hush(fade = 0.25) {
+    if (!this.ctx) return; const t = this.ctx.currentTime
+    for (const r of this.active) { try { r.g.gain.cancelScheduledValues(t); r.g.gain.setValueAtTime(r.g.gain.value, t); r.g.gain.linearRampToValueAtTime(0.0001, t + fade); r.s.stop(t + fade + 0.02) } catch (e) {} }
+    this.active.clear()
   },
   loop(slot, url, vol = 0.3, fade = 0.6) {
     const old = this.loops[slot]; this.loops[slot] = url ? { url, vol } : null
