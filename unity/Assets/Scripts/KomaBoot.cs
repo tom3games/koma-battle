@@ -213,6 +213,8 @@ public partial class KomaBoot : MonoBehaviour
             case "boardat": BoardAt = N(0); break;
             case "fightt": fightT = N(0); break;
             case "jump": player.jumpReq = true; break;
+            case "lean": StartLean(player, CamRel(new Vector2(N(0), N(1)))); break;   // 検査用: 傾け（画面の向き）
+            case "leanw": StartLean(player, new Vector2(N(0), N(1))); break;   // 検査用: 傾け（世界の向き）
             case "super": StartSuper(player); break;
             case "pause": paused = N(0) > 0; break;
             case "move": touchMove = new Vector2(N(0), N(1)); if (touchMove.sqrMagnitude > 1) touchMove.Normalize(); break;
@@ -392,6 +394,13 @@ public partial class KomaBoot : MonoBehaviour
                     else player.lastShiftT = Time.unscaledTime;
                 }
                 if (Input.GetKeyDown(KeyCode.Space)) player.jumpReq = true;
+                // WASD（矢印）を0.28秒以内に2回: その向きへ傾ける
+                for (int di = 0; di < 4; di++)
+                {
+                    if (!(Input.GetKeyDown(LeanKeys[di * 2]) || Input.GetKeyDown(LeanKeys[di * 2 + 1]))) continue;
+                    if (Time.unscaledTime - lastKeyT[di] < 0.28f) { StartLean(player, CamRel(LeanVec[di])); lastKeyT[di] = -9; }
+                    else lastKeyT[di] = Time.unscaledTime;
+                }
                 if (touchMove.sqrMagnitude > 0.01f) move = touchMove;
                 if (move.sqrMagnitude > 1) move.Normalize();
                 move = CamRel(move);
@@ -640,6 +649,7 @@ public partial class KomaBoot : MonoBehaviour
 
     void TryDash(Koma k, Vector3 aim)
     {
+        if (k.clingT > 0) { if (k.alive && k.isPlayer && !autoPlayer) ClingSave(k); return; }   // CPU は StartCling で決めた時刻に戻る
         if (!k.alive || k.specialPhase > 0 || k.dashCd > 0) return;
         if (!k.grounded && k.isPlayer)
         {
@@ -844,11 +854,75 @@ public partial class KomaBoot : MonoBehaviour
         shake = Mathf.Max(shake, 0.4f);
     }
 
+    // ---------- 傾け（2026-11-27） ----------
+    // WASD 2回押しで、その向きへ1秒だけ大きく傾ける。傾けた側で当てると「かち上げ」（相手が上へ浮いて大きく飛ぶ・削りも少し増える）。
+    // 傾けた向きへ少しだけ滑り出る。待ち1.2秒。スマホは未対応
+    static readonly KeyCode[] LeanKeys = { KeyCode.W, KeyCode.UpArrow, KeyCode.S, KeyCode.DownArrow, KeyCode.D, KeyCode.RightArrow, KeyCode.A, KeyCode.LeftArrow };
+    static readonly Vector2[] LeanVec = { Vector2.up, Vector2.down, Vector2.right, Vector2.left };
+    readonly float[] lastKeyT = { -9, -9, -9, -9 };
+    const float LeanTime = 1.0f;
+    public void StartLean(Koma k, Vector2 dir)
+    {
+        if (!k.alive || k.leanCd > 0 || k.clingT > 0 || k.specialPhase > 0 || phase != "fight") return;
+        Vector3 d = new Vector3(dir.x, 0, dir.y); if (d.sqrMagnitude < 1e-4f) return; d.Normalize();
+        k.leanDir = d; k.leanT = LeanTime; k.leanCd = LeanTime + 0.2f;
+        if (k.grounded) k.vel += d * 6f;
+        EmitEv("lean", k, 0);
+    }
+    bool Upper(Koma a, Vector3 nhToB) => a.leanT > 0 && Vector3.Dot(a.leanDir, nhToB) > 0.45f;
+
+    // ---------- 場外ギリギリの踏ん張り（2026-11-27） ----------
+    // 縁から外へ出かけた瞬間、1.1秒だけ縁に引っかかって外へ傾く。ダッシュ（左クリック・はじく・スペース）で内へ跳ね戻る。
+    // 間に合わない・その間に当てられたら落ちる。CPU は 55% が 0.35〜0.8秒で戻る。1回使うと 6秒は起きない
+    const float ClingWin = 1.1f;
+    void StartCling(Koma k, Vector3 at, Vector3 outD)
+    {
+        k.clingWin = ClingWin; k.clingT = ClingWin; k.clingCd = 6f; k.clingHit = false;
+        k.clingAt = at + outD * 0.25f + Vector3.up * 0.05f; k.clingOut = outD;
+        k.pos = k.clingAt; k.vel = Vector3.zero; k.grounded = false; k.dashT = 0; k.lockT = 0;
+        k.cpuSaveAt = (!k.isPlayer || autoPlayer) && rng.NextDouble() < 0.55 ? ClingWin - (0.35f + (float)rng.NextDouble() * 0.45f) : -1f;
+        Spark(k.clingAt + Vector3.up * 0.1f, outD + Vector3.up * 0.6f, 24, 0.9f);
+        EmitEv("cling", k, 0);
+        if (k.isPlayer) shake = Mathf.Max(shake, 0.25f);
+    }
+    void ClingStep(Koma k, float dt)
+    {
+        k.clingT -= dt;
+        k.spin -= k.spinMax * 0.02f * dt;
+        k.pos = k.clingAt + new Vector3(Mathf.Sin(fightT * 61f), 0, Mathf.Cos(fightT * 47f)) * 0.04f; k.vel = Vector3.zero;
+        if (k.jumpReq && k.isPlayer) { k.jumpReq = false; ClingSave(k); return; }
+        if (k.cpuSaveAt > 0 && k.clingT <= k.cpuSaveAt) { ClingSave(k); return; }
+        if (!k.alive || phase != "fight" || k.clingHit || k.clingT <= 0 || k.spin <= 0)
+        {
+            // 落ちる: 外へ押し出して、あとは普通に落下（場外の判定は Step の最後）
+            k.clingT = 0;
+            k.pos = k.clingAt + k.clingOut * 0.9f;
+            k.vel = k.clingOut * (k.clingHit ? 11f : 5f) + Vector3.down * 2f;
+            EmitEv("clingfall", k, k.clingHit ? 1 : 0);
+            if (k.spin <= 0) { k.spin = 0; KO(k, "spin"); }
+        }
+    }
+    void ClingSave(Koma k)
+    {
+        k.clingT = 0; k.cpuSaveAt = -1;
+        Vector3 inD = -k.clingOut;
+        k.pos = k.clingAt + Vector3.up * 0.3f;
+        k.vel = inD * 15f * Mathf.Lerp(1f, k.st.speed, 0.4f) + Vector3.up * 9.5f;
+        k.grounded = false; k.dashT = 0.3f; k.dashCd = Mathf.Max(k.dashCd, 0.6f); k.airDashUsed = 0;
+        k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.04f);
+        Spark(k.clingAt + Vector3.up * 0.3f, inD + Vector3.up, 70, 1.6f); Wave(k.clingAt, 4f); Pulse(k.clingAt, new Color(1f, 0.8f, 0.4f), 10f, 12f);
+        EmitEv("save", k, 0);
+        if (k.isPlayer) shake = Mathf.Max(shake, 0.45f);
+    }
+
     // ---------- 物理 ----------
     const float G = 28f, StepUp = 0.35f;
 
     void Step(Koma k, float dt, Vector2 move)
     {
+        if (k.clingCd > 0) k.clingCd -= dt;
+        if (k.leanT > 0) k.leanT -= dt; if (k.leanCd > 0) k.leanCd -= dt;
+        if (k.clingT > 0) { ClingStep(k, dt); return; }
         Vector3 p = k.pos, v = k.vel;
         bool ctrl = k.alive && phase == "fight" && k.specialPhase == 0;
         k.lockT -= dt;
@@ -922,6 +996,14 @@ public partial class KomaBoot : MonoBehaviour
         Vector3 np = p + v * dt;
         float h0 = Arena.H(p.x, p.z);
         float h = Arena.H(np.x, np.z);
+        // 場外ギリギリの踏ん張り: 足場の上から奈落へ出る瞬間、低い所なら縁に引っかかる
+        if (h0 > -100 && h < -100 && k.alive && phase == "fight" && k.specialPhase == 0 && k.clingCd <= 0 && p.y < h0 + 2.2f)
+        {
+            Vector3 outD = new Vector3(np.x - p.x, 0, np.z - p.z);
+            if (outD.sqrMagnitude < 1e-6f) outD = new Vector3(p.x, 0, p.z);
+            StartCling(k, new Vector3(p.x, h0, p.z), outD.normalized);
+            return;
+        }
         float hw = Arena.WallH(np.x, np.z);
         // 壁（段差・縁・坂の横・縁の上の見えない柵）
         float hsNow = Mathf.Sqrt(v.x * v.x + v.z * v.z);
@@ -1208,6 +1290,13 @@ public partial class KomaBoot : MonoBehaviour
                 Vector3 dd = new Vector3(d.x, d.y * 1.6f, d.z);
                 float dist = dd.magnitude;
                 if (dist >= rr || dist < 1e-4f) continue;
+                if (a.clingT > 0 || b.clingT > 0)
+                {
+                    // 縁で踏ん張っている相手に当てると、とどめ（相手は落ち、当てた方は少し跳ね返る）
+                    var c = a.clingT > 0 ? a : b; var o = c == a ? b : a;
+                    if (o.clingT <= 0) { c.clingHit = true; c.lastHitT = fightT; o.vel = new Vector3(-o.vel.x * 0.3f, 3f, -o.vel.z * 0.3f); }
+                    continue;
+                }
                 Vector3 n = d.normalized;
                 Vector3 nh = new Vector3(n.x, 0, n.z);
                 if (nh.sqrMagnitude < 1e-4f) nh = Vector3.forward; else nh.Normalize();
@@ -1262,6 +1351,9 @@ public partial class KomaBoot : MonoBehaviour
                 else if (!bAir) { b.vel.y += pop; b.grounded = false; }
                 if (bAir) { a.vel -= nh * 9f; a.vel.y = Mathf.Min(a.vel.y, 1f); b.vel.y = 8f; b.vel.x *= 0.4f; b.vel.z *= 0.4f; b.airDashUsed = 1; b.aerialHits++; }
                 else if (!aAir) { a.vel.y += pop; a.grounded = false; }
+                // 傾けた側で当てた: かち上げ（相手を上へ浮かせて外へ大きく・自分はあまり弾かれない）
+                if (Upper(a, nh) && !aAir) { b.vel += nh * 9f / mb; b.vel.y = Mathf.Max(b.vel.y, 13.5f); b.grounded = false; a.vel = Vector3.Lerp(aV0, a.vel, 0.5f); dmgToB *= 1.2f; EmitEv("upper", b, 0); }
+                if (Upper(b, -nh) && !bAir) { a.vel -= nh * 9f / ma; a.vel.y = Mathf.Max(a.vel.y, 13.5f); a.grounded = false; b.vel = Vector3.Lerp(bV0, b.vel, 0.5f); dmgToA *= 1.2f; EmitEv("upper", a, 0); }
                 // 盾: 自分はほとんど弾かれず、相手を弾き返す
                 if (a.shieldT > 0) { a.vel = Vector3.Lerp(aV0, a.vel, 0.2f); b.vel += nh * 9f; }
                 if (b.shieldT > 0) { b.vel = Vector3.Lerp(bV0, b.vel, 0.2f); a.vel -= nh * 9f; }
@@ -1477,7 +1569,7 @@ public partial class KomaBoot : MonoBehaviour
               .Append(",\"ps\":").Append(k.pas).Append(",\"wg\":").Append(k.WingsOn ? 1 : 0).Append(",\"rg\":").Append(k.rage ? 1 : 0).Append(",\"sn\":").Append(k.stampN).Append(",\"lf\":").Append(k.left ? 1 : 0)
               .Append(",\"p\":[").Append(k.top).Append(',').Append(k.core).Append(',').Append(k.leg).Append("]")
               .Append(",\"why\":\"").Append(k.koWhy).Append("\"");
-            if (debugState) sb.Append(",\"tl\":").Append(F(k.TiltDeg)).Append(",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]");
+            if (debugState) sb.Append(",\"cc\":").Append(F(k.clingCd)).Append(",\"wy\":").Append(F(k.pos.y)).Append(",\"tl\":").Append(F(k.TiltDeg)).Append(",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]");
             sb.Append('}');
         }
         sb.Append("]}");

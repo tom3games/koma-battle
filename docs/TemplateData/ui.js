@@ -214,6 +214,13 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'jump': Snd.play('spring', { vol: m.i === 0 ? 0.7 : 0.3 }); break
       case 'super': Snd.play('whoosh', { vol: m.i === 0 ? 0.8 : 0.35, rate: 1.6 }); if (m.i === 0) lines(m.x, m.y, 0.6); break
       case 'miracle': Snd.play('boom', { vol: m.i === 0 ? 0.6 : 0.3, rate: 1.5 }); Snd.play('whoosh', { vol: 0.5, rate: 0.8 }); break
+      // 2026-11-27 WASD 2回押しの傾けと、かち上げ
+      case 'lean': if (m.i === 0) Snd.play('swish', { vol: 0.55, rate: 1.4 }); break
+      case 'upper': Snd.play('clang', { vol: 0.8, rate: 0.75 }); Snd.play('boom', { vol: 0.45, rate: 1.2 }); lines(m.x, m.y, 0.7); break
+      // 2026-11-27 場外ギリギリの踏ん張り: 縁できしむ → 戻れたら大きく、落ちたら重く
+      case 'cling': { const me = m.i === 0; Snd.play('creak', { vol: me ? 1 : 0.45, rate: 0.9 }); Snd.play('clang', { vol: me ? 0.35 : 0.15, rate: 1.4 }); if (me) { Snd.duck(0.45, 1.1); shakeScreen() } break }
+      case 'save': { const me = m.i === 0; Snd.play('spring', { vol: me ? 0.9 : 0.4, rate: 0.9 }); Snd.play('clang', { vol: me ? 0.8 : 0.35, rate: 1.1 }); Snd.play('whoosh', { vol: me ? 0.8 : 0.35, rate: 1.3 }); ring(m.x, m.y); if (me) { lines(m.x, m.y, 0.8); flash() } break }
+      case 'clingfall': if (m.p) { Snd.play('hit', { vol: 0.9, rate: 0.7 }); lines(m.x, m.y, 0.6) } break
       case 'burn': Snd.play('hit', { vol: m.i === 0 ? 0.3 : 0.15, rate: 1.7 }); break
       case 'board': Snd.play('boom', { vol: 0.5, rate: 1.25 }); break
       case 'special': {
@@ -579,6 +586,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     swish: [S('swishes-sound-pack_swishes_swishes_swish-7'), S('swishes-sound-pack_swishes_swishes_swish-9'), S('swishes-sound-pack_swishes_swishes_swish-3')],
     spring: [S('100-cc0-sfx_100-CC0-SFX_0_spring_03'), S('100-cc0-sfx_100-CC0-SFX_0_spring_05')],
     whoosh: [S('air-whoosh_whoosh2_0')],
+    creak: [S('kenney-rpg_creak1'), S('kenney-rpg_creak3')],
     tick: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_HIT_jingles_HIT03')],
     go: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL04')],
     win: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL00')],

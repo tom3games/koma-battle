@@ -19,3 +19,5 @@
 - snd/85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL04.mp3: 85 Short music jingles / Kenney / CC0
 - snd/85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL09.mp3: 85 Short music jingles / Kenney / CC0
 - snd/85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_HIT_jingles_HIT03.mp3: 85 Short music jingles / Kenney / CC0
+- snd/kenney-rpg_creak1.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/kenney-rpg_creak3.mp3: 50 RPG sound effects / Kenney / CC0

@@ -65,6 +65,10 @@ public class Koma
     public bool left;   // 左回転（逆回り）
     // パッシブ（-1 なし / 0 逆鱗 1 天翔 2 魂喰らい 3 雷鳴の刻印 4 不屈 5 紅蓮の轍 6 影分身 7 黒鉄の盾）
     public int pas = -1; public float baseAtk = 1f, pasCd;
+    // 場外ギリギリの踏ん張り（2026-11-27 本人「二は欲しい」）: 縁に引っかかって外へ傾いている残り時間・待ち・場所・外の向き
+    // WASD 2回押しの傾け（2026-11-27 本人「二回連続クリックしたら意図的にその方向に角度をつけれるように」）: 残り時間・待ち・向き
+    public float leanT, leanCd; public Vector3 leanDir;
+    public float clingT, clingCd, clingWin, cpuSaveAt; public bool clingHit; public Vector3 clingAt, clingOut;
     public bool rage, gutsUsed, guard, rescueSet, wasAir; public int stampN, hitsTaken; public Koma stampBy; public Vector3 rescue;
     Transform wings, hex; Transform[] stampObj = new Transform[3]; Material wingMat, hexMat, stampMat;
     float landAmp, landT = 99f, landAng, landSq;
@@ -370,6 +374,8 @@ public class Koma
         padCd = 0; hitFlash = 0; lastVy = 0; lastHitT = -99; specialT = 0;
         superT = 0; superCd = 0; boardT = 0; fireT = 0; fireCd = 0; hiT = 0; burnSnd = 0; lastShiftT = -9; jumpReq = false; lastFire = new Vector3(0, -999, 0);
         tilt.localRotation = Quaternion.identity; tilt.localScale = Vector3.one; landT = 99f; landAmp = 0; auraT = 0;
+        leanT = 0; leanCd = 0;
+        clingT = 0; clingCd = 0; clingHit = false; cpuSaveAt = -1;
         rage = false; gutsUsed = false; guard = false; rescueSet = false; wasAir = false; stampN = 0; stampBy = null; hitsTaken = 0; pasCd = 0; st.atk = baseAtk;
         root.SetActive(true);
         root.transform.position = pos;
@@ -424,6 +430,21 @@ public class Koma
             float k = Mathf.Clamp01(downT / 0.7f);
             float bounce = Mathf.Abs(Mathf.Sin(downT * 14f)) * (1 - k) * 12f;
             tilt.localRotation = Quaternion.AngleAxis(Mathf.Lerp(0, 74f, k * k) + bounce, downAxis);
+        }
+        else if (leanT > 0 && clingT <= 0)
+        {
+            // 傾け: 入りは素早く、最後の0.25秒で戻す。回りながらも傾きの向きは保つ
+            float k = Mathf.Clamp01(leanT / 0.25f) * Mathf.Clamp01((1.0f - leanT) / 0.08f + 0.0001f);
+            Vector3 ax = Vector3.Cross(Vector3.up, leanDir); if (ax.sqrMagnitude < 1e-4f) ax = Vector3.right;
+            tilt.localRotation = Quaternion.AngleAxis(30f * Mathf.Clamp01(k), ax.normalized);
+        }
+        else if (clingT > 0)
+        {
+            // 縁で外へ大きく傾き、ガタガタ震える（残り時間が減るほど深く倒れる）
+            float k = 1f - clingT / Mathf.Max(0.01f, clingWin);
+            Vector3 ax = Vector3.Cross(Vector3.up, clingOut); if (ax.sqrMagnitude < 1e-4f) ax = Vector3.right;
+            float ang = Mathf.Lerp(24f, 46f, k) + Mathf.Sin(Time.time * 55f) * Mathf.Lerp(4f, 9f, k);
+            tilt.localRotation = Quaternion.AngleAxis(ang, ax.normalized);
         }
         else
         {
