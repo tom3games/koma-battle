@@ -335,6 +335,7 @@ public partial class KomaBoot : MonoBehaviour
         countStarted = false;
         if (practice) PracticeSetup();
     }
+    public float HeavyDecayK = 4.0f;   // 2026-11-28 本人「重量型が強すぎる」: 質量1.4を超えた分だけ回転が早く減る（重量型 1.65 で×2.0）
     public float TurnSudden = 70f, TurnDecayMul = 0.8f, TurnWear = 0.8f, TurnGain = 0.6f, TurnSpeedK = 0.9f;
     public float TurnSameDecay = 0.88f, TurnReverseDecay = 1.15f;
     const float StageIntro = 1.5f; bool countStarted;
@@ -506,7 +507,7 @@ public partial class KomaBoot : MonoBehaviour
             UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
-                k.spin -= (0.75f * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * (k.left ? TurnReverseDecay : TurnSameDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
+                k.spin -= (0.75f * (1f + HeavyDecayK * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
                 if (Arena.Stage == 2 && k.grounded) k.spin -= TurnWear * Mathf.Max(0f, k.st.grip - 0.7f) * Mathf.Clamp01(new Vector2(k.pos.x, k.pos.z).magnitude / Arena.R) * dt;   // 回る床の摩擦: グリップの高い（重い）足ほど、外側で回転が削れる
                 if (Arena.Stage == 2 && k.alive) k.spin = Mathf.Min(k.spinMax, k.spin + TurnGain * Mathf.Max(0f, k.st.speed - 0.9f) * dt);   // 回る床の勢いをもらう: 速く動くコマほど回転が戻る
                 if (k.braceT > 0) k.braceT -= dt;
@@ -819,7 +820,7 @@ public partial class KomaBoot : MonoBehaviour
     bool touchBrace;
     // 踏ん張り: ノックバックを減らす代わりに、軸がすり減って回転が削れる（重い型は効きやすく減りが少ない）
     const float BraceWear = 11f, BraceHitWear = 3f;
-    float BraceCut(Koma k) => Mathf.Clamp(0.35f * Mathf.Sqrt(k.st.mass / 1.1f), 0.25f, 0.45f);
+    float BraceCut(Koma k) => Mathf.Clamp(0.35f * Mathf.Sqrt(k.st.mass / 1.1f), 0.25f, 0.38f);
     float BraceWearF(Koma k) => Mathf.Clamp(1.1f / k.st.mass, 0.7f, 1.3f);
     float lastDenyT = -9;
     void TrySpecial(Koma k, Vector3 aim)
@@ -1122,7 +1123,7 @@ public partial class KomaBoot : MonoBehaviour
             if (Arena.Stage == 2 && k.alive && phase == "fight")
             {
                 // ターンテーブル: 床が時計回りに回り、足の摩擦（グリップ）の分だけ床の速さに引きずられる。外ほど速い（中心は弱い）。グリップの低い（速い）コマは流されにくい
-                Vector2 fl = new Vector2(p.z, -p.x) * Arena.TurnW * Mathf.Clamp(k.st.grip, 0.5f, 1.3f);
+                Vector2 fl = new Vector2(p.z, -p.x) * Arena.TurnW * Arena.TurnDirAt(Mathf.Sqrt(p.x * p.x + p.z * p.z)) * Mathf.Clamp(k.st.grip, 0.5f, 1.3f);
                 v.x = fl.x + (v.x - fl.x) * fr; v.z = fl.y + (v.z - fl.y) * fr;
             }
             else { v.x *= fr; v.z *= fr; }

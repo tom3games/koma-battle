@@ -83,6 +83,7 @@ public static class Arena
         float r = Mathf.Sqrt(x * x + z * z);
         if (r > Edge || r > CollapseR || r < PitR) return -1000f;
         if (r <= R) return Bowl(r) - (Stage == 0 ? Dip(r) : 0f);
+        if (Stage == 2) return -1000f;   // ターンテーブル: 外周の壁（縁）なし。円盤の外は場外
         float ang = Mathf.Atan2(z, x);
         float t = Mathf.Clamp01((r - R) / 0.36f);
         return Bowl(R) + LipHeight(ang) * t * t * (3 - 2 * t);
@@ -148,7 +149,7 @@ public static class Arena
     {
         float h = H(x, z);
         float r = Mathf.Sqrt(x * x + z * z);
-        if (CollapseR >= Edge && r > R + 0.25f && r <= Edge + 0.6f && GapFactor(Mathf.Atan2(z, x)) < 0.5f) return Mathf.Max(h, Bowl(R) + LipH + 14f);
+        if (Stage != 2 && CollapseR >= Edge && r > R + 0.25f && r <= Edge + 0.6f && GapFactor(Mathf.Atan2(z, x)) < 0.5f) return Mathf.Max(h, Bowl(R) + LipH + 14f);
         return h;
     }
 
@@ -429,7 +430,7 @@ public static class Arena
     static readonly List<Deform> deforms = new List<Deform>();
     static readonly List<MeshRenderer> floorRends = new List<MeshRenderer>();
     static readonly List<GameObject> arcObjs = new List<GameObject>(), iceObjs = new List<GameObject>(), turnObjs = new List<GameObject>();
-    static Transform turnRoot;
+    static Transform turnRoot, turnIn;
     static Materials mat0;
     static void Reg(GameObject g, float off = 0f) { deforms.Add(new Deform { mesh = g.GetComponent<MeshFilter>().sharedMesh, off = off }); }
     static int builtStage = 0;
@@ -442,12 +443,12 @@ public static class Arena
         foreach (var d in deforms)
         {
             var v = d.mesh.vertices;
-            for (int i = 0; i < v.Length; i++) if (v[i].y > -3.3f) { float h = FloorH(v[i].x * 0.99999f, v[i].z * 0.99999f); v[i].y = (h < -100 ? v[i].y : h) + d.off; }
+            for (int i = 0; i < v.Length; i++) if (v[i].y > -3.3f) { float h = FloorH(v[i].x * 0.99999f, v[i].z * 0.99999f); if (st == 2 && v[i].x * v[i].x + v[i].z * v[i].z > (R + 0.05f) * (R + 0.05f)) h = -3.2f - d.off; v[i].y = (h < -100 ? v[i].y : h) + d.off; }
             d.mesh.vertices = v; d.mesh.RecalculateNormals(); d.mesh.RecalculateBounds();
         }
         foreach (var r in floorRends) r.sharedMaterial = st == 1 ? mat0.Floor2 : st == 2 ? mat0.Floor3 : mat0.Floor;
         foreach (var g in turnObjs) g.SetActive(st == 2);
-        TurnAngle = 0f; if (turnRoot) turnRoot.localRotation = Quaternion.identity;
+        TurnAngle = 0f; if (turnRoot) turnRoot.localRotation = Quaternion.identity; if (turnIn) turnIn.localRotation = Quaternion.identity;
         foreach (var g in arcObjs) g.SetActive(st == 0);
         foreach (var g in iceObjs) g.SetActive(st == 1);
         if (pitWall) pitWall.SetActive(false);
@@ -490,9 +491,14 @@ public static class Arena
         }
         // ターンテーブル: 回る円盤の見た目（矢印の輪3本と放射状の線。丸ごと回す。物理は円対称なので高さは変わらない）
         { var tr = new GameObject("Turn"); tr.transform.SetParent(root.transform, false); turnRoot = tr.transform;
-          foreach (var band in new[] { new Vector2(4.6f, 6.0f), new Vector2(10.2f, 11.6f), new Vector2(15.8f, 17.2f) })
-          { var g = MeshKit.Obj("TurnBand", turnRoot, TurnBandMesh(band.x, band.y), m.TurnBand); g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.04f); turnObjs.Add(g); g.SetActive(false); }
-          var sp = MeshKit.Obj("TurnSpokes", turnRoot, TurnSpokeMesh(), m.TurnSpoke); sp.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(sp, 0.035f); turnObjs.Add(sp); sp.SetActive(false); }
+          var ti = new GameObject("TurnIn"); ti.transform.SetParent(root.transform, false); turnIn = ti.transform;
+          void Band(Transform par, float r0, float r1, Material mt) { var g = MeshKit.Obj("TurnBand", par, TurnBandMesh(r0, r1), mt); g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.04f); turnObjs.Add(g); g.SetActive(false); }
+          Band(turnIn, 3.0f, 4.4f, m.TurnBand); Band(turnIn, 6.6f, 8.0f, m.TurnBand); Band(turnRoot, 13.6f, 15.0f, m.TurnBand); Band(turnRoot, 18.0f, 19.4f, m.TurnBand);
+          // 内と外の境目（ここをまたぐと逆向きに引っぱられる）: 動かない橙の線
+          { var g = MeshKit.Obj("TurnEdge", root.transform, TurnBandMesh(R - 0.75f, R - 0.05f), m.TurnEdge); g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.05f); turnObjs.Add(g); g.SetActive(false); }
+          { var g = MeshKit.Obj("TurnSplit", root.transform, TurnBandMesh(TurnSplitR - 0.22f, TurnSplitR + 0.22f), m.TurnSplit); g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.05f); turnObjs.Add(g); g.SetActive(false); }
+          var sp = MeshKit.Obj("TurnSpokes", turnRoot, TurnSpokeMesh(TurnSplitR + 0.8f, R - 0.6f), m.TurnSpoke); sp.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(sp, 0.035f); turnObjs.Add(sp); sp.SetActive(false);
+          var sp2 = MeshKit.Obj("TurnSpokesIn", turnIn, TurnSpokeMesh(2.4f, TurnSplitR - 0.8f), m.TurnSpoke); sp2.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(sp2, 0.035f); turnObjs.Add(sp2); sp2.SetActive(false); }
         foreach (var p in Pads)
         {
             float y = BaseH(p.x, p.y);
@@ -509,13 +515,16 @@ public static class Arena
     }
 
     // ターンテーブル: 回転の向き（上から見て時計回り）と速さ。床の流れは Step 側
-    public const float TurnW = 0.5f;           // 床の回転（rad/s）
+    public const float TurnW = 0.38f;           // 床の回転（rad/s）
+    public const float TurnSplitR = 11.0f;     // 内（反時計回り）と外（時計回り）の境目の半径
+    public static float TurnDirAt(float r) => r < TurnSplitR ? -1f : 1f;
     public static float TurnAngle;
     public static void TurnUpdate(float dt)
     {
         if (Stage != 2 || !turnRoot) return;
         TurnAngle += TurnW * dt * Mathf.Rad2Deg;
         turnRoot.localRotation = Quaternion.Euler(0, TurnAngle, 0);
+        if (turnIn) turnIn.localRotation = Quaternion.Euler(0, -TurnAngle, 0);
     }
     static Mesh TurnBandMesh(float r0, float r1)
     {
@@ -544,14 +553,14 @@ public static class Arena
         m.RecalculateNormals(); m.RecalculateBounds();
         return m;
     }
-    static Mesh TurnSpokeMesh()
+    static Mesh TurnSpokeMesh(float rs, float re)
     {
         var mb = new MeshKit.Builder();
         int n = 8; float hw = 0.007f;
         for (int s = 0; s < n; s++)
         {
             float c = s * Mathf.PI * 2 / n, a0 = c - hw, a1 = c + hw;
-            float rs = 3.2f, re = R - 0.6f; int seg = 14;
+            int seg = 10;
             for (int k = 0; k < seg; k++)
             {
                 float r0 = Mathf.Lerp(rs, re, k / (float)seg), r1 = Mathf.Lerp(rs, re, (k + 1) / (float)seg);

@@ -26,7 +26,7 @@ async function drift(x, z, sec) {
 const near = await drift(3, 0, 3), far = await drift(15, 0, 3)
 console.log('中心付近', JSON.stringify(near), '外', JSON.stringify(far))
 ok(far.d < -0.05, `外では時計回りに流される (角度 ${far.d.toFixed(2)}rad)`)
-ok(far.arc > near.arc * 2 + 0.3, `中心は弱く外ほど強い (弧 ${near.arc.toFixed(2)}m < ${far.arc.toFixed(2)}m)`)
+ok(near.d > 0.05, `内側は反時計回り (角度 ${near.d.toFixed(2)}rad)`)
 // 回転の減り: 右回り vs 左回り
 await send(p, 'tp|0,6,0,0,0,0,0'); await wait(800)
 const sp0 = (await k(0)).sp; await wait(4000); const sp1 = (await k(0)).sp
