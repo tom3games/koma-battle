@@ -382,7 +382,7 @@ public partial class KomaBoot
     {
         for (int i = chains.Count - 1; i >= 0; i--) EndChain(chains[i]);
         foreach (var k in komas) { k.chainTo = null; k.chainFrom = null; k.chainT = 0; k.thrownT = 0; }
-        ClearSp3();
+        ClearSp3(); ClearEvo();
     }
 
     // 物理の1刻みごと: 鎖の長さを超えたら引き合う（軽い方がよく動く）

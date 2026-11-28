@@ -34,7 +34,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       { n: 'ラスト・スパイラル', d: 'ピンチの逆転の一撃', f: '回転が残り3割を切った時だけ撃てる。回転が少ないほど威力が上がる。撃てる時だけゲージが光る。', x: '残り30%で威力×1.0、0%に近いほど最大×2.4 範囲5.5m' },
       { n: 'グレイシャル・アロー', d: '氷の矢で突進', f: '狙った向きに輪が並び、開き終わると氷の矢になって一直線に突進する。当たった相手は弾かれて凍える。輪が開いている間に避けられる。', x: '展開0.95秒 突進約16m 凍え2秒（速さ・加速が半分）' },
       { n: 'チェイン・バインド', d: '鎖で振り回して投げる', f: '一番近い相手と鎖でつながる。自分が回るほど相手を振り回し、最後に狙いの向きへ放り投げる。つながれた側もダッシュで引っ張り返せる。', x: '4秒 鎖の長さ6.8m 回した数だけ遠くへ' },
-      { n: 'ソニック・トレイル', d: '光の軌跡で削る', f: '5秒のあいだ、通った道に光の帯が残る。帯は3秒で消え、触れた相手を削って弾く。自分は当たらない。相手の周りを駆け抜けるように使う。', x: '5秒 帯は3秒残る 触れるとダメージ6＋弾き' },
+      { n: 'ソニック・トレイル', d: '光の軌跡で削る', f: '5秒のあいだ、通った道に光の帯が残る。帯は3秒で消え、触れた相手を削って弾く。自分は当たらない。相手の周りを駆け抜けるように使う。', x: '5秒 帯は3秒残る 触れるとダメージ8＋強い弾き' },
       { n: 'ファントム・ミラージュ', d: '光の分身が2体', f: '6秒のあいだ、左右に光の分身が2体ついて同じ動きをする。分身にも当たり判定があり、相手に触れるとダメージ。', x: '6秒 分身2体 触れるとダメージ2.5＋速さ分' } ] },
     { key: 'pas', name: 'パッシブ', parts: [
       { n: 'なし', d: 'なし', f: 'パッシブを使わない。', x: '' },
@@ -54,6 +54,20 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   // 必殺ごとに要るゲージ（0〜100）。強い技ほど多い。Unity の SpNeed と同じ並び
   const SP_NEED = [90, 100, 70, 80, 85, 70, 100, 80, 75, 90]
   SLOTS.find(x => x.key === 'sp').parts.forEach((p, i) => { p.x = (p.x ? p.x + '　' : '') + `必要ゲージ${SP_NEED[i]}%` })
+  // 極大技（ゲージ5本・長押し）。n = 漢字の名前、r = ルビ（読み）。元の効果を全部残して、範囲・時間・威力を上げ、技ごとの追加効果がつく
+  const EVO = [
+    { n: '滅星墜獄', r: 'アポカリプス・メテオ', f: '範囲10m・威力1.6倍。着地点に下から尖った岩が何本も突き上がり、当たった相手は大きく吹っ飛ぶ。' },
+    { n: '嵐帝雷神', r: 'テンペスト・ゼウス', f: '竜巻が5秒続き、そのあいだ自分の周りにランダムに雷が落ちる（落ちる前に床へ予告の円）。' },
+    { n: '六幻残影', r: 'ファントム・ヘキサ', f: '突進が6回。突進の残像が光って1秒残る。' },
+    { n: '金剛三重盾', r: 'イージス・トリニティ', f: '金色の六角形の盾が三重に回る。受けた攻撃の一部を相手へ跳ね返し、終わりに砕けて衝撃波で押し返す。' },
+    { n: '重界領域', r: 'グラビティ・ドミニオン', f: '足元に紫の領域。6.5秒、中にいる相手の動きが鈍る。重さと防御はそのまま。' },
+    { n: '終焉螺旋', r: 'ラスト・エクリプス', f: '回転が2割を切った時だけ撃てる。威力が1.5倍、赤黒い渦で突っ込む。' },
+    { n: '氷山蹂躙', r: 'グレイシャル・ベルグ', f: '撃った道に氷山が6秒残る。触れた相手は回転が削られ、しばらく滑りやすく弾かれやすくなる。' },
+    { n: '双鎖地獄', r: 'チェイン・ケルベロス', f: '2体を同時につなぐ。自分の回転と同じ向きに自動でぐるぐる振り回す。つながれた側はダッシュで抵抗できる。' },
+    { n: '光速残響', r: 'ソニック・ゼロ', f: '7秒、帯が太く長く、触れた相手へのダメージが1.5倍。' },
+    { n: '四重幻影', r: 'ミラージュ・クアッド', f: '光の分身が4体、9秒。' },
+  ]
+  const rubyHtml = (n, r) => `<ruby>${n}<rt>${r}</rt></ruby>`
   const SPECIALS = SLOTS.find(x => x.key === 'sp').parts.map(p => p.n)
   const isTouch = matchMedia('(pointer: coarse)').matches
   const DEBUG = /debug/.test(location.search)
@@ -341,6 +355,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         if (me) { onoma(['刃が欠けた', '円盤にひび', '軸が折れた'][part], m.x, Math.max(0.3, m.y)); shakeScreen() }
         const el = tagEls[m.i]; if (el) { const pb = el.querySelector('.pb'); if (pb) { const q = pb.children[part]; if (q) { q.classList.remove('hit', 'brk'); void q.offsetWidth; q.classList.add('brk') } } }
         break }
+      case 'evo': { const me = m.i === 0, kind = m.p | 0
+        Snd.play('boom', { vol: me ? 1 : 0.55, rate: 0.5 }); Snd.play('whoosh', { vol: me ? 1 : 0.5, rate: 0.6 }); Snd.play('clang', { vol: me ? 0.9 : 0.4, rate: 0.6, delay: 0.05 }); Snd.duck(0.3, 2)
+        if (me) { evoBanner(kind); flash(); shakeScreen() } else tint(kind, 0.7)
+        break }
       case 'trailhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.6 }); Snd.play('hit', { vol: 0.25, rate: 1.3 }); break
       case 'mirhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.2 }); Snd.play('hit', { vol: 0.3, rate: 1.0 }); break
       case 'pstat': pracStat(m); break
@@ -418,7 +436,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   let lastSlot = 'top'
   function renderDetail() {
     const sl = slotOf(lastSlot), p = sl.parts[pick[lastSlot]]
-    $('detail').innerHTML = `<b>${sl.name}　${p.n}</b>${p.f}${p.x ? `<em>${p.x}</em>` : ''}`
+    const ev = sl.key === 'sp' ? EVO[pick.sp] : null
+    $('detail').innerHTML = `<b>${sl.name}　${p.n}</b>${p.f}${p.x ? `<em>${p.x}</em>` : ''}${ev ? `<em class="evo">極大技（ゲージ5本・長押し）　${rubyHtml(ev.n, ev.r)}<br>${ev.f}</em>` : ''}`
   }
   function buildSlots() {
     const box = $('slots'); box.innerHTML = ''
@@ -529,7 +548,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (m.pw) $('psP').textContent = `刃 -${fmt(m.pw[0], 1)}　円盤 -${fmt(m.pw[1], 1)}　軸 -${fmt(m.pw[2], 1)}`
   }
   function pracStat(m) { $('psR').textContent = fmt(m.dist, 1) + ' m' }
-  function pracSpLabel() { $('prSp').textContent = '必殺　' + SPECIALS[pracSp] }
+  function pracSpLabel() { $('prSp').textContent = '必殺　' + SPECIALS[pracSp]; $('prEvo').innerHTML = '極大　' + rubyHtml(EVO[pracSp].n, EVO[pracSp].r) }
   function pracStart() {
     if (!KB.ready) return
     practice = true; Snd.init(); Snd.play('ui', { vol: 0.6 })
@@ -550,6 +569,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   $('prBack').onclick = () => { Snd.play('ui', { vol: 0.5 }); pracExit() }
   $('prReset').onclick = () => { Snd.play('ui', { vol: 0.5 }); send('pracreset'); $('psD').textContent = $('psV').textContent = $('psR').textContent = $('psM').textContent = $('psP').textContent = '-' }
   $('prSp').onclick = () => { pracSp = (pracSp + 1) % SPECIALS.length; pracSpLabel(); send(`setsp|${pracSp},0`); send('gauge|100'); Snd.play('ui', { vol: 0.5 }) }
+  $('prEvo').onclick = () => { Snd.play('ui', { vol: 0.5 }); send('gauge|500'); setTimeout(() => send('specialx'), 90) }
   document.querySelectorAll('#prDummy button').forEach(b => b.onclick = () => {
     pracDummy = +b.dataset.d; send(`dummytype|${pracDummy}`); Snd.play('ui', { vol: 0.4 })
     document.querySelectorAll('#prDummy button').forEach(x => x.classList.toggle('on', x === b))
@@ -576,11 +596,13 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     const me = m.k.find(k => k.i === 0)
     if (me) {
       // 2026-11-25 本人「左上に残り回転数みたいなの出すのやめて」: 数字は出さない。回転は名札の細い線とコマの揺れで見せる
-      const nd = me.nd || 1, ready = me.g >= nd - 1e-6
+      const nd = me.nd || 1, ready = me.g >= nd - 1e-6, evoR = me.ev === 1 && me.a === 1
+      $('spChip').classList.toggle('evo', evoR); $('tSpBtn').classList.toggle('evo', evoR); $('spChip').style.setProperty('--ec', me.ec || 0)
+      { const bars = Math.floor(me.g * 5 + 1e-6); if ($('tNd').dataset.b !== String(bars)) { $('tNd').dataset.b = bars; $('tNd').textContent = bars } }
       const full = ready && me.a === 1 && me.ok === 1
       $('spChip').classList.toggle('wait', ready && me.a === 1 && me.ok === 0); $('tSpBtn').classList.toggle('wait', ready && me.a === 1 && me.ok === 0)
-      { const nn = Math.round(nd * 100); if ($('spChip').dataset.nd !== String(nn)) { $('spChip').dataset.nd = nn; $('spChip').style.setProperty('--nd', nn + '%'); $('tNd').textContent = nn } }
-      { const rc = me.rc === 1 && me.a === 1; $('spChip').classList.toggle('rescue', rc); $('tSpBtn').classList.toggle('rescue', rc); const tx = $('spTxt'); const want = rc ? '復帰！　右クリック' : '必殺　右クリック'; if (tx && tx.textContent !== want) tx.textContent = want }
+      { const nn = Math.round(nd * 100); if ($('spChip').dataset.nd !== String(nn)) { $('spChip').dataset.nd = nn; $('spChip').style.setProperty('--nd', nn + '%') } }
+      { const rc = me.rc === 1 && me.a === 1; $('spChip').classList.toggle('rescue', rc); $('tSpBtn').classList.toggle('rescue', rc); const tx = $('spTxt'); const want = rc ? '復帰！　右クリック' : evoR ? '極大技　右クリック長押し' : '必殺　右クリック'; if (tx && tx.textContent !== want) tx.textContent = want }
       $('spChip').classList.toggle('full', full); $('spFill').style.width = Math.min(100, me.g * 100).toFixed(0) + '%'
       $('tBrace').classList.toggle('on', me.br === 1)
       $('tSpBtn').classList.toggle('full', full)
@@ -657,6 +679,14 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     b.querySelector('span').textContent = SPECIALS[kind | 0] || SPECIALS[0]
     b.style.setProperty('--bc', SP_RGB[kind | 0] || SP_RGB[0])
     b.classList.remove('on'); void b.offsetWidth; b.classList.add('on')
+  }
+  function evoBanner(kind) {
+    const b = $('banner'), ev = EVO[kind | 0] || EVO[0]
+    b.querySelector('span').innerHTML = rubyHtml(ev.n, ev.r)
+    b.style.setProperty('--bc', SP_RGB[kind | 0] || SP_RGB[0]); b.classList.add('evo')
+    b.classList.remove('on'); void b.offsetWidth; b.classList.add('on')
+    const g = $('evoGlow'); g.classList.remove('on'); void g.offsetWidth; g.classList.add('on')
+    setTimeout(() => b.classList.remove('evo'), 1700)
   }
   function pasTag(i) {
     const t = $('pasTag'); t.textContent = slotOf('pas').parts[i + 1].n; t.style.setProperty('--pc', PAS_HEX[i])
@@ -891,13 +921,19 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     const bend = e => { if (e.pointerId !== bid) return; bid = null; send('brace|0') }
     bb.addEventListener('pointerup', bend); bb.addEventListener('pointercancel', bend) }
   const spb = $('tSpBtn')
+  // 5本たまっている時は長押し（0.5秒）で極大技、短く離すと今の必殺。5本でなければ今まで通りすぐ撃つ
+  let spHold = null
+  const fireSp = () => { if (lastFlick && performance.now() - lastFlick.t < 2500) send(`specialdir|${lastFlick.x.toFixed(3)},${lastFlick.y.toFixed(3)}`); else send('specialnear') }
   spb.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation(); hintSeen()
     spb.classList.add('press'); setTimeout(() => spb.classList.remove('press'), 120)
-    // 直前にはじいた向きがあれば、その向きの相手を狙う（なければ近い相手）
-    if (lastFlick && performance.now() - lastFlick.t < 2500) send(`specialdir|${lastFlick.x.toFixed(3)},${lastFlick.y.toFixed(3)}`)
-    else send('specialnear')
+    if (KB.me && KB.me.ev === 1) {
+      spb.classList.add('charging'); try { spb.setPointerCapture(e.pointerId) } catch (err) {}
+      spHold = setTimeout(() => { spHold = null; spb.classList.remove('charging'); send('specialx') }, 500)
+    } else fireSp()
   })
+  const spUp = () => { if (spHold) { clearTimeout(spHold); spHold = null; spb.classList.remove('charging'); fireSp() } else spb.classList.remove('charging') }
+  spb.addEventListener('pointerup', spUp); spb.addEventListener('pointercancel', () => { if (spHold) { clearTimeout(spHold); spHold = null } spb.classList.remove('charging') })
 
   // 最初の1回だけの操作説明
   let hintT = 0, hintShownAt = 0

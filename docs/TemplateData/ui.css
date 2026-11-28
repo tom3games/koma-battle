@@ -467,7 +467,7 @@ body.practice .hud-time,body.practice #sudden{display:none!important}
 }
 
 /* 必殺ごとのゲージ量: 要る量の所に目盛り。それより右はゲージの余り（暗め）。スマホの星は輪が要る量で一周し、右下に数字 */
-#spChip:not(.full):not(.wait):not(.rescue){background:linear-gradient(90deg,rgba(12,13,17,.78) var(--nd,100%),rgba(70,56,28,.55) var(--nd,100%))}
+#spChip:not(.full):not(.wait):not(.rescue):not(.evo){background:linear-gradient(90deg,rgba(12,13,17,.78) var(--nd,100%),rgba(70,56,28,.55) var(--nd,100%))}
 #spTick{position:absolute;top:0;bottom:0;left:var(--nd,100%);width:3px;margin-left:-2px;background:var(--gold);box-shadow:0 0 6px rgba(255,200,60,.9)}
 #spChip.full #spTick{background:#16130c;box-shadow:none}
 #tNd{position:absolute;right:-2px;bottom:-4px;min-width:24px;padding:1px 4px;border-radius:9px;background:rgba(12,13,17,.85);border:1px solid rgba(255,200,58,.7);color:#ffd36a;font-size:11px;font-weight:900;line-height:1.3;text-align:center;pointer-events:none}
@@ -494,3 +494,25 @@ body:not(.playing) #koLog{display:none}
 
 .tag .pb i.brk{animation:pbbrk .6s ease-out}
 @keyframes pbbrk{0%{transform:scale(2.2,3);background:#fff}25%{transform:translateX(-3px) rotate(-14deg)}50%{transform:translateX(3px) rotate(12deg)}100%{transform:none}}
+
+/* 極大技（ゲージ5本）: ゲージは500で5本。要る量の目盛りと、1本ごとの区切り。5本で紫金に光り、長押しで進化版 */
+#spChip:not(.full):not(.wait):not(.rescue):not(.evo){background:linear-gradient(90deg,rgba(12,13,17,.78) var(--nd,20%),rgba(70,56,28,.55) var(--nd,20%))}
+#spChip::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(20% - 2px),rgba(255,255,255,.55) calc(20% - 2px),rgba(255,255,255,.55) 20%)}
+#spChip::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:calc(var(--ec,0) * 100%);background:#fff;z-index:2}
+#spChip.evo{background:linear-gradient(90deg,#6a2cc8,#e8b13a);color:#fff;animation:evoglow .6s ease-in-out infinite}
+#spChip.evo i{display:none}
+#spChip.evo #spTick{display:none}
+@keyframes evoglow{50%{box-shadow:0 0 18px 4px rgba(190,120,255,.9)}}
+#tSpBtn.evo{background:conic-gradient(#8a3cf0,#f0b93a,#8a3cf0) !important;border-color:#fff;animation:evoglow .6s ease-in-out infinite}
+#tSpBtn.charging{transform:scale(.9);box-shadow:0 0 26px 8px rgba(200,140,255,.95)}
+#banner.evo span{font-size:min(7.4vw,12vh,76px);-webkit-text-stroke:3px #3a1670}
+#banner.evo::before{background:linear-gradient(90deg,transparent,rgba(120,50,220,.92) 12%,rgba(232,177,58,.92) 50%,rgba(120,50,220,.92) 88%,transparent)}
+#banner ruby{ruby-position:over}
+#banner rt{font-size:.3em;letter-spacing:.2em;-webkit-text-stroke:1px #3a1670;font-weight:800}
+#evoGlow{position:fixed;inset:0;z-index:7;pointer-events:none;opacity:0;box-shadow:inset 0 0 90px 26px rgba(170,90,255,.85),inset 0 0 200px 60px rgba(240,180,60,.45)}
+#evoGlow.on{animation:evoedge 1.6s ease-out}
+@keyframes evoedge{0%{opacity:0}10%{opacity:1}60%{opacity:.7}100%{opacity:0}}
+#detail em.evo{display:block;margin-top:6px;color:#e6c8ff;font-style:normal;font-size:12px;line-height:1.5}
+#detail rt{font-size:.6em}
+.pr-evo ruby{ruby-position:over}
+.pr-evo rt{font-size:.55em}

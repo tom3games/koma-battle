@@ -7,7 +7,7 @@ using UnityEngine;
 public partial class KomaBoot
 {
     // 数字の調整はここ
-    const float TrailSec = 5f, TrailLife = 3f, TrailDmg = 6f, TrailKnock = 6.5f, TrailRadius = 1.15f, TrailGap = 0.7f;
+    const float TrailSec = 5f, TrailLife = 3f, TrailDmg = 8f, TrailKnock = 10f, TrailRadius = 1.4f, TrailGap = 0.7f;
     const float MirageSec = 6f, MirageSide = 2.4f, MirageDmg = 2.5f, MirageKnock = 6f;
     // 強い技ほど多く要る（ゲージは0〜100）。メテオ テンペスト ファントム・レイド イージス アンカー スパイラル アロー チェイン トレイル ミラージュ
     public static readonly float[] SpNeed = { 90f, 100f, 70f, 80f, 85f, 70f, 100f, 80f, 75f, 90f };
@@ -45,9 +45,10 @@ public partial class KomaBoot
         // 9: 影の分身を左右に1体ずつ（同じ持ち主の前の分身は消す）
         for (int i = mirages.Count - 1; i >= 0; i--) if (mirages[i].owner == k) { if (mirages[i].tr) Object.Destroy(mirages[i].tr.gameObject); mirages.RemoveAt(i); }
         if (mirageMat == null) mirageMat = mats.AddGlow(SpColors[9]);
-        for (int s = -1; s <= 1; s += 2)
+        float[] sides = k.evo ? new[] { -2f, -1f, 1f, 2f } : new[] { -1f, 1f };
+        foreach (var s in sides)
         {
-            var c = new Mirage { owner = k, side = s, t = MirageSec, pos = k.pos };
+            var c = new Mirage { owner = k, side = s, t = k.evo ? EvoMirageSec : MirageSec, pos = k.pos };
             var g = new GameObject("Mirage").transform;
             c.m = new Material(mirageMat);
             var a = MeshKit.Obj("d", g, MeshKit.Frustum(0.85f, 0.9f, 0.2f, 28, true), c.m); a.transform.localPosition = new Vector3(0, 0.4f, 0);
@@ -56,7 +57,7 @@ public partial class KomaBoot
             foreach (var r in g.GetComponentsInChildren<MeshRenderer>()) { r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; }
             c.tr = g; c.lr = MakeLine(g, c.m, 0.7f, false); c.lr.positionCount = 0;
             Vector3 hd = heading[k.idx].sqrMagnitude > 0.1f ? heading[k.idx] : Vector3.forward;
-            c.pos = k.pos + new Vector3(hd.z, 0, -hd.x) * MirageSide * s;
+            c.pos = k.pos + new Vector3(hd.z, 0, -hd.x) * MirageSide * s * (Mathf.Abs(s) > 1f ? 0.9f : 1f);
             g.position = c.pos;
             mirages.Add(c);
         }
@@ -102,6 +103,7 @@ public partial class KomaBoot
                 var l2 = trailLr[i]; l2.positionCount = pts.Count;
                 for (int p = 0; p < pts.Count; p++) l2.SetPosition(p, pts[p].p);
                 float newest = pts[pts.Count - 1].t / TrailLife;
+                l2.widthMultiplier = komas[i].evo && komas[i].sp == 8 ? EvoTrailWidth : 1.4f;
                 l2.sharedMaterial.SetColor("_TintColor", SpColors[8] * (0.5f + 0.12f * Mathf.Sin(Time.time * 18f)));
             }
         }
@@ -112,11 +114,12 @@ public partial class KomaBoot
             {
                 if (o == owner || !o.alive || !o.root.activeSelf || trailCd[tp.owner, o.idx] > 0) continue;
                 Vector3 d = o.pos - tp.p; float dy = Mathf.Abs(d.y - 0.3f); d.y = 0;
-                if (d.magnitude > TrailRadius + o.Radius * 0.6f || dy > 1.4f) continue;
+                float evR = owner.evo && owner.sp == 8 ? EvoTrailRadius / TrailRadius : 1f;
+                if (d.magnitude > TrailRadius * evR + o.Radius * 0.6f || dy > 1.4f) continue;
                 trailCd[tp.owner, o.idx] = 0.5f;
                 Vector3 n = d.sqrMagnitude > 0.01f ? d.normalized : Vector3.forward;
                 o.vel += n * TrailKnock / Mathf.Sqrt(o.st.mass); o.vel.y = Mathf.Max(o.vel.y, 2f); o.grounded = false;
-                Damage(owner, o, TrailDmg * owner.st.atk / o.st.def); o.hitFlash = 0.12f;
+                Damage(owner, o, TrailDmg * (owner.evo && owner.sp == 8 ? EvoTrailDmg : 1f) * owner.st.atk / o.st.def); o.hitFlash = 0.12f;
                 Spark(o.Center, n + Vector3.up * 0.4f, 30, 1.2f); Pulse(o.pos, SpColors[8], 4f, 10f);
                 var sp = cam.WorldToViewportPoint(o.pos);
                 Emit("{\"t\":\"e\",\"k\":\"trailhit\",\"i\":" + o.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
@@ -131,7 +134,7 @@ public partial class KomaBoot
             Vector3 hv = new Vector3(k.vel.x, 0, k.vel.z);
             if (hv.magnitude > 1.5f) heading[k.idx] = Vector3.Lerp(heading[k.idx], hv.normalized, 1f - Mathf.Exp(-8f * dt)).normalized;
             Vector3 hd = heading[k.idx].sqrMagnitude > 0.1f ? heading[k.idx] : Vector3.forward;
-            Vector3 want = k.pos + new Vector3(hd.z, 0, -hd.x) * MirageSide * c.side;
+            Vector3 want = k.pos + new Vector3(hd.z, 0, -hd.x) * MirageSide * c.side * (Mathf.Abs(c.side) > 1f ? 0.9f : 1f);
             float f = 1f - Mathf.Exp(-14f * dt);
             c.pos.x = Mathf.Lerp(c.pos.x, want.x, f); c.pos.z = Mathf.Lerp(c.pos.z, want.z, f);
             float gh = Arena.H(c.pos.x, c.pos.z), og = Arena.H(k.pos.x, k.pos.z);

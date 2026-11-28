@@ -24,7 +24,7 @@ public partial class KomaBoot
     void PracticeUpdate(float dt, float realDt)
     {
         if (phase != "fight") return;
-        if (player.alive) { player.gauge = Mathf.Min(100f, player.gauge + 45f * dt); player.spin = Mathf.Min(player.spinMax, player.spin + player.spinMax * 0.05f * dt); }   // 必殺はすぐたまる・回転も少しずつ戻る
+        if (player.alive) { player.gauge = Mathf.Min(GaugeCap, player.gauge + 45f * dt); player.spin = Mathf.Min(player.spinMax, player.spin + player.spinMax * 0.05f * dt); }   // 必殺はすぐたまる・回転も少しずつ戻る
         if (dummy != null && dummy.alive) { dummy.gauge = 0f; dummy.spin = Mathf.Min(dummy.spinMax, dummy.spin + dummy.spinMax * 0.06f * dt); }
         // 動かない的: 当てられて1.2秒たったら止まる（すり鉢で転がらない）
         if (dummyType == 0 && dummy != null && dummy.alive && dummy.grounded && fightT - dummy.lastHitT > 1.2f) { dummy.vel.x = 0; dummy.vel.z = 0; }

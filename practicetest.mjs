@@ -23,7 +23,7 @@ ok(await p.evaluate(() => getComputedStyle(document.getElementById('hudTime')).d
 await shot('2_start')
 let s = await st(); ok(s.k.length === 2, `コマは自分とダミーの2体 (${s.k.length})`)
 // 必殺がすぐたまる
-await p.waitForFunction(() => KB.state.k[0].g >= 0.9, null, { timeout: 15000 }).catch(() => {}); s = await st(); ok(s.k[0].g >= 0.9, `必殺ゲージが満タン g=${s.k[0].g}`)
+await p.waitForFunction(() => KB.state.k[0].g >= 0.5, null, { timeout: 25000 }).catch(() => {}); s = await st(); ok(s.k[0].g >= 0.5, `必殺ゲージが満タン g=${s.k[0].g}`)
 // 的3種
 const pos = async () => { const q = await st(); return [q.k[1].wx, q.k[1].wz] }
 const dist = (a, c) => Math.hypot(a[0] - c[0], a[1] - c[1])

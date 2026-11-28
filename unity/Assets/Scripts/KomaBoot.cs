@@ -274,6 +274,7 @@ public partial class KomaBoot : MonoBehaviour
                 }
                 break;
             case "special": touchSpecial = true; break;
+            case "specialx": { var t = Nearest(player); if (phase == "fight" && player.alive) TryEvolved(player, t != null ? t.pos : player.pos + Vector3.forward); break; }   // 極大技（スマホ・検査用）
             case "gauge": if (nums.Length > 1) komas[(int)N(1)].gauge = N(0); else player.gauge = N(0); break;
             case "spin": komas[(int)N(1)].spin = N(0) * komas[(int)N(1)].spinMax; break;
             case "tp":
@@ -327,9 +328,10 @@ public partial class KomaBoot : MonoBehaviour
         if (practice) PracticeSetup();
     }
     // 2026-11-28 本人「必殺が簡単にたまりすぎ」: 時間 2.2→1.0/秒、当てた時 ×1.5→×0.9、当てられた時 ×1.1→×0.6
-    public float GaugeTime = 1.0f, GaugeDealt = 0.9f, GaugeTaken = 0.6f;
-    public float HeavyDecayK = 4.0f;   // 2026-11-28 本人「重量型が強すぎる」: 質量1.4を超えた分だけ回転が早く減る（重量型 1.65 で×2.0）
-    public float TurnSudden = 70f, TurnDecayMul = 0.8f, TurnWear = 0.8f, TurnGain = 0.6f, TurnSpeedK = 0.9f;
+    public float GaugeTime = 1.6f, GaugeDealt = 1.8f, GaugeTaken = 1.1f;
+    bool rmbHold; float rmbT, evoCharge;
+    public float HeavyDecayK = 2.4f;   // 2026-11-28 本人「重量型が強すぎる」: 質量1.4を超えた分だけ回転が早く減る（重量型 1.65 で×2.0）
+    public float TurnSudden = 70f, TurnDecayMul = 0.8f, TurnWear = 0.8f, TurnGain = 0.6f, TurnSpeedK = 0.5f;
     public float TurnSameDecay = 0.88f, TurnReverseDecay = 1.15f;
     const float StageIntro = 1.5f; bool countStarted;
 
@@ -405,7 +407,7 @@ public partial class KomaBoot : MonoBehaviour
         }
 
         // 入力
-        Vector2 move = Vector2.zero; bool dash = false, special = false;
+        Vector2 move = Vector2.zero; bool dash = false, special = false, evoFire = false;
         AimUpdate();
         if (phase == "fight" && player.alive)
         {
@@ -437,7 +439,12 @@ public partial class KomaBoot : MonoBehaviour
                 if (move.sqrMagnitude > 1) move.Normalize();
                 move = CamRel(move);
                 dash = (!touchMode && Input.GetMouseButtonDown(0)) || touchDash;
-                special = (!touchMode && Input.GetMouseButtonDown(1)) || touchSpecial;   // 2026-11-26 本人「必殺は右クリックだけでいい」
+                // 2026-11-29 極大技: ゲージ5本の時は右クリック長押し（0.5秒）で進化版、短く押すと今の必殺（1回分）。5本でなければ今まで通りすぐ撃つ
+                if (!touchMode && Input.GetMouseButtonDown(1)) { if (EvoReady(player)) { rmbHold = true; rmbT = 0f; } else special = true; }
+                if (rmbHold) { if (Input.GetMouseButton(1)) { rmbT += realDt; if (rmbT >= 0.5f) { rmbHold = false; evoFire = true; } } else { rmbHold = false; special = true; } }
+                if (!EvoReady(player)) rmbHold = false;
+                evoCharge = rmbHold ? Mathf.Clamp01(rmbT / 0.5f) : 0f;
+                special |= touchSpecial;   // 2026-11-26 本人「必殺は右クリックだけでいい」
                 if (touchDash && Input.touchCount == 0 && !Input.GetMouseButtonDown(0))
                 {
                     // 画面のボタンのダッシュ: 動かしている向き、なければ近い相手へ
@@ -452,6 +459,7 @@ public partial class KomaBoot : MonoBehaviour
             touchDash = false; touchSpecial = false;
             if (dash) TryDash(player, aimPoint);
             if (special) TrySpecial(player, aimPoint);
+            if (evoFire) TryEvolved(player, aimPoint);
         }
 
         // CPU
@@ -465,7 +473,7 @@ public partial class KomaBoot : MonoBehaviour
             if (practice) PracticeThink(k, dt, out moves[i], out d2); else Think(k, dt, out moves[i], out d2, out s2);
             if (d2 && practice) TryDash(k, player.pos);
             else if (d2 && !(Arena.PitActive && CrossesPit(k.pos, AimFor(k)))) TryDash(k, k.chainFrom != null ? k.pos + (k.pos - k.chainFrom.pos) : AimFor(k));
-            if (s2) TrySpecial(k, AimFor(k));
+            if (s2) { if (EvoReady(k) && rng.NextDouble() < 0.7) TryEvolved(k, AimFor(k)); else TrySpecial(k, AimFor(k)); }
         }
 
         for (int mi = 0; mi < komas.Count; mi++) komas[mi].inputMv = phase == "fight" ? moves[mi] : Vector2.zero;
@@ -501,7 +509,7 @@ public partial class KomaBoot : MonoBehaviour
             UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
-                k.spin -= (0.75f * ShaftDecayMul(k) * (1f + HeavyDecayK * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
+                k.spin -= (0.75f * (Arena.Stage == 1 ? 0.8f : 1f) * ShaftDecayMul(k) * (1f + HeavyDecayK * (Arena.Stage == 2 ? 0.4f : 1f) * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
                 if (Arena.Stage == 2 && k.grounded) k.spin -= TurnWear * Mathf.Max(0f, k.st.grip - 0.7f) * Mathf.Clamp01(new Vector2(k.pos.x, k.pos.z).magnitude / Arena.R) * dt;   // 回る床の摩擦: グリップの高い（重い）足ほど、外側で回転が削れる
                 if (Arena.Stage == 2 && k.alive) k.spin = Mathf.Min(k.spinMax, k.spin + TurnGain * Mathf.Max(0f, k.st.speed - 0.9f) * dt);   // 回る床の勢いをもらう: 速く動くコマほど回転が戻る
                 if (k.braceT > 0) k.braceT -= dt;
@@ -512,7 +520,7 @@ public partial class KomaBoot : MonoBehaviour
                     if (k.braceFxT <= 0) { k.braceFxT = 0.09f; Spark(k.pos + Vector3.up * 0.05f, new Vector3(Random.Range(-1f, 1f), 0.3f, Random.Range(-1f, 1f)), 4, 0.55f); }
                     if (Random.value < 0.02f) EmitEv("brace", k, 0);
                 }
-                k.gauge = Mathf.Min(100f, k.gauge + GaugeTime * k.st.gaugeRate * dt);
+                k.gauge = Mathf.Min(GaugeCap, k.gauge + GaugeTime * k.st.gaugeRate * dt);
                 if (k.spin <= 0) { k.spin = 0; KO(k, "spin"); }
                 // 奇跡: 回転数が上限近くを保つと、数秒だけ通り道に炎が残る（本人は無傷）
                 if (k.alive)
@@ -537,7 +545,7 @@ public partial class KomaBoot : MonoBehaviour
             PassiveUpdate(k, dt);
             k.Visual(dt, realDt);
         }
-        UpdateStrikes(dt); UpdateClones(dt); UpdateSp3(dt); UpdateArrowRings(realDt); UpdateAimMark(realDt);
+        UpdateStrikes(dt); UpdateClones(dt); UpdateSp3(dt); UpdateEvo(dt); UpdateArrowRings(realDt); UpdateAimMark(realDt);
         keyBuf.Clear(); keyBuf.AddRange(pairCd.Keys);
         foreach (var key in keyBuf) { pairCd[key] -= dt; if (pairCd[key] <= 0) pairCd.Remove(key); }
 
@@ -1440,18 +1448,20 @@ public partial class KomaBoot : MonoBehaviour
             if (o == k || !o.alive || !o.root.activeSelf) continue;
             Vector3 d = o.pos - at; d.y = 0;
             float dist = d.magnitude;
-            if (dist > 6f) continue;
+            float RR = k.evo ? EvoMeteorR : 6f;
+            if (dist > RR) continue;
             Vector3 n = dist > 0.01f ? d / dist : Vector3.forward;
-            float f = 1f - dist / 6f * 0.5f;
+            float f = 1f - dist / RR * 0.5f;
             float ares = o.anchorT > 0 ? 0.1f : 1f;
-            o.vel += n * 16.5f * f / Mathf.Sqrt(o.st.mass) * (1.6f - o.st.grip * 0.35f) * ares;
+            o.vel += n * 16.5f * f / Mathf.Sqrt(o.st.mass) * (1.6f - o.st.grip * 0.35f) * ares * (k.evo ? EvoMeteorKnock : 1f);
             o.vel.y = Mathf.Max(o.vel.y, 6.5f * f * ares);
             o.grounded = false;
-            float dmg = 10f * f * k.st.atk / o.st.def;
+            float dmg = 10f * f * k.st.atk / o.st.def * (k.evo ? EvoMeteorDmg : 1f);
             Damage(k, o, dmg); PartWear(o, 1, DiskMeteor * f);
             o.hitFlash = 0.2f;
             Spark(o.Center, n + Vector3.up * 0.5f, 40, 1.4f);
         }
+        if (k.evo) EvoSpikes(at);
         Slow(0.15f, 0.6f);
         float near = k.isPlayer ? 1f : Mathf.Clamp(1.1f - Vector3.Distance(player.pos, at) / 18f, 0.25f, 1f);
         shake = Mathf.Max(shake, 1.5f * near); fovKick = Mathf.Max(fovKick, 16f * near);
@@ -1463,14 +1473,15 @@ public partial class KomaBoot : MonoBehaviour
     void Damage(Koma from, Koma to, float dmg)
     {
         if (phase == "end") return;
-        dmg *= HitScale * Mathf.Clamp(1.25f - 0.25f * to.st.speed, 0.82f, 1.1f);   // 2026-11-29 速度型が受けるダメージを少し減らす（速いコマは当たりをいなす）。重い・遅いコマはわずかに増える
+        dmg *= HitScale * Mathf.Clamp(1.4f - 0.4f * to.st.speed, 0.7f, 1.15f) * (Arena.Stage == 2 ? 1f : Mathf.Pow(Mathf.Max(0.6f, from.st.atk), Arena.Stage == 1 ? -0.9f : -0.5f));   // 攻撃型の与ダメを少し抑える（ターンテーブルは別式）   // 2026-11-29 速度型が受けるダメージを少し減らす（速いコマは当たりをいなす）。重い・遅いコマはわずかに増える
         if (Arena.Stage == 2) dmg *= Mathf.Clamp(1.9f - TurnSpeedK * to.st.speed, 0.5f, 1.4f) * Mathf.Pow(Mathf.Max(0.5f, from.st.atk), -1.1f) * 0.85f;   // ターンテーブル: 速く動き回れるコマは回る床の上で衝撃をいなす（受けるダメージが減る）。遅いコマは受けが増える
         if (to.shieldT > 0) dmg *= 0.2f; if (to.anchorT > 0) dmg *= 0.35f; if (to.specialPhase == 30) dmg *= 0.4f; if (to.chainTo != null) dmg *= 0.5f;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
+        if (to.evoShield && to.shieldT > 0 && from != to && from.alive) { float rf = dmg * EvoReflect; from.spin -= rf; from.lossHit += rf; Spark(from.Center, Vector3.up, 16, 1f); if (from.spin <= 0) { from.spin = 0; KO(from, "spin"); } }   // イージス進化版: 受けた分の一部を相手へ跳ね返す
         if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);
         from.dealt += dmg; PasSoul(from, to, dmg);
-        from.gauge = Mathf.Min(100f, from.gauge + dmg * GaugeDealt * from.st.gaugeRate);
-        to.gauge = Mathf.Min(100f, to.gauge + dmg * GaugeTaken * to.st.gaugeRate);
+        from.gauge = Mathf.Min(GaugeCap, from.gauge + dmg * GaugeDealt * from.st.gaugeRate);
+        to.gauge = Mathf.Min(GaugeCap, to.gauge + dmg * GaugeTaken * to.st.gaugeRate);
         if (to.spin <= 0) { to.spin = 0; KO(to, "spin"); }
     }
 
@@ -1961,7 +1972,7 @@ public partial class KomaBoot : MonoBehaviour
             var sp = cam.WorldToViewportPoint(k.pos + Vector3.up * 1.25f);
             sb.Append("{\"i\":").Append(k.idx).Append(",\"a\":").Append(k.alive ? 1 : 0).Append(",\"sp\":").Append(F(k.SpinRatio))
               .Append(",\"pb\":[").Append(F(k.pb0 / Mathf.Max(1f, k.pbm0))).Append(',').Append(F(k.pb1 / Mathf.Max(1f, k.pbm1))).Append(',').Append(F(k.pb2 / Mathf.Max(1f, k.pbm2))).Append(']')
-              .Append(",\"nd\":").Append(F(NeedOf(k) / 100f)).Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"br\":").Append(k.Bracing ? 1 : 0).Append(",\"rc\":").Append(k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
+              .Append(",\"nd\":").Append(F(NeedOf(k) / GaugeCap)).Append(",\"g\":").Append(F(k.gauge / GaugeCap)).Append(",\"ev\":").Append(EvoReady(k) ? 1 : 0).Append(",\"ec\":").Append(k.isPlayer ? F(evoCharge) : "0").Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"br\":").Append(k.Bracing ? 1 : 0).Append(",\"rc\":").Append(k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
               .Append(",\"vx\":").Append(F(k.vel.x)).Append(",\"vz\":").Append(F(k.vel.z)).Append(",\"yaw\":").Append(F(camYaw)).Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
               .Append(",\"ps\":").Append(k.pas).Append(",\"wg\":").Append(k.WingsOn ? 1 : 0).Append(",\"rg\":").Append(k.rage ? 1 : 0).Append(",\"sn\":").Append(k.stampN).Append(",\"lf\":").Append(k.left ? 1 : 0)

@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1752996275
+--- !u!1 &985692442
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,8 +127,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1752996277}
-  - component: {fileID: 1752996276}
+  - component: {fileID: 985692444}
+  - component: {fileID: 985692443}
   m_Layer: 0
   m_Name: KomaBoot
   m_TagString: Untagged
@@ -136,27 +136,27 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1752996276
+--- !u!114 &985692443
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1752996275}
+  m_GameObject: {fileID: 985692442}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cbf9e5f9d0d5f40799c8f01ce95ad4d0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::KomaBoot
-  GaugeTime: 1
-  GaugeDealt: 0.9
-  GaugeTaken: 0.6
-  HeavyDecayK: 4
+  GaugeTime: 1.6
+  GaugeDealt: 1.8
+  GaugeTaken: 1.1
+  HeavyDecayK: 2.4
   TurnSudden: 70
   TurnDecayMul: 0.8
   TurnWear: 0.8
   TurnGain: 0.6
-  TurnSpeedK: 0.9
+  TurnSpeedK: 0.5
   TurnSameDecay: 0.88
   TurnReverseDecay: 1.15
   assistMaxBend: 0
@@ -167,13 +167,13 @@ MonoBehaviour:
   KnockSpinDecisive: 3.7
   RunHitKnock: 1.05
   RecenterHalf: 1
---- !u!4 &1752996277
+--- !u!4 &985692444
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1752996275}
+  m_GameObject: {fileID: 985692442}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -186,4 +186,4 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1752996277}
+  - {fileID: 985692444}

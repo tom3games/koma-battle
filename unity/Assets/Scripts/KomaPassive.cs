@@ -147,7 +147,8 @@ public partial class KomaBoot
     readonly List<Strike> strikes = new List<Strike>();
     public const float StrikeDelay = 0.55f, StrikeR = 2.4f;
 
-    void SpawnStrike(Koma owner, Koma victim)
+    void SpawnStrike(Koma owner, Koma victim) { SpawnStrikeAt(owner, victim.pos); }
+    void SpawnStrikeAt(Koma owner, Vector3 at)
     {
         Strike s = null;
         foreach (var x in strikes) if (!x.active) { s = x; break; }
@@ -162,8 +163,8 @@ public partial class KomaBoot
             s.rm = s.ring.GetComponent<MeshRenderer>().material; s.fm = s.fill.GetComponent<MeshRenderer>().material; s.bm = s.bolt.GetComponent<MeshRenderer>().material;
             strikes.Add(s);
         }
-        float gh = Arena.H(victim.pos.x, victim.pos.z);
-        s.pos = new Vector3(victim.pos.x, gh > -100 ? gh : victim.pos.y, victim.pos.z);
+        float gh = Arena.H(at.x, at.z);
+        s.pos = new Vector3(at.x, gh > -100 ? gh : at.y, at.z);
         s.owner = owner; s.t = 0; s.done = false; s.active = true; s.boltT = 0;
         for (int i = 0; i < 4; i++) s.react[i] = rng.NextDouble() < 0.8;   // CPU は8割がよける
         s.ring.position = s.pos + Vector3.up * 0.1f; s.fill.position = s.pos + Vector3.up * 0.09f;

@@ -8,7 +8,7 @@ const NG = []; const ok = (c, m) => { console.log((c ? 'OK ' : 'NG ') + m); if (
 {
   const o = await begin(url, { sp: 8, w: W, h: H, mobile, stage: 0 })
   await o.place(0, -8, 0, 0, 0, 1); await o.place(1, 0, 4, 0, 0, 1); await wait(1500)
-  const nd = (await o.k(0)).nd; ok(Math.abs(nd - 0.75) < 0.01, `トレイルの必要ゲージ 0.75 (${nd})`)
+  const nd = (await o.k(0)).nd; ok(Math.abs(nd * 5 - 0.75) < 0.01, `トレイルの必要ゲージ 0.75 (${nd})`)
   await send(o.p, 'gauge|70'); await send(o.p, 'specialnear'); await wait(300)
   ok((await o.evs('special')).length === 0, '70%では撃てない（必要75%）')
   await send(o.p, 'gauge|80'); await o.clear(); await send(o.p, 'specialnear'); await wait(400)
@@ -31,7 +31,7 @@ const NG = []; const ok = (c, m) => { console.log((c ? 'OK ' : 'NG ') + m); if (
 {
   const o = await begin(url, { sp: 9, w: W, h: H, mobile, stage: 0 })
   await o.place(0, -8, 0, 0, 0, 1); await o.place(1, 10, 6, 0, 0, 1); await wait(1500)
-  const nd = (await o.k(0)).nd; ok(Math.abs(nd - 0.9) < 0.01, `ミラージュの必要ゲージ 0.9 (${nd})`)
+  const nd = (await o.k(0)).nd; ok(Math.abs(nd * 5 - 0.9) < 0.01, `ミラージュの必要ゲージ 0.9 (${nd})`)
   await send(o.p, 'gauge|100'); await o.clear(); await send(o.p, 'specialnear'); await wait(500)
   ok((await o.evs('special')).some(e => e.i === 0 && e.p === 9), '分身が出る')
   await send(o.p, 'inmv|1,0.3'); await wait(800); await o.shot(`sp3_${tag}_mirage`)

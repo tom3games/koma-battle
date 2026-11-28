@@ -72,6 +72,7 @@ public class Koma
     // パッシブ（-1 なし / 0 逆鱗 1 天翔 2 魂喰らい 3 雷鳴の刻印 4 不屈 5 紅蓮の轍 6 影分身 7 黒鉄の盾）
     public int pas = -1; public float baseAtk = 1f, pasCd;
     // 2026-11-28 パーツ破損: 刃（外周・横の体当たりで削れる）・円盤（中・上からで削れる）・軸（下・かち上げで削れる）。壊れ方は KomaParts.cs
+    public float evoT, evoCd, slipT; public bool evoShield; public bool evo => evoT > 0f;   // 極大技（ゲージ5本）の効果が続いている間
     public float pb0, pb1, pb2, pbm0, pbm1, pbm2, atk0, mass0; public bool bladeBroken, diskBroken; public readonly float[] pbLast = new float[3];
     public void RecalcParts()
     {
@@ -407,6 +408,7 @@ public class Koma
     public void Place(Vector3 p)
     {
         pos = p; vel = Vector3.zero; grounded = false; alive = true; down = false; downT = 0; downYaw = 0;
+        evoT = 0; evoCd = 0; slipT = 0; evoShield = false;
         st.mass = mass0; baseAtk = atk0; pb0 = pbm0; pb1 = pbm1; pb2 = pbm2; bladeBroken = diskBroken = false;
         spin = spinMax; gauge = 0; dashCd = 0; dashT = 0; airDashUsed = 0; specialPhase = 0; koWhy = ""; shieldT = 0; tornadoT = 0; rushLeft = 0;
         dealt = 0; aerialHits = 0; specials = 0; dashes = 0; lossWall = 0; lossHit = 0; lossDash = 0; diveTarget = -1; boostCd = 0;
