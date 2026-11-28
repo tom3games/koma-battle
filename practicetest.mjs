@@ -61,7 +61,7 @@ await wait(1500); ok((await done()).includes('air'), '空中から当てる に�
 await send(p, 'pracreset'); await wait(500)
 if (!mobile) {
   await send(p, 'cpuoff|1'); { const d = await st(); await send(p, `tp|${d.k[1].wx - 2.5},${(d.k[1].gh + 0.1).toFixed(2)},${d.k[1].wz},0,0,0,0`) }
-  await wait(300); await send(p, 'leanw|1,0'); await send(p, 'inmv|1,0'); await wait(900); await send(p, 'inmv')
+  for (let r = 0; r < 4 && !(await done()).includes('upper'); r++) { { const d = await st(); await send(p, `tp|${d.k[1].wx - 2.5},${(d.k[1].gh + 0.1).toFixed(2)},${d.k[1].wz},0,0,0,0`) } await wait(400); await send(p, 'leanw|1,0'); await send(p, 'inmv|1,0'); await wait(900); await send(p, 'inmv') }
   ok((await done()).includes('upper'), 'かち上げ に印')
 }
 // 踏ん張り

@@ -64,7 +64,7 @@ public partial class KomaBoot
         bool air = pa ? aAir : bAir, up = pa ? Upper(a, nh) && !aAir : Upper(b, -nh) && !bAir;
         Vector3 dv = dummy.vel; dv.y = 0;
         Emit("{\"t\":\"e\",\"k\":\"phit\",\"dd\":" + F(Mathf.Max(0f, toDummy) / Mathf.Max(1f, dummy.spinMax) * 100f) + ",\"dm\":" + F(Mathf.Max(0f, toMe) / Mathf.Max(1f, me.spinMax) * 100f)
-             + ",\"v\":" + F(dv.magnitude) + ",\"dash\":" + (me.dashT > 0 ? 1 : 0) + ",\"air\":" + (air ? 1 : 0) + ",\"up\":" + (up ? 1 : 0) + ",\"sp\":" + (me.specialPhase >= 2 ? 1 : 0) + "}");
+             + ",\"v\":" + F(dv.magnitude) + ",\"dash\":" + (me.dashT > 0 ? 1 : 0) + ",\"air\":" + (air ? 1 : 0) + ",\"up\":" + (up ? 1 : 0) + ",\"sp\":" + (me.specialPhase >= 2 ? 1 : 0) + ",\"pw\":[" + F(dummy.pbLast[0]) + "," + F(dummy.pbLast[1]) + "," + F(dummy.pbLast[2]) + "]}");
         if (pracWinT >= 0f) return;
         pracWinT = 0f; pracPos0 = dummy.pos; pracSpin0 = dummy.spin + toDummy;
     }

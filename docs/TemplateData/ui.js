@@ -314,7 +314,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
           Snd.play('tink', { vol: 0.34 * v, rate: 1.1, dest: 'hi', cut: 0.3, delay: 0.32 })
           ;[[0.62, 1], [0.86, 1.08], [1.04, 1.16], [1.18, 1.25], [1.28, 1.35], [1.36, 1.45], [1.42, 1.55]].forEach(([d, r], n) => Snd.play(n % 2 ? 'tink' : 'clang', { vol: (0.22 - n * 0.02) * v, rate: r + 0.3, delay: d }))
           Snd.play('creak', { vol: 0.22 * v, rate: 1.9, delay: 0.5 }) }
-        if (m.i === 0) onoma(m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : 'ダウン', m.x, Math.max(0.25, m.y))
+        if (m.i === 0) onoma(m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : m.why === 'shaft' ? '軸折れ' : 'ダウン', m.x, Math.max(0.25, m.y))
         else koLog(m)   // 2026-11-28 本人: 他のコマのダウンは画面に大きく出さない。PC だけ左上に小さく流れる1行
         break
       case 'sudden': $('sudden').hidden = false; Snd.play('down', { vol: 0.6, rate: 0.7 }); Snd.rate('bgm', 1.12); break
@@ -336,6 +336,11 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'collapse': Snd.play('down', { vol: 0.9, rate: 0.6 }); Snd.play('boom', { vol: 0.7, rate: 0.7 }); break
       case 'end': result(m); break
       case 'phit': pracHit(m); break
+      case 'pbreak': { const me = m.i === 0, part = m.p | 0
+        Snd.play(part === 2 ? 'crack' : 'clang', { vol: me ? 0.9 : 0.45, rate: part === 0 ? 1.7 : part === 1 ? 0.8 : 1.1 }); Snd.play('hit', { vol: me ? 0.5 : 0.25, rate: 1.3 })
+        if (me) { onoma(['刃が欠けた', '円盤にひび', '軸が折れた'][part], m.x, Math.max(0.3, m.y)); shakeScreen() }
+        const el = tagEls[m.i]; if (el) { const pb = el.querySelector('.pb'); if (pb) { const q = pb.children[part]; if (q) { q.classList.remove('hit'); void q.offsetWidth; q.classList.add('hit') } } }
+        break }
       case 'trailhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.6 }); Snd.play('hit', { vol: 0.25, rate: 1.3 }); break
       case 'mirhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.2 }); Snd.play('hit', { vol: 0.3, rate: 1.0 }); break
       case 'pstat': pracStat(m); break
@@ -521,6 +526,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   function pracHit(m) {
     $('psD').textContent = fmt(m.dd, 1) + '%'; $('psV').textContent = fmt(m.v, 1) + ' m/s'; $('psR').textContent = '…'
     $('psM').textContent = fmt(m.dm, 1) + '%'
+    if (m.pw) $('psP').textContent = `刃 -${fmt(m.pw[0], 1)}　円盤 -${fmt(m.pw[1], 1)}　軸 -${fmt(m.pw[2], 1)}`
   }
   function pracStat(m) { $('psR').textContent = fmt(m.dist, 1) + ' m' }
   function pracSpLabel() { $('prSp').textContent = '必殺　' + SPECIALS[pracSp] }
@@ -528,7 +534,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (!KB.ready) return
     practice = true; Snd.init(); Snd.play('ui', { vol: 0.6 })
     pracSp = pick.sp; pracSpLabel()
-    $('psD').textContent = $('psV').textContent = $('psR').textContent = $('psM').textContent = '-'
+    $('psD').textContent = $('psV').textContent = $('psR').textContent = $('psM').textContent = $('psP').textContent = '-'
     document.querySelectorAll('#prDummy button').forEach(x => x.classList.toggle('on', +x.dataset.d === pracDummy))
     if (isTouch) $('prList').classList.add('shut')
     pracRender(); startMatch()
@@ -542,7 +548,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   }
   $('btnPractice').onclick = pracStart
   $('prBack').onclick = () => { Snd.play('ui', { vol: 0.5 }); pracExit() }
-  $('prReset').onclick = () => { Snd.play('ui', { vol: 0.5 }); send('pracreset'); $('psD').textContent = $('psV').textContent = $('psR').textContent = $('psM').textContent = '-' }
+  $('prReset').onclick = () => { Snd.play('ui', { vol: 0.5 }); send('pracreset'); $('psD').textContent = $('psV').textContent = $('psR').textContent = $('psM').textContent = $('psP').textContent = '-' }
   $('prSp').onclick = () => { pracSp = (pracSp + 1) % SPECIALS.length; pracSpLabel(); send(`setsp|${pracSp},0`); send('gauge|100'); Snd.play('ui', { vol: 0.5 }) }
   document.querySelectorAll('#prDummy button').forEach(b => b.onclick = () => {
     pracDummy = +b.dataset.d; send(`dummytype|${pracDummy}`); Snd.play('ui', { vol: 0.4 })
@@ -590,9 +596,11 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         el.className = 'tag' + (k.i === 0 ? ' me' : '')
         el.style.setProperty('--c', COLORS[k.i])
         { const sp = document.createElement('span'); sp.textContent = k.i === 0 ? myName() : practice ? 'ダミー' : NAMES[k.i]; el.appendChild(sp) }
+        { const pb = document.createElement('div'); pb.className = 'pb'; pb.innerHTML = '<i title="刃"></i><i title="円盤"></i><i title="軸"></i>'; el.appendChild(pb) }
         $('tags').appendChild(el)
       }
       el.classList.toggle('out', k.a === 0)
+      if (k.pb) { const pb = el.querySelector('.pb'); if (pb) for (let q = 0; q < 3; q++) { const c = pb.children[q], v = k.pb[q]; c.style.setProperty('--v', Math.max(0, v).toFixed(2)); c.classList.toggle('low', v > 0 && v < 0.3); c.classList.toggle('gone', v <= 0) } }
       el.style.display = k.z > 0 && k.h > -6 ? '' : 'none'
       el.style.transform = `translate(${(k.x * W).toFixed(0)}px,${((1 - k.y) * H).toFixed(0)}px) translate(-50%,-100%)`
     })
@@ -603,7 +611,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (isTouch || practice) return
     let box = document.getElementById('koLog'); if (!box) { box = document.createElement('div'); box.id = 'koLog'; document.body.appendChild(box) }
     const nm = practice ? 'ダミー' : NAMES[m.i] || ''
-    const why = m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : 'ダウン'
+    const why = m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : m.why === 'shaft' ? '軸折れ' : 'ダウン'
     const row = document.createElement('div'); row.textContent = `${nm}　${why === 'ダウン' ? 'ダウン' : 'ダウン（' + why + '）'}`
     box.appendChild(row); while (box.children.length > 4) box.removeChild(box.firstChild)
     setTimeout(() => row.remove(), 4000)
@@ -682,7 +690,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     const big = $('rsBig')
     big.textContent = m.win ? '勝ち' : '負け'
     big.className = 'rs-big ' + (m.win ? 'win' : 'lose')
-    $('rsWhy').textContent = m.win ? '最後まで回り切った' : m.why === 'out' ? '場外に落ちた' : m.why === 'pit' ? '穴に落ちた' : '回転が尽きた'
+    $('rsWhy').textContent = m.win ? '最後まで回り切った' : m.why === 'out' ? '場外に落ちた' : m.why === 'pit' ? '穴に落ちた' : m.why === 'shaft' ? '軸が折れた' : '回転が尽きた'
     $('rsLine').textContent = `${m.rank ? m.rank + '位／' + m.of + '人　' : ''}${Math.floor(m.time)}秒　削った回転 ${Math.round(m.dealt)}　上からの一撃 ${m.aerial}回　必殺 ${m.specials}回`
     $('onoma').classList.remove('on'); $('banner').classList.remove('on')
     // 経験値: 勝てば多い。相手が多いほど・上から当てた回数・必殺の回数で少し増える

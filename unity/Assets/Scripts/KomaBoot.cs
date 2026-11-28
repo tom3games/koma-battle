@@ -211,6 +211,7 @@ public partial class KomaBoot : MonoBehaviour
             case "specnext": SpectateStep((int)N(0) >= 0 ? 1 : -1); break;
             case "specexit": if (phase == "fight" && spectating) { phase = "end"; endT = EndHold - 0.001f; endWin = 0; endWhy = player.koWhy; endSubject = specTarget; spectating = false; } break;
             case "brace": touchBrace = N(0) > 0; break;
+            case "partwear": PartWear(komas[(int)N(0)], (int)N(1), N(2)); break;   // 検査用: パーツを直接削る
             case "arenacheck": Emit("{\"t\":\"e\",\"k\":\"arena\"," + Arena.Verify() + "}"); break;   // 検査用: ステージの部品が全部あるか
             case "practice": practice = N(0) > 0; dummyType = (int)N(1); break;   // 練習場（開始の前に送る）
             case "pracreset": if (practice) { player.Place(new Vector3(-6f, Arena.H(-6f, 0) + 2.5f, 0)); dummy.Place(new Vector3(6f, Arena.H(6f, 0) + 2.5f, 0)); pAliveLast = true; deathT = -1f; pracWinT = -1f; } break;
@@ -510,7 +511,7 @@ public partial class KomaBoot : MonoBehaviour
             UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
-                k.spin -= (0.75f * (1f + HeavyDecayK * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
+                k.spin -= (0.75f * ShaftDecayMul(k) * (1f + HeavyDecayK * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
                 if (Arena.Stage == 2 && k.grounded) k.spin -= TurnWear * Mathf.Max(0f, k.st.grip - 0.7f) * Mathf.Clamp01(new Vector2(k.pos.x, k.pos.z).magnitude / Arena.R) * dt;   // 回る床の摩擦: グリップの高い（重い）足ほど、外側で回転が削れる
                 if (Arena.Stage == 2 && k.alive) k.spin = Mathf.Min(k.spinMax, k.spin + TurnGain * Mathf.Max(0f, k.st.speed - 0.9f) * dt);   // 回る床の勢いをもらう: 速く動くコマほど回転が戻る
                 if (k.braceT > 0) k.braceT -= dt;
@@ -1121,7 +1122,8 @@ public partial class KomaBoot : MonoBehaviour
         if (k.grounded)
         {
             Vector2 gr = Arena.Grad(p.x, p.z);
-            if (phase == "end" && k.alive) { float dm = Mathf.Exp(-5f * dt); v.x *= dm; v.z *= dm; }   // 決着後、残ったコマはその場で減速して止まる
+            if (phase == "end" && k.alive) { float dm = Mathf.Exp(-5f * dt); v.x *= dm; v.z *= dm; }
+            else if (!k.alive && k.down) { float dm = Mathf.Exp(-2.5f * dt); v.x *= dm; v.z *= dm; }   // 倒れたコマは摩擦が大きく、当てると少し転がって止まる   // 決着後、残ったコマはその場で減速して止まる
             else if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
             float fr = Mathf.Exp(-0.9f * k.st.grip * (Arena.Stage == 2 && p.x * p.x + p.z * p.z > (Arena.R - 3.5f) * (Arena.R - 3.5f) ? 1.6f : 1f) * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * (Arena.IceAt(p.x, p.z) ? 0.12f : 1f) * dt);
             if (Arena.Stage == 2 && k.alive && phase == "fight")
@@ -1454,7 +1456,7 @@ public partial class KomaBoot : MonoBehaviour
             o.vel.y = Mathf.Max(o.vel.y, 6.5f * f * ares);
             o.grounded = false;
             float dmg = 10f * f * k.st.atk / o.st.def;
-            Damage(k, o, dmg);
+            Damage(k, o, dmg); PartWear(o, 1, DiskMeteor * f);
             o.hitFlash = 0.2f;
             Spark(o.Center, n + Vector3.up * 0.5f, 40, 1.4f);
         }
@@ -1511,7 +1513,11 @@ public partial class KomaBoot : MonoBehaviour
             for (int j = i + 1; j < komas.Count; j++)
             {
                 var a = komas[i]; var b = komas[j];
-                if (!a.root.activeSelf || !b.root.activeSelf || !a.alive || !b.alive) continue;
+                if (!a.root.activeSelf || !b.root.activeSelf) continue;
+                // 2026-11-28 本人「回転が止まったコマも当たり判定は残してて」: 倒れたコマ（回転0・軸折れ）は床に残る障害物。当たると押し動かされ跳ね返るが、ダメージ・勝敗・必殺の対象にはならない。場外・穴に落ちたコマは今まで通り判定なし
+                bool dwA = !a.alive && a.down, dwB = !b.alive && b.down;
+                if ((!a.alive && !dwA) || (!b.alive && !dwB)) continue;
+                if (dwA || dwB) { if (!(dwA && dwB)) DownBump(a, b, dwA, dwB); continue; }
                 Vector3 d = b.Center - a.Center;
                 float rr = a.Radius + b.Radius;
                 // 高さは楕円で（コマは平たい）
@@ -1618,6 +1624,7 @@ public partial class KomaBoot : MonoBehaviour
                 Damage(a, b, dmgToB);
                 Damage(b, a, dmgToA);
                 PasOnHit(a, b, dmgToB > 0); PasOnHit(b, a, dmgToA > 0);
+                PartsHit(a, b, nh, aAir, bAir, vn);
                 if (practice) PracticeHit(a, b, nh, aAir, bAir, spA0 - a.spin, spB0 - b.spin);
                 bool aSp = a.specialPhase == 2, bSp = b.specialPhase == 2;
                 if (aSp) SpecialImpact(a, a.pos);
@@ -1640,6 +1647,26 @@ public partial class KomaBoot : MonoBehaviour
                 Emit("{\"t\":\"e\",\"k\":\"hit\",\"a\":" + i + ",\"b\":" + j + ",\"p\":" + F(power) + ",\"da\":" + F(dmgToA) + ",\"db\":" + F(dmgToB) + ",\"vn\":" + F(vn) + ",\"ka\":" + angA + ",\"kb\":" + angB + ",\"fa\":" + F(facA) + ",\"fb\":" + F(facB) + ",\"air\":" + ((aAir || bAir) ? 1 : 0) +
                      ",\"big\":" + (big ? 1 : 0) + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
             }
+    }
+
+    // 倒れたコマとの当たり: 押し出して、重さに応じて跳ね返す（ダメージなし）
+    void DownBump(Koma a, Koma b, bool dwA, bool dwB)
+    {
+        Vector3 d = b.Center - a.Center; Vector3 dd = new Vector3(d.x, d.y * 1.6f, d.z);
+        float rr = a.Radius + b.Radius, dist = dd.magnitude;
+        if (dist >= rr || dist < 1e-4f) return;
+        Vector3 n = d.normalized; Vector3 nh = new Vector3(n.x, 0, n.z); if (nh.sqrMagnitude < 1e-4f) nh = Vector3.forward; else nh.Normalize();
+        float pen = rr - dist, ma = a.st.mass, mb = b.st.mass;
+        Vector3 pa = a.pos - nh * pen * mb / (ma + mb), pb = b.pos + nh * pen * ma / (ma + mb);
+        if (Arena.WallH(pa.x, pa.z) - a.pos.y <= StepUp) a.pos = new Vector3(pa.x, a.pos.y, pa.z);
+        if (Arena.WallH(pb.x, pb.z) - b.pos.y <= StepUp) b.pos = new Vector3(pb.x, b.pos.y, pb.z);
+        float vn = Vector3.Dot(a.vel - b.vel, nh);
+        if (vn <= 0.3f) return;
+        float J = 1.3f * vn / (1f / ma + 1f / mb);
+        a.vel -= nh * J / ma; b.vel += nh * J / mb;
+        Vector3 cp = (a.Center + b.Center) * 0.5f; Spark(cp, Vector3.up * 0.3f, Mathf.Clamp((int)(vn * 2f), 6, 30), 0.8f);
+        var sp = cam.WorldToViewportPoint(cp);
+        Emit("{\"t\":\"e\",\"k\":\"wall\",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
     }
 
     // ---------- 演出 ----------
@@ -1938,6 +1965,7 @@ public partial class KomaBoot : MonoBehaviour
             if (!first) sb.Append(','); first = false;
             var sp = cam.WorldToViewportPoint(k.pos + Vector3.up * 1.25f);
             sb.Append("{\"i\":").Append(k.idx).Append(",\"a\":").Append(k.alive ? 1 : 0).Append(",\"sp\":").Append(F(k.SpinRatio))
+              .Append(",\"pb\":[").Append(F(k.pb0 / Mathf.Max(1f, k.pbm0))).Append(',').Append(F(k.pb1 / Mathf.Max(1f, k.pbm1))).Append(',').Append(F(k.pb2 / Mathf.Max(1f, k.pbm2))).Append(']')
               .Append(",\"nd\":").Append(F(NeedOf(k) / 100f)).Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"br\":").Append(k.Bracing ? 1 : 0).Append(",\"rc\":").Append(k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
               .Append(",\"vx\":").Append(F(k.vel.x)).Append(",\"vz\":").Append(F(k.vel.z)).Append(",\"yaw\":").Append(F(camYaw)).Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))

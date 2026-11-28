@@ -24,7 +24,7 @@ public static class Parts
         switch (core)
         {
             case 0: s.stamina = 1.35f; s.speed *= 0.92f; break;                    // エターナルコア
-            case 1: s.stamina = 0.85f; s.speed *= 1.22f; s.dashCd = 0.75f; break;  // ソニックコア
+            case 1: s.stamina = 0.92f; s.speed *= 1.22f; s.dashCd = 0.75f; break;  // ソニックコア
             case 2: s.stamina = 1.05f; s.speed *= 0.95f; s.mass += 0.35f; s.def *= 1.1f; break; // グラビティコア
             case 3: s.stamina = 0.95f; s.gaugeRate = 1.55f; break;                 // フェニックスコア
             case 4: s.stamina = 1.0f; s.steal = 0.35f; s.mass += 0.15f; break;     // アビスコア
@@ -34,7 +34,7 @@ public static class Parts
             case 0: s.grip = 1.7f; s.jump = 0.85f; s.speed *= 0.95f; break;          // タイタンベース
             case 1: s.grip = 0.6f; s.speed *= 1.15f; s.decay = 0.7f; break;          // スティンガーニードル
             case 2: s.jump = 1.45f; s.aerial *= 1.3f; break;                         // ヘヴンズスプリング
-            case 3: s.grip = 0.8f; s.speed *= 1.3f; s.decay = 1.15f; break;          // ファントムホイール
+            case 3: s.grip = 0.8f; s.speed *= 1.3f; s.decay = 1.05f; break;          // ファントムホイール
             case 4: s.grip = 1.3f; s.jump = 1.15f; s.aerial *= 1.15f; break;         // クレイモアスパイク
         }
         return s;
@@ -44,6 +44,7 @@ public static class Parts
 // コマ1つ。物理は自前（高さ関数の上をすべる・跳ぶ）
 public class Koma
 {
+    public const float SpinBase = 270f;   // 2026-11-28 本人「全体の回転数の基礎をあげて」: 160→270（回転切れで終わるのを遅く）
     public int idx;
     public bool isPlayer, cpu;
     public int top, core, leg, sp;   // sp = 必殺技の種類
@@ -70,6 +71,16 @@ public class Koma
     public bool left;   // 左回転（逆回り）
     // パッシブ（-1 なし / 0 逆鱗 1 天翔 2 魂喰らい 3 雷鳴の刻印 4 不屈 5 紅蓮の轍 6 影分身 7 黒鉄の盾）
     public int pas = -1; public float baseAtk = 1f, pasCd;
+    // 2026-11-28 パーツ破損: 刃（外周・横の体当たりで削れる）・円盤（中・上からで削れる）・軸（下・かち上げで削れる）。壊れ方は KomaParts.cs
+    public float pb0, pb1, pb2, pbm0, pbm1, pbm2, atk0, mass0; public bool bladeBroken, diskBroken; public readonly float[] pbLast = new float[3];
+    public void RecalcParts()
+    {
+        atk0 = st.atk; mass0 = st.mass;
+        pbm0 = 100f * Mathf.Pow(Mathf.Clamp(st.atk, 0.8f, 1.6f), 1.3f);   // 刃: 攻撃型が固い
+        pbm1 = 100f * Mathf.Clamp(st.mass, 0.8f, 1.9f);                      // 円盤: 重量型が固い
+        pbm2 = 100f * Mathf.Clamp(st.speed, 0.85f, 1.7f);                    // 軸: 速度型が固い
+        pb0 = pbm0; pb1 = pbm1; pb2 = pbm2; bladeBroken = diskBroken = false;
+    }
     // 場外ギリギリの踏ん張り（2026-11-27 本人「二は欲しい」）: 縁に引っかかって外へ傾いている残り時間・待ち・場所・外の向き
     // WASD 2回押しの傾け（2026-11-27 本人「二回連続クリックしたら意図的にその方向に角度をつけれるように」）: 残り時間・待ち・向き
     public float leanT, leanCd; public Vector3 leanDir;
@@ -98,8 +109,8 @@ public class Koma
     {
         this.left = left;
         this.idx = idx; this.top = top; this.core = core; this.leg = leg; this.color = color; mats = m;
-        st = Parts.Compute(top, core, leg); baseAtk = st.atk;
-        spinMax = 160f * st.stamina; spin = spinMax;
+        st = Parts.Compute(top, core, leg); baseAtk = st.atk; RecalcParts();
+        spinMax = SpinBase * st.stamina; spin = spinMax;
         BuildVisual(m);
     }
 
@@ -107,8 +118,8 @@ public class Koma
     {
         left = leftSpin;
         top = Mathf.Clamp(t, 0, Parts.Count - 1); core = Mathf.Clamp(c, 0, Parts.Count - 1); leg = Mathf.Clamp(l, 0, Parts.Count - 1);
-        st = Parts.Compute(top, core, leg); baseAtk = st.atk;
-        spinMax = 160f * st.stamina; spin = spinMax;
+        st = Parts.Compute(top, core, leg); baseAtk = st.atk; RecalcParts();
+        spinMax = SpinBase * st.stamina; spin = spinMax;
         var p = root.transform.position;
         // 作り直す前に、このコマだけの形と素材を捨てる（WebGL のメモリが増え続けないように）
         foreach (var mf in root.GetComponentsInChildren<MeshFilter>(true)) if (mf.sharedMesh) Object.Destroy(mf.sharedMesh);
@@ -396,6 +407,7 @@ public class Koma
     public void Place(Vector3 p)
     {
         pos = p; vel = Vector3.zero; grounded = false; alive = true; down = false; downT = 0; downYaw = 0;
+        st.mass = mass0; baseAtk = atk0; pb0 = pbm0; pb1 = pbm1; pb2 = pbm2; bladeBroken = diskBroken = false;
         spin = spinMax; gauge = 0; dashCd = 0; dashT = 0; airDashUsed = 0; specialPhase = 0; koWhy = ""; shieldT = 0; tornadoT = 0; rushLeft = 0;
         dealt = 0; aerialHits = 0; specials = 0; dashes = 0; lossWall = 0; lossHit = 0; lossDash = 0; diveTarget = -1; boostCd = 0;
         padCd = 0; hitFlash = 0; lastVy = 0; lastHitT = -99; specialT = 0;
@@ -414,7 +426,7 @@ public class Koma
     {
         if (!alive) return;
         alive = false; koWhy = why; shieldT = 0; tornadoT = 0; anchorT = 0; frostT = 0; arrowT = 0; arrowDashT = 0;
-        if (why == "spin") { down = true; downAxis = new Vector3(Random.Range(-1f, 1f), 0, Random.Range(-1f, 1f)).normalized; if (downAxis == Vector3.zero) downAxis = Vector3.right; }
+        if (why == "spin" || why == "shaft") { down = true; downAxis = new Vector3(Random.Range(-1f, 1f), 0, Random.Range(-1f, 1f)).normalized; if (downAxis == Vector3.zero) downAxis = Vector3.right; }
     }
 
     // 狙いの矢印: dir が 0 なら隠す
@@ -452,6 +464,7 @@ public class Koma
         spinner.localRotation = Quaternion.Euler(0, left ? -spinAngle : spinAngle, 0);
         wobblePhase += dt * Mathf.Lerp(2f, 11f, 1 - sr);   // 回転が落ちるほど首振り（歳差）が大きく・速くなる
         float wob = alive ? Mathf.Lerp(0f, 30f, Mathf.Pow(1 - sr, 1.9f)) : 0;
+        if (alive && pbm2 > 0f && pb2 < pbm2 * 0.3f) wob = Mathf.Max(wob, Mathf.Lerp(18f, 6f, pb2 / (pbm2 * 0.3f)) + Mathf.Sin(Time.time * 40f) * 3f);   // 軸が壊れかけ: ふらつく
         if (down)
         {
             // 倒れたあとも床の上で縁をこすりながら回る（慣性）。傾きは大きくなり、回る速さはだんだん落ちて1.8秒ほどで止まる

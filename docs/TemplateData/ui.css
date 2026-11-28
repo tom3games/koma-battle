@@ -476,3 +476,18 @@ body.practice .hud-time,body.practice #sudden{display:none!important}
 #koLog div{font-size:12px;font-weight:800;color:#fff;background:rgba(12,13,17,.6);padding:2px 10px;clip-path:var(--cut);animation:kolog 4s ease-out forwards}
 @keyframes kolog{0%{opacity:0;transform:translateX(-12px)}8%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
 body:not(.playing) #koLog{display:none}
+
+/* パーツ破損: 名札の下の3つの印（刃・円盤・軸）。壊れそうなら点滅、壊れたら暗く */
+.tag .pb{display:flex;gap:2px;margin-top:1px}
+.tag .pb i{display:block;width:12px;height:4px;background:rgba(255,255,255,.18);position:relative;overflow:hidden}
+.tag .pb i::after{content:"";position:absolute;left:0;top:0;bottom:0;width:calc(var(--v,1) * 100%);background:#e8e6df}
+.tag .pb i:nth-child(1)::after{background:#ff8a5c}
+.tag .pb i:nth-child(2)::after{background:#8fd0ff}
+.tag .pb i:nth-child(3)::after{background:#ffd36a}
+.tag.me .pb i{width:16px;height:5px}
+.tag .pb i.low{animation:pblow .5s linear infinite}
+.tag .pb i.gone{background:rgba(255,60,40,.45)}
+.tag .pb i.hit{animation:pbhit .35s ease-out}
+@keyframes pblow{50%{opacity:.25}}
+@keyframes pbhit{0%{transform:scaleY(2.4)}100%{transform:none}}
+#prStat .parts b{color:#9fe0ff}
