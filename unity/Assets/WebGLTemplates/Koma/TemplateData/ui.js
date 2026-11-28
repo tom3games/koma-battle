@@ -34,7 +34,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       { n: 'ラスト・スパイラル', d: 'ピンチの逆転の一撃', f: '回転が残り3割を切った時だけ撃てる。回転が少ないほど威力が上がる。撃てる時だけゲージが光る。', x: '残り30%で威力×1.0、0%に近いほど最大×2.4 範囲5.5m' },
       { n: 'グレイシャル・アロー', d: '氷の矢で突進', f: '狙った向きに輪が並び、開き終わると氷の矢になって一直線に突進する。当たった相手は弾かれて凍える。輪が開いている間に避けられる。', x: '展開0.95秒 突進約16m 凍え2秒（速さ・加速が半分）' },
       { n: 'チェイン・バインド', d: '鎖で振り回して投げる', f: '一番近い相手と鎖でつながる。自分が回るほど相手を振り回し、最後に狙いの向きへ放り投げる。つながれた側もダッシュで引っ張り返せる。', x: '4秒 鎖の長さ6.8m 回した数だけ遠くへ' },
-      { n: 'ソニック・トレイル', d: '光の軌跡で削る', f: '5秒のあいだ、通った道に光の帯が残る。帯は4秒で消え、触れた相手を削って弾く。自分は当たらない。相手の周りを駆け抜けるように使う。', x: '5秒 帯は4秒残る 触れるとダメージ6＋弾き' },
+      { n: 'ソニック・トレイル', d: '光の軌跡で削る', f: '5秒のあいだ、通った道に光の帯が残る。帯は3秒で消え、触れた相手を削って弾く。自分は当たらない。相手の周りを駆け抜けるように使う。', x: '5秒 帯は3秒残る 触れるとダメージ6＋弾き' },
       { n: 'ファントム・ミラージュ', d: '光の分身が2体', f: '6秒のあいだ、左右に光の分身が2体ついて同じ動きをする。分身にも当たり判定があり、相手に触れるとダメージ。', x: '6秒 分身2体 触れるとダメージ2.5＋速さ分' } ] },
     { key: 'pas', name: 'パッシブ', parts: [
       { n: 'なし', d: 'なし', f: 'パッシブを使わない。', x: '' },
@@ -314,7 +314,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
           Snd.play('tink', { vol: 0.34 * v, rate: 1.1, dest: 'hi', cut: 0.3, delay: 0.32 })
           ;[[0.62, 1], [0.86, 1.08], [1.04, 1.16], [1.18, 1.25], [1.28, 1.35], [1.36, 1.45], [1.42, 1.55]].forEach(([d, r], n) => Snd.play(n % 2 ? 'tink' : 'clang', { vol: (0.22 - n * 0.02) * v, rate: r + 0.3, delay: d }))
           Snd.play('creak', { vol: 0.22 * v, rate: 1.9, delay: 0.5 }) }
-        onoma(m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : 'ダウン', m.x, Math.max(0.25, m.y))
+        if (m.i === 0) onoma(m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : 'ダウン', m.x, Math.max(0.25, m.y))
+        else koLog(m)   // 2026-11-28 本人: 他のコマのダウンは画面に大きく出さない。PC だけ左上に小さく流れる1行
         break
       case 'sudden': $('sudden').hidden = false; Snd.play('down', { vol: 0.6, rate: 0.7 }); Snd.rate('bgm', 1.12); break
       // 2026-11-28 必殺4つと中央の崩落
@@ -598,6 +599,15 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   }
 
   // ---------- 演出 ----------
+  function koLog(m) {
+    if (isTouch || practice) return
+    let box = document.getElementById('koLog'); if (!box) { box = document.createElement('div'); box.id = 'koLog'; document.body.appendChild(box) }
+    const nm = practice ? 'ダミー' : NAMES[m.i] || ''
+    const why = m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : 'ダウン'
+    const row = document.createElement('div'); row.textContent = `${nm}　${why === 'ダウン' ? 'ダウン' : 'ダウン（' + why + '）'}`
+    box.appendChild(row); while (box.children.length > 4) box.removeChild(box.firstChild)
+    setTimeout(() => row.remove(), 4000)
+  }
   const SVGNS = 'http://www.w3.org/2000/svg'
   function lines(x, y, power) {
     const svg = $('lines')

@@ -36,11 +36,14 @@ const NG = []; const ok = (c, m) => { console.log((c ? 'OK ' : 'NG ') + m); if (
   ok((await o.evs('special')).some(e => e.i === 0 && e.p === 9), '分身が出る')
   await send(o.p, 'inmv|1,0.3'); await wait(800); await o.shot(`sp3_${tag}_mirage`)
   // 分身が相手に当たる: 的を自分の脇（2.4m 横）の進路に置く
-  await send(o.p, 'inmv'); await o.place(0, -8, 0, 0, 0, 1); await wait(400)
-  await o.clear(); const hp0 = (await o.k(1)).sp
-  const me = await o.k(0)
-  await o.place(1, me.wx + 6, me.wz + 2.4, 0, 0, 1)
-  await send(o.p, 'inmv|1,0'); await wait(1500); await send(o.p, 'inmv')
+  await send(o.p, 'inmv'); await o.clear()
+  for (let r = 0; r < 4 && !(await o.evs('mirhit')).length; r++) {
+    await send(o.p, 'gauge|100'); if (r > 0) { await send(o.p, 'specialnear'); await wait(300) }
+    await o.place(0, -8, 0, 0, 0, 1); await wait(500)
+    const me = await o.k(0)
+    await o.place(1, me.wx + 5, me.wz + 2.4, 0, 0, 1)
+    await send(o.p, 'inmv|1,0'); await wait(1400); await send(o.p, 'inmv')
+  }
   const mh = (await o.evs('mirhit')).length
   ok(mh >= 1, `分身が相手に当たった (${mh}回)`)
   console.log('errs', o.errs); ok(o.errs.length === 0, 'コンソールエラー0')

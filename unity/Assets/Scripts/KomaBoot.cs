@@ -211,6 +211,7 @@ public partial class KomaBoot : MonoBehaviour
             case "specnext": SpectateStep((int)N(0) >= 0 ? 1 : -1); break;
             case "specexit": if (phase == "fight" && spectating) { phase = "end"; endT = EndHold - 0.001f; endWin = 0; endWhy = player.koWhy; endSubject = specTarget; spectating = false; } break;
             case "brace": touchBrace = N(0) > 0; break;
+            case "arenacheck": Emit("{\"t\":\"e\",\"k\":\"arena\"," + Arena.Verify() + "}"); break;   // 検査用: ステージの部品が全部あるか
             case "practice": practice = N(0) > 0; dummyType = (int)N(1); break;   // 練習場（開始の前に送る）
             case "pracreset": if (practice) { player.Place(new Vector3(-6f, Arena.H(-6f, 0) + 2.5f, 0)); dummy.Place(new Vector3(6f, Arena.H(6f, 0) + 2.5f, 0)); pAliveLast = true; deathT = -1f; pracWinT = -1f; } break;
             case "dummytype": dummyType = (int)N(0); break;
@@ -306,8 +307,8 @@ public partial class KomaBoot : MonoBehaviour
         foreach (var k in komas) if (!k.isPlayer) k.root.SetActive(false);
         player.Place(new Vector3(0, Arena.H(0, 0), 0));
         player.grounded = true; player.SetArrow(Vector2.zero);
-        Arena.SetStage(0); ApplyStageLook(0);
-        sudden = false; Arena.ResetCollapse(); boardAnnounced = false; fires.Clear(); ClearChains();
+        Arena.ResetCollapse(); Arena.SetStage(0); ApplyStageLook(0);
+        sudden = false; boardAnnounced = false; fires.Clear(); ClearChains();
     }
 
     void StartMatch()
@@ -335,6 +336,8 @@ public partial class KomaBoot : MonoBehaviour
         countStarted = false;
         if (practice) PracticeSetup();
     }
+    // 2026-11-28 本人「必殺が簡単にたまりすぎ」: 時間 2.2→1.0/秒、当てた時 ×1.5→×0.9、当てられた時 ×1.1→×0.6
+    public float GaugeTime = 1.0f, GaugeDealt = 0.9f, GaugeTaken = 0.6f;
     public float HeavyDecayK = 4.0f;   // 2026-11-28 本人「重量型が強すぎる」: 質量1.4を超えた分だけ回転が早く減る（重量型 1.65 で×2.0）
     public float TurnSudden = 70f, TurnDecayMul = 0.8f, TurnWear = 0.8f, TurnGain = 0.6f, TurnSpeedK = 0.9f;
     public float TurnSameDecay = 0.88f, TurnReverseDecay = 1.15f;
@@ -518,7 +521,7 @@ public partial class KomaBoot : MonoBehaviour
                     if (k.braceFxT <= 0) { k.braceFxT = 0.09f; Spark(k.pos + Vector3.up * 0.05f, new Vector3(Random.Range(-1f, 1f), 0.3f, Random.Range(-1f, 1f)), 4, 0.55f); }
                     if (Random.value < 0.02f) EmitEv("brace", k, 0);
                 }
-                k.gauge = Mathf.Min(100f, k.gauge + 2.2f * k.st.gaugeRate * dt);
+                k.gauge = Mathf.Min(100f, k.gauge + GaugeTime * k.st.gaugeRate * dt);
                 if (k.spin <= 0) { k.spin = 0; KO(k, "spin"); }
                 // 奇跡: 回転数が上限近くを保つと、数秒だけ通り道に炎が残る（本人は無傷）
                 if (k.alive)
@@ -1471,8 +1474,8 @@ public partial class KomaBoot : MonoBehaviour
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
         if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);
         from.dealt += dmg; PasSoul(from, to, dmg);
-        from.gauge = Mathf.Min(100f, from.gauge + dmg * 1.5f * from.st.gaugeRate);
-        to.gauge = Mathf.Min(100f, to.gauge + dmg * 1.1f * to.st.gaugeRate);
+        from.gauge = Mathf.Min(100f, from.gauge + dmg * GaugeDealt * from.st.gaugeRate);
+        to.gauge = Mathf.Min(100f, to.gauge + dmg * GaugeTaken * to.st.gaugeRate);
         if (to.spin <= 0) { to.spin = 0; KO(to, "spin"); }
     }
 

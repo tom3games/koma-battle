@@ -178,6 +178,7 @@ public static class Arena
         if (warnRing) warnRing.SetActive(false);
         BoardOn = false; if (boardObj) boardObj.SetActive(false);
         if (baseObj) baseObj.SetActive(true);
+        foreach (var tp in turnParts) tp.go.SetActive(Stage == 2);
         ResetPit();
     }
 
@@ -215,6 +216,7 @@ public static class Arena
                         p.spin = new Vector3(Random.Range(-60f, 60f), Random.Range(-20f, 20f), Random.Range(-60f, 60f));
                     }
                     CollapseR = ri;
+                    foreach (var tp in turnParts) if (tp.ring == nextRing) tp.go.SetActive(false);   // 落ちた輪の上の模様も一緒に外す
                     if (baseObj) baseObj.SetActive(false);
                     nextRing--; dropped = true;
                     if (nextRing < 0) { warnRing.SetActive(false); SafeR = KeepR; }
@@ -426,19 +428,25 @@ public static class Arena
 
     // ---------- 見た目 ----------
     // 床の形を作り直す物の一覧（頂点の高さを今のステージの FloorH に合わせて更新する）
-    class Deform { public Mesh mesh; public float off; }
+    class Deform { public Mesh mesh; public float off; public GameObject go; }
     static readonly List<Deform> deforms = new List<Deform>();
     static readonly List<MeshRenderer> floorRends = new List<MeshRenderer>();
     static readonly List<GameObject> arcObjs = new List<GameObject>(), iceObjs = new List<GameObject>(), turnObjs = new List<GameObject>();
     static Transform turnRoot, turnIn;
+    class TurnPart { public GameObject go; public int ring; }
+    static readonly List<TurnPart> turnParts = new List<TurnPart>();
     static Materials mat0;
-    static void Reg(GameObject g, float off = 0f) { deforms.Add(new Deform { mesh = g.GetComponent<MeshFilter>().sharedMesh, off = off }); }
+    static void Reg(GameObject g, float off = 0f) { deforms.Add(new Deform { mesh = g.GetComponent<MeshFilter>().sharedMesh, off = off, go = g }); }
     static int builtStage = 0;
     // ステージを切り替える（試合の開始時。同じステージなら何もしない）
     public static void SetStage(int st)
     {
         st = Mathf.Clamp(st, 0, StageNames.Length - 1);
-        if (st == Stage && builtStage == st) return;
+        // 2026-11-28 本人「マップの表示がちゃんとされないことがある」の根本: 崩落中・穴が開いた状態で床の頂点を作り直すと、崩れた所の高さが -1000 で飛ばされ、前のステージの形が残った。
+        // 作り直しは必ず「崩落なし・穴なし」の状態で行い、同じステージでも頂点がずれていれば作り直す（試合開始ごとに初期状態を保証する）
+        float cr0 = CollapseR, pr0 = PitR; CollapseR = 1e9f; PitR = 0f;
+        bool same = st == Stage && builtStage == st;
+        if (same && BadVerts(1) == 0) { CollapseR = cr0; PitR = pr0; return; }
         Stage = st; builtStage = st;
         foreach (var d in deforms)
         {
@@ -452,6 +460,49 @@ public static class Arena
         foreach (var g in arcObjs) g.SetActive(st == 0);
         foreach (var g in iceObjs) g.SetActive(st == 1);
         if (pitWall) pitWall.SetActive(false);
+        CollapseR = cr0; PitR = pr0;
+    }
+
+    // 2026-11-28 本人「マップの表示がちゃんとされないことがある」の検査用: 今のステージにあるべき部品が全部あるかを数える
+    //   床の頂点の高さが今の FloorH とずれている数・崩落の破片（全部戻っているか）・ステージごとの物の出し分け
+    // 今のステージの形と食い違っている頂点の数（stopAt 個で打ち切る）。崩落・穴の状態は呼ぶ側で初期にしてから
+    static int BadVerts(int stopAt, out int verts)
+    {
+        int bad = 0; verts = 0;
+        foreach (var d in deforms)
+        {
+            if (!d.go.activeInHierarchy && !pieces.Exists(pc => pc.go == d.go)) continue;   // 出ていない物（今のステージ用でない物）は見ない
+            var v = d.mesh.vertices;
+            for (int i = 0; i < v.Length; i++)
+            {
+                if (v[i].y <= -3.3f) continue;   // 側面の下端は作り直しの対象外
+                float rr2 = v[i].x * v[i].x + v[i].z * v[i].z;
+                float want;
+                if (Stage == 2 && rr2 > (R + 0.05f) * (R + 0.05f)) want = -3.2f;
+                else { float h = FloorH(v[i].x * 0.99999f, v[i].z * 0.99999f); if (h < -100) continue; want = h + d.off; }
+                verts++;
+                if (Mathf.Abs(v[i].y - want) > 0.03f) { bad++; if (bad >= stopAt) return bad; }
+            }
+        }
+        return bad;
+    }
+    static int BadVerts(int stopAt) { return BadVerts(stopAt, out _); }
+    public static string Verify()
+    {
+        float cr = CollapseR, pr = PitR; CollapseR = 1e9f; PitR = 0f;
+        int bad = BadVerts(int.MaxValue, out int verts);
+        CollapseR = cr; PitR = pr;
+        int pOn = 0, pOk = 0; foreach (var p in pieces) { if (p.go.activeSelf) pOn++; if (p.go.activeSelf && !p.falling && p.go.transform.localPosition.sqrMagnitude < 1e-4f) pOk++; }
+        int ghost = 0; foreach (var tp in turnParts) if (tp.go.activeSelf && tp.ring >= 0 && CollapseR <= RingR[tp.ring] + 0.01f) ghost++;
+        int arcOn = 0, iceOn = 0, turnOn = 0;
+        foreach (var g in arcObjs) if (g.activeSelf) arcOn++;
+        foreach (var g in iceObjs) if (g.activeSelf) iceOn++;
+        foreach (var g in turnObjs) if (g.activeSelf) turnOn++;
+        string matOk = "1"; foreach (var r in floorRends) { var want = Stage == 1 ? mat0.Floor2 : Stage == 2 ? mat0.Floor3 : mat0.Floor; if (r.sharedMaterial != want) matOk = "0"; }
+        return "\"stage\":" + Stage + ",\"built\":" + builtStage + ",\"bad\":" + bad + ",\"verts\":" + verts + ",\"pieces\":" + pieces.Count + ",\"pOn\":" + pOn + ",\"pOk\":" + pOk
+            + ",\"base\":" + (baseObj && baseObj.activeSelf ? 1 : 0) + ",\"arc\":" + arcOn + ",\"arcN\":" + arcObjs.Count + ",\"ice\":" + iceOn + ",\"iceN\":" + iceObjs.Count
+            + ",\"turn\":" + turnOn + ",\"turnN\":" + turnObjs.Count + ",\"mat\":" + matOk + ",\"crOK\":" + (CollapseR > 1e8f ? 1 : 0) + ",\"pitOK\":" + (PitR <= 0f && pitT < 0 ? 1 : 0)
+            + ",\"ghost\":" + ghost + ",\"pitPiece\":" + (pitPiece && pitPiece.activeSelf ? 1 : 0);
     }
 
     public static GameObject BuildVisual(Materials m)
@@ -492,13 +543,23 @@ public static class Arena
         // ターンテーブル: 回る円盤の見た目（矢印の輪3本と放射状の線。丸ごと回す。物理は円対称なので高さは変わらない）
         { var tr = new GameObject("Turn"); tr.transform.SetParent(root.transform, false); turnRoot = tr.transform;
           var ti = new GameObject("TurnIn"); ti.transform.SetParent(root.transform, false); turnIn = ti.transform;
-          void Band(Transform par, float r0, float r1, Material mt) { var g = MeshKit.Obj("TurnBand", par, TurnBandMesh(r0, r1), mt); g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.04f); turnObjs.Add(g); g.SetActive(false); }
-          Band(turnIn, 3.0f, 4.4f, m.TurnBand); Band(turnIn, 6.6f, 8.0f, m.TurnBand); Band(turnRoot, 13.6f, 15.0f, m.TurnBand); Band(turnRoot, 18.0f, 19.4f, m.TurnBand);
-          // 内と外の境目（ここをまたぐと逆向きに引っぱられる）: 動かない橙の線
-          { var g = MeshKit.Obj("TurnEdge", root.transform, TurnBandMesh(R - 0.75f, R - 0.05f), m.TurnEdge); g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.05f); turnObjs.Add(g); g.SetActive(false); }
-          { var g = MeshKit.Obj("TurnSplit", root.transform, TurnBandMesh(TurnSplitR - 0.22f, TurnSplitR + 0.22f), m.TurnSplit); g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.05f); turnObjs.Add(g); g.SetActive(false); }
-          var sp = MeshKit.Obj("TurnSpokes", turnRoot, TurnSpokeMesh(TurnSplitR + 0.8f, R - 0.6f), m.TurnSpoke); sp.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(sp, 0.035f); turnObjs.Add(sp); sp.SetActive(false);
-          var sp2 = MeshKit.Obj("TurnSpokesIn", turnIn, TurnSpokeMesh(2.4f, TurnSplitR - 0.8f), m.TurnSpoke); sp2.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(sp2, 0.035f); turnObjs.Add(sp2); sp2.SetActive(false); }
+          turnParts.Clear();
+          // 床の模様は、床の破片（RingR の輪）ごとに別の物にして、その輪が落ちる時に一緒に外す。ring = その模様がのっている床の輪の番号（崩れない中央は -1）
+          void Add(GameObject g, int ring) { g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.04f); turnObjs.Add(g); g.SetActive(false); turnParts.Add(new TurnPart { go = g, ring = ring }); }
+          void Band(Transform par, float r0, float r1, Material mt, bool rev, int ring) { Add(MeshKit.Obj("TurnBand", par, TurnBandMesh(r0, r1, rev), mt), ring); }
+          // 内側の矢印は反時計回り（外側と逆向きの並び）
+          Band(turnIn, 5.0f, 6.4f, m.TurnBand, true, -1); Band(turnIn, 7.4f, 8.6f, m.TurnBand, true, -1);
+          Band(turnRoot, 13.0f, 14.6f, m.TurnBand, false, 1); Band(turnRoot, 19.0f, 20.6f, m.TurnBand, false, 3);
+          // 内と外の境目（ここをまたぐと逆向きに引っぱられる）: 動かない橙の線（輪 0 の上）
+          Add(MeshKit.Obj("TurnSplit", root.transform, TurnBandMesh(TurnSplitR - 0.22f, TurnSplitR + 0.22f, false), m.TurnSplit), 0);
+          Add(MeshKit.Obj("TurnEdge", root.transform, TurnBandMesh(R - 0.75f, R - 0.05f, false), m.TurnEdge), 4);
+          Add(MeshKit.Obj("TurnSpokesIn", turnIn, TurnSpokeMesh(4.4f, TurnSplitR - 0.8f), m.TurnSpoke), -1);
+          for (int ri = 0; ri < RingR.Length - 1; ri++)
+          {
+              float s0 = Mathf.Max(RingR[ri], TurnSplitR + 0.8f), s1 = Mathf.Min(RingR[ri + 1], R - 0.6f);
+              if (s1 - s0 > 0.3f) Add(MeshKit.Obj("TurnSpokes" + ri, turnRoot, TurnSpokeMesh(s0, s1), m.TurnSpoke), ri);
+          }
+        }
         foreach (var p in Pads)
         {
             float y = BaseH(p.x, p.y);
@@ -526,7 +587,7 @@ public static class Arena
         turnRoot.localRotation = Quaternion.Euler(0, TurnAngle, 0);
         if (turnIn) turnIn.localRotation = Quaternion.Euler(0, -TurnAngle, 0);
     }
-    static Mesh TurnBandMesh(float r0, float r1)
+    static Mesh TurnBandMesh(float r0, float r1, bool rev)
     {
         int seg = 96, nr = 2;
         var v = new List<Vector3>(); var uv = new List<Vector2>(); var t = new List<int>();
@@ -538,7 +599,7 @@ public static class Arena
                 float a = j * Mathf.PI * 2 / seg;
                 float x = Mathf.Cos(a) * rr, z = Mathf.Sin(a) * rr;
                 v.Add(new Vector3(x, 0.1f, z));
-                uv.Add(new Vector2(i / (float)nr, j / (float)seg * 48f));
+                uv.Add(new Vector2(i / (float)nr, (rev ? seg - j : j) / (float)seg * 48f));
             }
         }
         int W = seg + 1;

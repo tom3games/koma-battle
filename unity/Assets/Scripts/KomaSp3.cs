@@ -7,7 +7,7 @@ using UnityEngine;
 public partial class KomaBoot
 {
     // 数字の調整はここ
-    const float TrailSec = 5f, TrailLife = 4f, TrailDmg = 6f, TrailKnock = 6.5f, TrailRadius = 1.15f, TrailGap = 0.7f;
+    const float TrailSec = 5f, TrailLife = 3f, TrailDmg = 6f, TrailKnock = 6.5f, TrailRadius = 1.15f, TrailGap = 0.7f;
     const float MirageSec = 6f, MirageSide = 2.4f, MirageDmg = 2.5f, MirageKnock = 6f;
     // 強い技ほど多く要る（ゲージは0〜100）。メテオ テンペスト ファントム・レイド イージス アンカー スパイラル アロー チェイン トレイル ミラージュ
     public static readonly float[] SpNeed = { 90f, 100f, 70f, 80f, 85f, 70f, 100f, 80f, 75f, 90f };
