@@ -1,0 +1,16 @@
+import { open, wait, state, send } from './lib.mjs'
+const { b, p, errs } = await open('http://localhost:5392/', { w: 640, h: 360 })
+await p.click('#btnPlay'); await wait(200)
+await p.evaluate(() => document.querySelector('#vsPick button[data-n="1"]').click())
+await p.click('#btnFight')
+await p.waitForFunction(() => window.KB.state && window.KB.state.ph === 'fight', null, { timeout: 60000 })
+await send(p, 'cpuoff|1'); await send(p, 'debugstate|1')
+await p.evaluate(() => { window.__tr = []; const o = window.KB.onUnity; window.KB.onUnity = s => { o(s); if (s.startsWith('{"t":"s"')) { const m = JSON.parse(s); const k = m.k[0]; window.__tr.push([+m.tm.toFixed(2), +k.h.toFixed(2), +(k.h-k.gh).toFixed(2), +k.vx.toFixed(1), +k.vz.toFixed(1), k.air, +(k.tl||0).toFixed(1)].join(' ')) } else if (s.includes('"k":"land"')) window.__tr.push('LAND ' + s) } })
+await wait(3000)
+const s0 = (await state(p)).k[0]
+console.log('s0', s0.wx, s0.wz, s0.gh, s0.h)
+await p.evaluate(() => { window.__tr.length = 0 })
+await send(p, 'tp|' + [s0.wx, s0.gh + 16, s0.wz, 0, 0, 0].join(','))
+await wait(4000)
+console.log((await p.evaluate(() => window.__tr.slice(0, 70))).join('\n'))
+await b.close()

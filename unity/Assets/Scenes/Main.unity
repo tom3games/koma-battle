@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1558536407
+--- !u!1 &180678603
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,8 +127,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1558536409}
-  - component: {fileID: 1558536408}
+  - component: {fileID: 180678605}
+  - component: {fileID: 180678604}
   m_Layer: 0
   m_Name: KomaBoot
   m_TagString: Untagged
@@ -136,13 +136,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1558536408
+--- !u!114 &180678604
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1558536407}
+  m_GameObject: {fileID: 180678603}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cbf9e5f9d0d5f40799c8f01ce95ad4d0, type: 3}
@@ -150,15 +150,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::KomaBoot
   assistMaxBend: 0
   LeftSpinMul: 0.9
+  KnockRest: 0.45
+  KnockRestDecisive: 0.62
+  KnockSpin: 3.1
+  KnockSpinDecisive: 3.7
   RunHitKnock: 1.05
   RecenterHalf: 1
---- !u!4 &1558536409
+--- !u!4 &180678605
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1558536407}
+  m_GameObject: {fileID: 180678603}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -171,4 +175,4 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1558536409}
+  - {fileID: 180678605}

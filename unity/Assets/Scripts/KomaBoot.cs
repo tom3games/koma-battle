@@ -211,9 +211,13 @@ public partial class KomaBoot : MonoBehaviour
             case "specnext": SpectateStep((int)N(0) >= 0 ? 1 : -1); break;
             case "specexit": if (phase == "fight" && spectating) { phase = "end"; endT = EndHold - 0.001f; endWin = 0; endWhy = player.koWhy; endSubject = specTarget; spectating = false; } break;
             case "brace": touchBrace = N(0) > 0; break;
+            case "practice": practice = N(0) > 0; dummyType = (int)N(1); break;   // 練習場（開始の前に送る）
+            case "pracreset": if (practice) { player.Place(new Vector3(-6f, Arena.H(-6f, 0) + 2.5f, 0)); dummy.Place(new Vector3(6f, Arena.H(6f, 0) + 2.5f, 0)); pAliveLast = true; deathT = -1f; pracWinT = -1f; } break;
+            case "dummytype": dummyType = (int)N(0); break;
             case "recenter": RecenterHalf = N(0) > 0 ? N(0) : 1e9f; break;   // 検査用: 寄せる速さ（半減秒）。0以下で切る
             case "setparts": { var kk = komas[(int)N(0)]; kk.Rebuild((int)N(1), (int)N(2), (int)N(3), mats, kk.left); break; }   // 検査用: 指定のコマのパーツを変える
             case "leftmul": LeftSpinMul = N(0); break;   // 検査用
+            case "knockk": KnockRest = N(0); KnockRestDecisive = N(1); KnockSpin = N(2); KnockSpinDecisive = N(3); break;   // 検査用
             case "runknock": RunHitKnock = N(0); break;
             case "cpusp": cpuSpMode = (int)N(0); break;   // 検査用: CPU の必殺を固定（-1 でランダム）
             case "setsp": komas[(int)N(1)].sp = (int)N(0); break;
@@ -311,7 +315,8 @@ public partial class KomaBoot : MonoBehaviour
         phase = "count"; phaseT = 0; fightT = 0; sudden = false; endWin = -1; endT = 0;
         touchMove = Vector2.zero; touchAimOn = false; touchDash = false; touchSpecial = false;
         camInit = true; Arena.ResetCollapse(); boardAnnounced = false; fires.Clear(); ClearChains(); pitForced = false; suddenAt = -1f;
-        { int st = PickStage(); Arena.SetStage(st); ApplyStageLook(st); BoardAt = st == 1 ? 1e9f : 40f; Emit("{\"t\":\"e\",\"k\":\"stage\",\"p\":" + st + "}"); }
+        if (practice) nCpu = 1;
+        { int st = practice ? 0 : PickStage(); Arena.SetStage(st); ApplyStageLook(st); BoardAt = st == 1 ? 1e9f : 40f; Emit("{\"t\":\"e\",\"k\":\"stage\",\"p\":" + st + "}"); }
         spectating = false; deathT = -1f; pAliveLast = true; specTarget = null; endSubject = null; camClose = 0f; placeAtDeath = 0; totalK = 1 + nCpu;
         pairCd.Clear();
         int n = 1 + nCpu;
@@ -319,7 +324,8 @@ public partial class KomaBoot : MonoBehaviour
         {
             var k = komas[i];
             if (i >= n) { k.root.SetActive(false); k.alive = false; continue; }
-            if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = cpuSpMode >= 0 ? cpuSpMode : rng.Next(8); k.pas = cpuPasMode == -2 ? (rng.NextDouble() < 0.5 ? rng.Next(8) : -1) : cpuPasMode; }
+            if (i > 0 && practice) { /* 練習: ダミーは PracticeSetup で固定の装備 */ }
+            else if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = cpuSpMode >= 0 ? cpuSpMode : rng.Next(8); k.pas = cpuPasMode == -2 ? (rng.NextDouble() < 0.5 ? rng.Next(8) : -1) : cpuPasMode; }
             float ang = -Mathf.PI / 2 + Mathf.PI / 8 + i * Mathf.PI * 2 / n;
             float r = 11f;
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
@@ -1475,6 +1481,7 @@ public partial class KomaBoot : MonoBehaviour
     }
 
     public float LeftSpinMul = 0.9f;
+    public float KnockRest = 0.45f, KnockRestDecisive = 0.62f, KnockSpin = 3.1f, KnockSpinDecisive = 3.7f;
     public float RunHitKnock = 1.05f; bool testMoveOn; Vector2 testMove;
     void Collide(float dt)
     {
@@ -1521,12 +1528,15 @@ public partial class KomaBoot : MonoBehaviour
                 bool aAir = !a.grounded && a.Center.y > b.Center.y + 0.55f && a.vel.y < -2f;
                 bool bAir = !b.grounded && b.Center.y > a.Center.y + 0.55f && b.vel.y < -2f;
                 Vector3 aV0 = a.vel, bV0 = b.vel;
-                float J = (1f + 0.7f) * vn / (1f / ma + 1f / mb);
+                // 2026-11-28 本人「ちょっと飛ばされすぎる」: ふつうの当たり（歩き・ダッシュ）は跳ね返り 0.7→0.45・回転の弾き 4→3.1。空中から・かち上げ・必殺は決め技なので下げ幅は小さめ（0.62・3.7）
+                bool decisive = aAir || bAir || Upper(a, nh) || Upper(b, -nh) || a.specialPhase >= 2 || b.specialPhase >= 2;
+                float rest = decisive ? KnockRestDecisive : KnockRest, spinK = decisive ? KnockSpinDecisive : KnockSpin;
+                float J = (1f + rest) * vn / (1f / ma + 1f / mb);
                 a.vel -= n * J / ma;
                 b.vel += n * J / mb;
                 // 回転の弾き（おおげさ）
                 float sa = Mathf.Max(0, Vector3.Dot(a.vel + n * J / ma, n)), sb = Mathf.Max(0, Vector3.Dot(b.vel - n * J / mb, -n));
-                float spinPushA = 4f * a.st.atk * (0.4f + 0.6f * a.SpinRatio), spinPushB = 4f * b.st.atk * (0.4f + 0.6f * b.SpinRatio);
+                float spinPushA = spinK * a.st.atk * (0.4f + 0.6f * a.SpinRatio), spinPushB = spinK * b.st.atk * (0.4f + 0.6f * b.SpinRatio);
                 Vector3 tang = Vector3.Cross(Vector3.up, nh);
                 // 逆回り（左回転）どうしは接点が同じ向きに動いてかみ合わず、横へ大きく流れる
                 bool opp = a.left != b.left; float tk = opp ? 4.2f : 1.5f;

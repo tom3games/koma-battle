@@ -5,14 +5,14 @@ const A = Math.PI / 4, tx = -Math.sin(A), tz = Math.cos(A)   // 接線方向（�
 const vx0 = 11 * Math.cos(A), vz0 = 11 * Math.sin(A)
 const parts = { 同じ重さ: ['3,4,4', '3,4,4'], '重い→軽い': ['1,2,0', '2,1,3'], '軽い→重い': ['2,1,3', '1,2,0'] }
 const rows = []
-for (const [pl, [pa, pv]] of Object.entries(parts)) for (const sc of ['歩き', 'ダッシュ', '空中から', 'かち上げ']) {
+for (const [pl, [pa, pv]] of Object.entries(parts)) for (const sc of (process.env.SC || '歩き,ダッシュ,空中から,かち上げ').split(',')) {
   const o = await begin(url, { sp: 0, stage: 0 })
   await send(o.p, `setparts|0,${pa}`); await send(o.p, `setparts|1,${pv}`)
   await o.place(0, vx0 - tx * 1.25, vz0 - tz * 1.25, 0, 0, 1.0); await o.place(1, vx0, vz0, 0, 0, 1.0); await wait(1800)
   await o.monReset()
   const g = (await o.k(1)).gh
   if (sc === '歩き') await o.place(0, vx0 - tx * 1.25, vz0 - tz * 1.25, tx * 9, tz * 9, g + 0.1)
-  else if (sc === 'ダッシュ') await o.place(0, vx0 - tx * 1.25, vz0 - tz * 1.25, tx * 19, tz * 19, g + 0.1)
+  else if (sc === 'ダッシュ') { await o.place(0, vx0 - tx * 4.5, vz0 - tz * 4.5, 0, 0, g + 0.1); await wait(700); await send(o.p, `dashat|0,${vx0},${vz0}`) }
   else if (sc === '空中から') await o.place(0, vx0 + tx * 0.2, vz0 + tz * 0.2, 0, 0, g + 3.2)
   else { await send(o.p, `leanw|${tx.toFixed(3)},${tz.toFixed(3)}`); await o.place(0, vx0 - tx * 1.25, vz0 - tz * 1.25, tx * 11, tz * 11, g + 0.1) }
   await wait(4200)
