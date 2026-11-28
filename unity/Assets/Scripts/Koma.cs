@@ -73,11 +73,13 @@ public class Koma
     public int pas = -1; public float baseAtk = 1f, pasCd;
     // 2026-11-28 パーツ破損: 刃（外周・横の体当たりで削れる）・円盤（中・上からで削れる）・軸（下・かち上げで削れる）。壊れ方は KomaParts.cs
     public float bzT, bzStagger, bzMax; public int bzKills; public Koma lastHitter;   // 狂戦化: 残り時間・ふらつき・倒した数
+    public int tclass;   // 型の分類（0 なし・1 速度・2 攻撃・3 重量）。型のバランス調整用
     public float evoT, evoCd, slipT; public bool evoShield; public bool evo => evoT > 0f;   // 極大技（ゲージ5本）の効果が続いている間
     public float pb0, pb1, pb2, pbm0, pbm1, pbm2, atk0, mass0; public bool bladeBroken, diskBroken; public readonly float[] pbLast = new float[3];
     public void RecalcParts()
     {
         atk0 = st.atk; mass0 = st.mass;
+        tclass = st.speed >= 1.35f ? 1 : st.atk >= 1.3f ? 2 : st.mass >= 1.45f ? 3 : 0;
         pbm0 = 200f * Mathf.Pow(Mathf.Clamp(st.atk, 0.8f, 1.6f), 1.3f);   // 刃: 攻撃型が固い
         pbm1 = 200f * Mathf.Clamp(st.mass, 0.8f, 1.9f);                      // 円盤: 重量型が固い
         pbm2 = 100f * Mathf.Clamp(st.speed, 0.85f, 1.7f);                    // 軸: 速度型が固い

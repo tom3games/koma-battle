@@ -329,6 +329,8 @@ public partial class KomaBoot : MonoBehaviour
     }
     // 2026-11-28 本人「必殺が簡単にたまりすぎ」: 時間 2.2→1.0/秒、当てた時 ×1.5→×0.9、当てられた時 ×1.1→×0.6
     public float GaugeTime = 1.6f, GaugeDealt = 1.8f, GaugeTaken = 1.1f;
+    // 受けるダメージの倍率 [ステージ, 型]（型 0 なし・1 速度・2 攻撃・3 重量）。typemix.mjs（3体とも CPU）で測って合わせる
+    static readonly float[,] TypeTake = { { 1f, 0.7f, 1.1f, 0.85f }, { 1f, 1f, 1f, 0.75f }, { 1f, 1f, 1f, 1f } };
     bool rmbHold; float rmbT, evoCharge;
     public float HeavyDecayK = 2.4f;   // 2026-11-28 本人「重量型が強すぎる」: 質量1.4を超えた分だけ回転が早く減る（重量型 1.65 で×2.0）
     public float TurnSudden = 70f, TurnDecayMul = 0.8f, TurnWear = 0.8f, TurnGain = 0.6f, TurnSpeedK = 0.5f;
@@ -509,7 +511,7 @@ public partial class KomaBoot : MonoBehaviour
             UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
-                k.spin -= (0.75f * (k.bzT > 0 ? 0f : 1f) * (Arena.Stage == 1 ? 0.8f : 1f) * ShaftDecayMul(k) * (1f + HeavyDecayK * (Arena.Stage == 2 ? 0.4f : 1f) * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
+                k.spin -= (0.75f * (k.bzT > 0 ? 0f : 1f) * (Arena.Stage == 1 ? 0.7f : Arena.Stage == 0 ? 1.45f : 1f) * ShaftDecayMul(k) * (1f + HeavyDecayK * (Arena.Stage == 2 ? 0.4f : 1f) * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
                 if (Arena.Stage == 2 && k.grounded) k.spin -= TurnWear * Mathf.Max(0f, k.st.grip - 0.7f) * Mathf.Clamp01(new Vector2(k.pos.x, k.pos.z).magnitude / Arena.R) * dt;   // 回る床の摩擦: グリップの高い（重い）足ほど、外側で回転が削れる
                 if (Arena.Stage == 2 && k.alive) k.spin = Mathf.Min(k.spinMax, k.spin + TurnGain * Mathf.Max(0f, k.st.speed - 0.9f) * dt);   // 回る床の勢いをもらう: 速く動くコマほど回転が戻る
                 if (k.braceT > 0) k.braceT -= dt;
@@ -1480,7 +1482,9 @@ public partial class KomaBoot : MonoBehaviour
         dmg *= HitScale * Mathf.Clamp(1.4f - 0.4f * to.st.speed, 0.7f, 1.15f) * (Arena.Stage == 2 ? 1f : Mathf.Pow(Mathf.Max(0.6f, from.st.atk), Arena.Stage == 1 ? -0.9f : -0.5f));   // 攻撃型の与ダメを少し抑える（ターンテーブルは別式）   // 2026-11-29 速度型が受けるダメージを少し減らす（速いコマは当たりをいなす）。重い・遅いコマはわずかに増える
         if (Arena.Stage == 2) dmg *= Mathf.Clamp(1.9f - TurnSpeedK * to.st.speed, 0.5f, 1.4f) * Mathf.Pow(Mathf.Max(0.5f, from.st.atk), -1.1f) * 0.85f;   // ターンテーブル: 速く動き回れるコマは回る床の上で衝撃をいなす（受けるダメージが減る）。遅いコマは受けが増える
         if (to.shieldT > 0) dmg *= 0.2f; if (to.anchorT > 0) dmg *= 0.35f; if (to.specialPhase == 30) dmg *= 0.4f; if (to.chainTo != null) dmg *= 0.5f;
+        dmg *= TypeTake[Mathf.Clamp(Arena.Stage, 0, 2), to.tclass];   // 型ごとの受けるダメージの補正（CPU 同士で測って合わせる）
         dmg *= BzAtk(from, 1f);
+        if (trailT[to.idx] > 0) dmg *= 0.8f;   // ソニック・トレイル中は受けるダメージが2割減る
         to.lastHitter = from;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
         if (to.evoShield && to.shieldT > 0 && from != to && from.alive) { float rf = dmg * EvoReflect; from.spin -= rf; from.lossHit += rf; Spark(from.Center, Vector3.up, 16, 1f); if (from.spin <= 0) { from.spin = 0; KO(from, "spin"); } }   // イージス進化版: 受けた分の一部を相手へ跳ね返す

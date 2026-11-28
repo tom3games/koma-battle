@@ -76,7 +76,11 @@ public partial class KomaBoot
             bool evo = k.evo;
             // 見た目: 赤黒いオーラ（黒い瘴気）・赤い目が2つ・黒い稲妻
             k.SetAura(evo ? new Color(0.3f, 0.05f, 0.25f) : new Color(0.55f, 0.04f, 0.1f), 0.2f);
-            if (Random.value < (evo ? 0.9f : 0.6f)) Fleck(k.Center + Random.insideUnitSphere * 0.8f, Vector3.up * 2.2f + Random.insideUnitSphere * 0.6f, evo ? new Color(0.1f, 0.0f, 0.16f) : new Color(0.16f, 0.0f, 0.06f), evo ? 0.7f : 0.55f, 1.3f, false);
+            // 黒い瘴気: 極大は濃く大きく量を増やす（コマの周りを黒い煙が立ちのぼる）
+            int smoke = evo ? 4 : (Random.value < 0.6f ? 1 : 0);
+            for (int q = 0; q < smoke; q++)
+                Fleck(k.pos + Vector3.up * Random.Range(0.1f, 1.2f) + new Vector3(Random.Range(-1f, 1f), 0, Random.Range(-1f, 1f)) * (evo ? 1.1f : 0.8f), Vector3.up * Random.Range(1.2f, 3.2f) + Random.insideUnitSphere * 0.7f,
+                    evo ? new Color(0.02f, 0.0f, 0.04f, 1f) : new Color(0.12f, 0.0f, 0.05f, 1f), evo ? Random.Range(0.9f, 1.5f) : 0.55f, evo ? 2.0f : 1.3f, false);
             { Vector3 rt = cam.transform.right; Vector3 eye = k.Center + Vector3.up * 0.55f;
               Fleck(eye + rt * 0.2f, Vector3.zero, new Color(1f, 0.1f, 0.08f), 0.2f, 0.07f, true); Fleck(eye - rt * 0.2f, Vector3.zero, new Color(1f, 0.1f, 0.08f), 0.2f, 0.07f, true); }
             if (Random.value < 0.08f) Scorch(k.pos, 1.1f);   // 床の小さな爪痕

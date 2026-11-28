@@ -7,7 +7,7 @@ using UnityEngine;
 public partial class KomaBoot
 {
     // 数字の調整はここ
-    const float TrailSec = 5f, TrailLife = 3f, TrailDmg = 8f, TrailKnock = 10f, TrailRadius = 1.4f, TrailGap = 0.7f;
+    const float TrailSec = 5f, TrailLife = 3f, TrailDmg = 8f, TrailKnock = 10f, TrailRadius = 1.4f, TrailGap = 0.7f, TrailFlinch = 0.4f;
     const float MirageSec = 6f, MirageSide = 2.4f, MirageDmg = 2.5f, MirageKnock = 6f;
     // 強い技ほど多く要る（ゲージは0〜100）。メテオ テンペスト ファントム・レイド イージス アンカー スパイラル アロー チェイン トレイル ミラージュ
     public static readonly float[] SpNeed = { 90f, 100f, 70f, 80f, 85f, 70f, 100f, 80f, 75f, 90f, 85f };
@@ -119,6 +119,7 @@ public partial class KomaBoot
                 trailCd[tp.owner, o.idx] = 0.5f;
                 Vector3 n = d.sqrMagnitude > 0.01f ? d.normalized : Vector3.forward;
                 o.vel += n * TrailKnock / Mathf.Sqrt(o.st.mass); o.vel.y = Mathf.Max(o.vel.y, 2f); o.grounded = false;
+                o.lockT = Mathf.Max(o.lockT, TrailFlinch); o.lastHitter = owner;   // 触れた相手は一瞬ひるむ（操作を受け付けない）
                 Damage(owner, o, TrailDmg * (owner.evo && owner.sp == 8 ? EvoTrailDmg : 1f) * owner.st.atk / o.st.def); o.hitFlash = 0.12f;
                 Spark(o.Center, n + Vector3.up * 0.4f, 30, 1.2f); Pulse(o.pos, SpColors[8], 4f, 10f);
                 var sp = cam.WorldToViewportPoint(o.pos);
