@@ -337,9 +337,9 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'end': result(m); break
       case 'phit': pracHit(m); break
       case 'pbreak': { const me = m.i === 0, part = m.p | 0
-        Snd.play(part === 2 ? 'crack' : 'clang', { vol: me ? 0.9 : 0.45, rate: part === 0 ? 1.7 : part === 1 ? 0.8 : 1.1 }); Snd.play('hit', { vol: me ? 0.5 : 0.25, rate: 1.3 })
+        Snd.play('clang', { vol: me ? 1 : 0.55, rate: part === 0 ? 1.8 : part === 1 ? 0.9 : 1.3 }); Snd.play('tink', { vol: me ? 0.8 : 0.4, rate: 1.4, dest: 'hi', cut: 0.3, delay: 0.03 }); if (part === 2) Snd.play('crack', { vol: me ? 0.9 : 0.5, rate: 1.1, delay: 0.05 }); Snd.play('hit', { vol: me ? 0.5 : 0.25, rate: 1.3 })
         if (me) { onoma(['刃が欠けた', '円盤にひび', '軸が折れた'][part], m.x, Math.max(0.3, m.y)); shakeScreen() }
-        const el = tagEls[m.i]; if (el) { const pb = el.querySelector('.pb'); if (pb) { const q = pb.children[part]; if (q) { q.classList.remove('hit'); void q.offsetWidth; q.classList.add('hit') } } }
+        const el = tagEls[m.i]; if (el) { const pb = el.querySelector('.pb'); if (pb) { const q = pb.children[part]; if (q) { q.classList.remove('hit', 'brk'); void q.offsetWidth; q.classList.add('brk') } } }
         break }
       case 'trailhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.6 }); Snd.play('hit', { vol: 0.25, rate: 1.3 }); break
       case 'mirhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.2 }); Snd.play('hit', { vol: 0.3, rate: 1.0 }); break

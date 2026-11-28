@@ -44,7 +44,7 @@ public static class Parts
 // コマ1つ。物理は自前（高さ関数の上をすべる・跳ぶ）
 public class Koma
 {
-    public const float SpinBase = 270f;   // 2026-11-28 本人「全体の回転数の基礎をあげて」: 160→270（回転切れで終わるのを遅く）
+    public const float SpinBase = 240f;   // 2026-11-28 本人「全体の回転数の基礎をあげて」: 160→270（回転切れで終わるのを遅く）
     public int idx;
     public bool isPlayer, cpu;
     public int top, core, leg, sp;   // sp = 必殺技の種類
@@ -76,8 +76,8 @@ public class Koma
     public void RecalcParts()
     {
         atk0 = st.atk; mass0 = st.mass;
-        pbm0 = 100f * Mathf.Pow(Mathf.Clamp(st.atk, 0.8f, 1.6f), 1.3f);   // 刃: 攻撃型が固い
-        pbm1 = 100f * Mathf.Clamp(st.mass, 0.8f, 1.9f);                      // 円盤: 重量型が固い
+        pbm0 = 200f * Mathf.Pow(Mathf.Clamp(st.atk, 0.8f, 1.6f), 1.3f);   // 刃: 攻撃型が固い
+        pbm1 = 200f * Mathf.Clamp(st.mass, 0.8f, 1.9f);                      // 円盤: 重量型が固い
         pbm2 = 100f * Mathf.Clamp(st.speed, 0.85f, 1.7f);                    // 軸: 速度型が固い
         pb0 = pbm0; pb1 = pbm1; pb2 = pbm2; bladeBroken = diskBroken = false;
     }

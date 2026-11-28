@@ -491,3 +491,6 @@ body:not(.playing) #koLog{display:none}
 @keyframes pblow{50%{opacity:.25}}
 @keyframes pbhit{0%{transform:scaleY(2.4)}100%{transform:none}}
 #prStat .parts b{color:#9fe0ff}
+
+.tag .pb i.brk{animation:pbbrk .6s ease-out}
+@keyframes pbbrk{0%{transform:scale(2.2,3);background:#fff}25%{transform:translateX(-3px) rotate(-14deg)}50%{transform:translateX(3px) rotate(12deg)}100%{transform:none}}

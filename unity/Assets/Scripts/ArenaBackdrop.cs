@@ -52,24 +52,25 @@ public static class Backdrop
     {
         parts.Clear();
         var root = new GameObject("Backdrop").transform;
-        structM = new Material(m.Sky); lampM = new Material(m.Sky);
+        var sh = Resources.Load<Shader>("KomaVertexUnlit");
+        structM = new Material(sh); lampM = new Material(sh);
         haloM = m.AddGlow(new Color(1f, 0.55f, 0.16f, 1f), m.Dot); redM = m.AddGlow(new Color(1f, 0.1f, 0.06f, 1f), m.Dot);
-        coneM = m.AddGlow(new Color(0.9f, 0.95f, 1f, 1f), Texture2D.whiteTexture); coneM.SetColor("_TintColor", new Color(0.8f, 0.9f, 1f, 1f) * 0.022f);
-        redLampM = new Material(m.Sky);
+        coneM = m.AddGlow(new Color(0.9f, 0.95f, 1f, 1f), Texture2D.whiteTexture); coneM.SetColor("_TintColor", new Color(0.8f, 0.9f, 1f, 1f) * 0.05f);
+        redLampM = new Material(sh);
         float da = Mathf.PI * 2 / Seg;
 
         // ---- 観覧席（段々）: 上ほど暗い。座席の切れ目と通路で細かい縞 ----
         var st = new VB();
         for (int i = 0; i < Steps; i++)
         {
-            float f = Mathf.Lerp(1f, 0.22f, i / (float)(Steps - 1));
+            float f = Mathf.Lerp(1f, 0.5f, i / (float)(Steps - 1));
             float r0 = RIn + i * Step, r1 = r0 + Step, y = Y0 + i * Rise, y1 = y + Rise;
             for (int s = 0; s < Seg; s++)
             {
                 float a0 = s * da, a1 = a0 + da;
                 bool aisle = s % 9 == 0, gap = s % 2 == 0;
                 float n = (Hash(s, i) - 0.5f) * 0.05f;
-                float tread = (aisle ? 0.30f : 0.22f) * f + n * f, riser = (aisle ? 0.22f : gap ? 0.12f : 0.16f) * f + n * f * 0.6f;
+                float tread = (aisle ? 0.46f : 0.34f) * f + n * f, riser = (aisle ? 0.34f : gap ? 0.19f : 0.25f) * f + n * f * 0.6f;
                 st.Quad(P(a0, r0, y), P(a0, r1, y), P(a1, r1, y), P(a1, r0, y), G(tread));
                 st.Quad(P(a0, r1, y), P(a0, r1, y1), P(a1, r1, y1), P(a1, r1, y), G(riser * 0.8f), G(riser));
             }
@@ -80,7 +81,7 @@ public static class Backdrop
         {
             float a0 = s * da, a1 = a0 + da; bool yel = (s / 2) % 2 == 0;
             st.Quad(P(a0, rb, Y0 - 7f), P(a0, rb, Y0 + 0.3f), P(a1, rb, Y0 + 0.3f), P(a1, rb, Y0 - 7f), G(0.05f), G(0.09f));
-            st.Quad(P(a0, rb, Y0 + 0.3f), P(a0, rb, Y0 + 1.0f), P(a1, rb, Y0 + 1.0f), P(a1, rb, Y0 + 0.3f), yel ? new Color(0.5f, 0.4f, 0.05f) : G(0.03f));
+            st.Quad(P(a0, rb, Y0 + 0.3f), P(a0, rb, Y0 + 1.0f), P(a1, rb, Y0 + 1.0f), P(a1, rb, Y0 + 0.3f), yel ? new Color(0.62f, 0.5f, 0.06f) : G(0.04f));
         }
         Add("Terraces", root, st.Mesh(), structM);
 
@@ -93,26 +94,26 @@ public static class Backdrop
             for (int k = 0; k < 6; k++)
             {
                 float y0 = Mathf.Lerp(WallH0, WallH1, k / 6f), y1 = Mathf.Lerp(WallH0, WallH1, (k + 1) / 6f);
-                float c0 = 0.11f * Mathf.Lerp(1f, 0.2f, k / 6f) + (Hash(s, k + 40) - 0.5f) * 0.012f, c1 = 0.11f * Mathf.Lerp(1f, 0.2f, (k + 1) / 6f);
+                float c0 = 0.2f * Mathf.Lerp(1f, 0.35f, k / 6f) + (Hash(s, k + 40) - 0.5f) * 0.012f, c1 = 0.2f * Mathf.Lerp(1f, 0.35f, (k + 1) / 6f);
                 wl.Quad(P(a0, rw, y0), P(a0, rw, y1), P(a1, rw, y1), P(a1, rw, y0), G(c0), G(c1));
             }
             // 黄黒の警告帯（壁の足元）
             bool yel = (s / 2) % 2 == 0;
-            wl.Quad(P(a0, rw - 0.05f, WallH0), P(a0, rw - 0.05f, WallH0 + 1.6f), P(a1, rw - 0.05f, WallH0 + 1.6f), P(a1, rw - 0.05f, WallH0), yel ? new Color(0.42f, 0.34f, 0.04f) : G(0.025f));
+            wl.Quad(P(a0, rw - 0.05f, WallH0), P(a0, rw - 0.05f, WallH0 + 1.6f), P(a1, rw - 0.05f, WallH0 + 1.6f), P(a1, rw - 0.05f, WallH0), yel ? new Color(0.6f, 0.48f, 0.05f) : G(0.04f));
         }
         // 横の太い配管（3本）と縦の配管（12本）
         foreach (var hy in new[] { 21f, 28.5f, 36f })
             for (int s = 0; s < Seg; s++)
             {
                 float a0 = s * da, a1 = a0 + da, f = Mathf.Lerp(1f, 0.35f, (hy - WallH0) / (WallH1 - WallH0));
-                wl.Quad(P(a0, rw - 0.5f, hy), P(a0, rw - 0.5f, hy + 1.5f), P(a1, rw - 0.5f, hy + 1.5f), P(a1, rw - 0.5f, hy), G(0.10f * f), G(0.045f * f));
-                wl.Quad(P(a0, rw - 0.5f, hy + 1.5f), P(a0, rw - 0.5f, hy + 1.9f), P(a1, rw - 0.5f, hy + 1.9f), P(a1, rw - 0.5f, hy + 1.5f), G(0.2f * f));
+                wl.Quad(P(a0, rw - 0.5f, hy), P(a0, rw - 0.5f, hy + 1.5f), P(a1, rw - 0.5f, hy + 1.5f), P(a1, rw - 0.5f, hy), G(0.2f * f), G(0.1f * f));
+                wl.Quad(P(a0, rw - 0.5f, hy + 1.5f), P(a0, rw - 0.5f, hy + 1.9f), P(a1, rw - 0.5f, hy + 1.9f), P(a1, rw - 0.5f, hy + 1.5f), G(0.36f * f));
             }
         for (int p = 0; p < 12; p++)
         {
             float a = (p + 0.5f) * Mathf.PI * 2 / 12, w = 0.016f;
-            wl.Quad(P(a - w, rw - 0.6f, WallH0 + 1.6f), P(a - w, rw - 0.6f, WallH1 - 4f), P(a + w, rw - 0.6f, WallH1 - 4f), P(a + w, rw - 0.6f, WallH0 + 1.6f), G(0.09f), G(0.03f));
-            wl.Quad(P(a - w * 1.2f, rw - 0.62f, WallH0 + 1.6f), P(a - w * 1.2f, rw - 0.62f, WallH1 - 4f), P(a - w * 0.5f, rw - 0.62f, WallH1 - 4f), P(a - w * 0.5f, rw - 0.62f, WallH0 + 1.6f), G(0.17f), G(0.05f));
+            wl.Quad(P(a - w, rw - 0.6f, WallH0 + 1.6f), P(a - w, rw - 0.6f, WallH1 - 4f), P(a + w, rw - 0.6f, WallH1 - 4f), P(a + w, rw - 0.6f, WallH0 + 1.6f), G(0.17f), G(0.07f));
+            wl.Quad(P(a - w * 1.2f, rw - 0.62f, WallH0 + 1.6f), P(a - w * 1.2f, rw - 0.62f, WallH1 - 4f), P(a - w * 0.5f, rw - 0.62f, WallH1 - 4f), P(a - w * 0.5f, rw - 0.62f, WallH0 + 1.6f), G(0.32f), G(0.1f));
         }
         Add("Wall", root, wl.Mesh(), structM);
 
@@ -128,26 +129,37 @@ public static class Backdrop
         Add("Beams", root, bm.Mesh(), structM);
 
         // ---- 試合場の真下: 底の見えない縦穴 ----
-        var sh = new VB(); float rs = Arena.Edge + 3.9f;
+        var shf = new VB(); float rs = Arena.Edge + 3.9f;
         for (int k = 0; k < 14; k++)
         {
-            float y0 = -3.4f - k * 5.5f, y1 = y0 - 5.5f, c0 = 0.085f * Mathf.Pow(0.62f, k), c1 = 0.085f * Mathf.Pow(0.62f, k + 1);
+            float y0 = -3.4f - k * 5.5f, y1 = y0 - 5.5f, c0 = 0.14f * Mathf.Pow(0.66f, k), c1 = 0.14f * Mathf.Pow(0.66f, k + 1);
             for (int s = 0; s < Seg; s++)
             {
                 float a0 = s * da, a1 = a0 + da; float n = (Hash(s, k + 90) - 0.5f) * 0.02f * Mathf.Pow(0.62f, k);
-                sh.Quad(P(a0, rs, y0), P(a0, rs, y1), P(a1, rs, y1), P(a1, rs, y0), G(c0 + n), G(c1 + n));
+                shf.Quad(P(a0, rs, y0), P(a0, rs, y1), P(a1, rs, y1), P(a1, rs, y0), G(c0 + n), G(c1 + n));
             }
-            if (k % 2 == 0) for (int s = 0; s < Seg; s++) { float a0 = s * da, a1 = a0 + da; sh.Quad(P(a0, rs - 0.1f, y0 - 0.3f), P(a0, rs - 0.1f, y0 - 0.9f), P(a1, rs - 0.1f, y0 - 0.9f), P(a1, rs - 0.1f, y0 - 0.3f), G(0.12f * Mathf.Pow(0.62f, k))); }
+            if (k % 2 == 0) for (int s = 0; s < Seg; s++) { float a0 = s * da, a1 = a0 + da; shf.Quad(P(a0, rs - 0.1f, y0 - 0.3f), P(a0, rs - 0.1f, y0 - 0.9f), P(a1, rs - 0.1f, y0 - 0.9f), P(a1, rs - 0.1f, y0 - 0.3f), G(0.12f * Mathf.Pow(0.62f, k))); }
         }
-        Add("Shaft", root, sh.Mesh(), structM);
+        Add("Shaft", root, shf.Mesh(), structM);
 
         // ---- 作業灯（オレンジ・ステージで色が変わる）と点滅する赤い回転灯 ----
-        var lq = new VB(); var hq = new VB(); var rq = new VB(); var rh = new VB();
+        var lq = new VB(); var hq = new VB(); var rq = new VB(); var rh = new VB(); var pq = new VB();
+        // 作業灯: 観覧席の上に立つ支柱の先（カメラの普通の高さに入る）16 本 + 壁の高い所 12 灯
+        for (int i = 0; i < 16; i++)
+        {
+            float a = (i + 0.5f) * Mathf.PI * 2 / 16, row = 5 + (i % 3) * 3; float rr = RIn + row * Step + 0.6f, yy = Y0 + row * Rise + Rise;
+            // 支柱
+            Vector3 c0 = P(a, rr, yy); Vector3 tan = new Vector3(-Mathf.Sin(a), 0, Mathf.Cos(a)) * 0.12f;
+            pq.Quad(c0 - tan, c0 - tan + Vector3.up * 3.2f, c0 + tan + Vector3.up * 3.2f, c0 + tan, G(0.07f), G(0.16f));
+            Quad2(lq, a, rr - 0.1f, yy + 3.5f, 2.2f, 0.9f, Color.white);
+            Quad2(hq, a, rr - 0.4f, yy + 3.5f, 11f, 7f, Color.white);
+            Quad2(hq, a, rr - 0.3f, yy + 0.2f, 15f, 5f, Color.white);   // 観覧席に落ちるあかり溜まり
+        }
         for (int i = 0; i < 12; i++)
         {
-            float a = (i + 0.5f) * Mathf.PI * 2 / 12 + 0.1f; float y = i % 2 == 0 ? 20f : 31f;
-            Quad2(lq, a, rw - 0.9f, y, 2.4f, 0.8f, Color.white);
-            Quad2(hq, a, rw - 1.2f, y, 9f, 5f, Color.white);
+            float a = (i + 0.5f) * Mathf.PI * 2 / 12 + 0.12f; float y = i % 2 == 0 ? 19f : 27f;
+            Quad2(lq, a, rw - 0.9f, y, 2.6f, 0.9f, Color.white);
+            Quad2(hq, a, rw - 1.2f, y, 12f, 8f, Color.white);
         }
         for (int i = 0; i < 6; i++)
         {
@@ -155,6 +167,7 @@ public static class Backdrop
             Quad2(rq, a, rw - 1.0f, 14.6f, 0.6f, 0.6f, Color.white);
             Quad2(rh, a, rw - 1.3f, 14.6f, 7f, 7f, Color.white);
         }
+        Add("WorkPosts", root, pq.Mesh(), structM);
         Add("WorkLamps", root, lq.Mesh(), lampM); Add("WorkHalos", root, hq.Mesh(), haloM);
         Add("RedLamps", root, rq.Mesh(), redLampM); Add("RedHalos", root, rh.Mesh(), redM);
 
@@ -184,7 +197,7 @@ public static class Backdrop
         if (structM == null) return;
         structM.color = StructTint[st];
         lampM.color = LampTint[st] * 1.05f; lampM.color = LampTint[st];
-        haloM.SetColor("_TintColor", LampTint[st] * (st == 0 ? 0.30f : 0.24f));
+        haloM.SetColor("_TintColor", LampTint[st] * (st == 0 ? 0.42f : 0.34f));
         foreach (var g in parts) if (g) g.SetActive(true);
     }
 

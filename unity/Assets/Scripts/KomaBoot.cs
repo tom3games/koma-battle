@@ -1463,7 +1463,8 @@ public partial class KomaBoot : MonoBehaviour
     void Damage(Koma from, Koma to, float dmg)
     {
         if (phase == "end") return;
-        dmg *= HitScale; if (Arena.Stage == 2) dmg *= Mathf.Clamp(1.9f - TurnSpeedK * to.st.speed, 0.5f, 1.4f) * Mathf.Pow(Mathf.Max(0.5f, from.st.atk), -1.1f) * 0.85f;   // ターンテーブル: 速く動き回れるコマは回る床の上で衝撃をいなす（受けるダメージが減る）。遅いコマは受けが増える
+        dmg *= HitScale * Mathf.Clamp(1.25f - 0.25f * to.st.speed, 0.82f, 1.1f);   // 2026-11-29 速度型が受けるダメージを少し減らす（速いコマは当たりをいなす）。重い・遅いコマはわずかに増える
+        if (Arena.Stage == 2) dmg *= Mathf.Clamp(1.9f - TurnSpeedK * to.st.speed, 0.5f, 1.4f) * Mathf.Pow(Mathf.Max(0.5f, from.st.atk), -1.1f) * 0.85f;   // ターンテーブル: 速く動き回れるコマは回る床の上で衝撃をいなす（受けるダメージが減る）。遅いコマは受けが増える
         if (to.shieldT > 0) dmg *= 0.2f; if (to.anchorT > 0) dmg *= 0.35f; if (to.specialPhase == 30) dmg *= 0.4f; if (to.chainTo != null) dmg *= 0.5f;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
         if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);

@@ -1,0 +1,10 @@
+import { open, wait, send } from './lib.mjs'
+const { b, p } = await open('http://localhost:5393/', { w: 1280, h: 720 })
+await p.click('#btnPlay'); await wait(300)
+await p.evaluate(() => { document.querySelector('#vsPick button[data-n="2"]').click(); KB.send('stage|1'); KB.startMatch() })
+await p.waitForFunction(() => window.KB.state.ph === 'fight', null, { timeout: 60000 })
+await send(p, 'cpuoff|1'); await send(p, 'tp|0,6,6,0,0,0,0'); await wait(1800)
+const buf = await p.screenshot()
+const pg = await b.newPage()
+const r = await pg.evaluate(async d => { const im = new Image(); im.src = 'data:image/png;base64,' + d; await im.decode(); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); const out = []; for (const yy of [20, 60, 100, 140, 180, 240]) { const q = x.getImageData(640, yy, 1, 1).data; out.push([yy, q[0], q[1], q[2]]) } return out }, buf.toString('base64'))
+console.log(JSON.stringify(r)); await b.close()
