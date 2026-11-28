@@ -91,6 +91,7 @@ public static class Arena
     public static float MoundAdd(float x, float z, out int idx)
     {
         idx = -1; float best = 0;
+        if (Stage == 1) return 0f;   // 2026-11-28 本人「丘にジャンプ台いらん」
         for (int i = 0; i < Mounds.Length; i++)
         {
             float d = (new Vector2(x, z) - Mounds[i]).magnitude;

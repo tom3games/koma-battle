@@ -24,7 +24,7 @@ public class Materials
         Chevron = ChevronTex();
         Funnel = FunnelTex();
         Floor = Lit(Color.white, 0.48f, 0.5f, FloorTex(1024));
-        Floor2 = Lit(new Color(1f, 0.74f, 0.48f), 0.3f, 0.15f, Floor.mainTexture);   // 丘: 砂岩のような暖かい色
+        Floor2 = Lit(new Color(1f, 0.74f, 0.48f), 0.3f, 0.15f, FloorTex(1024, 1));   // 丘: 砂岩のような暖かい色
         Ice = Emis(new Color(0.42f, 0.66f, 0.85f), new Color(0.03f, 0.08f, 0.14f));                        // 氷の帯
         Base = Lit(new Color(0.09f, 0.1f, 0.12f), 0.5f, 0.6f, Brushed);
         Arc = Lit(Color.white, 0.55f, 0.7f, ArcTex());
@@ -131,6 +131,13 @@ public class Materials
     }
 
     // 床: 黒鉄の削り出し。細い同心の溝・放射の継ぎ目・はげた白線・中央の刻印・切れ目と山の注意塗装
+    // 丘は別の床の模様（切れ目の注意塗装は丘の8つに合わせ、ジャンプ台の模様は無し）
+    static Texture2D FloorTex(int n, int stage)
+    {
+        int saved = Arena.Stage; Arena.Stage = stage;
+        var t = FloorTex(n);
+        Arena.Stage = saved; return t;
+    }
     static Texture2D FloorTex(int n)
     {
         var t = Make(n, n);
@@ -171,7 +178,7 @@ public class Materials
                         c = Color.Lerp(c, Color.Lerp(hazDark, haz, st) * pool, g * Mathf.Clamp01((wear - 0.22f) * 3f));
                     }
                     // 山（ジャンプ台）: 鋼の板＋注意の輪
-                    for (int i = 0; i < Arena.Mounds.Length && r > Arena.MoundR - Arena.MoundBase - 0.1f && r < Arena.MoundR + Arena.MoundBase + 0.1f; i++)
+                    for (int i = 0; Arena.Stage == 0 && i < Arena.Mounds.Length && r > Arena.MoundR - Arena.MoundBase - 0.1f && r < Arena.MoundR + Arena.MoundBase + 0.1f; i++)
                     {
                         float d = (new Vector2(wx, wz) - Arena.Mounds[i]).magnitude;
                         if (d < Arena.MoundBase)

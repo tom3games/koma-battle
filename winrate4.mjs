@@ -6,7 +6,7 @@ await p.click('#btnPlay'); await wait(200)
 await p.evaluate(() => document.querySelector('#vsPick button[data-n="2"]').click())
 let win = 0, done = 0, secs = 0, why = {}
 for (let i = 0; i < N; i++) {
-  await p.evaluate(({ stage, top, core, leg }) => { Object.assign(KB.pick, { top, core, leg, dir: 0, sp: 0, pas: 0 }); KB.result = null; KB.events.length = 0; KB.send('stage|' + stage); KB.startMatch() }, { stage, top, core, leg })
+  await p.evaluate(({ stage, top, core, leg, sp }) => { Object.assign(KB.pick, { top, core, leg, dir: 0, sp, pas: 0 }); KB.result = null; KB.events.length = 0; KB.send('stage|' + stage); KB.startMatch() }, { stage, top, core, leg, sp: +(process.env.SP || 0) })
   await p.waitForFunction(() => window.KB.state && window.KB.state.ph === 'count', null, { timeout: 60000 })
   await wait(100)
   await p.evaluate(() => { KB.send('auto|1'); KB.send('cpupas|-1'); KB.send('cpusp|-1'); KB.send('timescale|3') })

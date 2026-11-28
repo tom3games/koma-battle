@@ -412,3 +412,14 @@ body.spec #touch{display:none}
 .stage-tag.on{animation:stg 1.4s ease-out}
 body.stage-intro #tags{visibility:hidden}
 @keyframes stg{0%{opacity:0;transform:translateY(14px) scale(.94)}12%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+
+/* 2026-11-28 落ちかけで必殺（チェイン）が復帰に使える時: 必殺の表示を赤く点滅させて目立たせる */
+#spChip.rescue{background:#ff3b2f !important;color:#fff;animation:rescue .35s linear infinite}
+#spChip.rescue i{display:none}
+#tSpBtn.rescue{background:#ff3b2f !important;border-color:#fff;box-shadow:0 0 26px 8px rgba(255,59,47,.85);animation:rescuebtn .35s linear infinite}
+@keyframes rescue{50%{box-shadow:0 0 28px 8px rgba(255,59,47,.9);transform:translateX(-50%) scale(1.08)}}
+@keyframes rescuebtn{50%{transform:scale(1.18)}}
+
+/* 2026-11-28 踏ん張り（F / スマホは左のボタン。左のスティックを離している間だけ効く＝2本の指を同時に使わない） */
+#tBrace{left:calc(22px + var(--sl));bottom:calc(var(--vh) * .46);width:68px;height:68px;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.35);color:#fff;font-weight:900;font-size:11px;letter-spacing:0;line-height:1.1;padding:0}
+#tBrace.on{background:rgba(255,120,40,.55);border-color:#fff;box-shadow:0 0 18px 4px rgba(255,140,60,.7)}

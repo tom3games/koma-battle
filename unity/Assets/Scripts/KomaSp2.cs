@@ -11,7 +11,7 @@ public partial class KomaBoot
     const float SpiralBase = 21f, SpiralMin = 1.0f, SpiralMax = 2.4f;
     const float ArrowSpeed = 60f, ArrowDashSec = 0.27f, ArrowTeleSec = 0.95f, FrostSec = 2f, FrostSlow = 0.5f, ArrowDmg = 3.0f;
     const float ArrowHitVn = 26f;
-    const float ChainSec = 4f, ChainLen = 6.8f;
+    const float ChainSec = 3.2f, ChainLen = 6.8f;
 
     int cpuSpMode = -1;
     static readonly Color IceC = new Color(0.7f, 0.93f, 1f);
@@ -79,6 +79,8 @@ public partial class KomaBoot
         }
         if (k.sp == 7)
         {
+            // 落ちかけなら「復帰」: 近い相手へ鎖をかけて縮め、床の上へ引き戻される（振り回し・投げは無し）
+            if (IsFalling(k)) { StartRecover(k); return; }
             // チェイン・バインド: 一番近い相手と鎖でつながる
             var t = Nearest(k);
             if (t == null) { k.gauge = 100f; k.specials--; return; }
@@ -163,6 +165,7 @@ public partial class KomaBoot
             if (k.specialT <= 0) SpiralImpact(k, k.pos, 0.6f);
         }
         if (k.thrownT > 0) k.thrownT -= dt;
+        if (k.grounded) k.recoverUsed = false;
     }
 
     // ---------- ラスト・スパイラルの当たり ----------
@@ -199,7 +202,7 @@ public partial class KomaBoot
         float near = k.isPlayer ? 1f : Mathf.Clamp(1.1f - Vector3.Distance(player.pos, at) / 18f, 0.25f, 1f);
         shake = Mathf.Max(shake, 1.2f * near * Mathf.Min(1.4f, pw)); fovKick = Mathf.Max(fovKick, 14f * near);
         var sp = cam.WorldToViewportPoint(at);
-        Emit("{\"t\":\"e\",\"k\":\"boom\",\"s\":5,\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
+        Emit("{\"t\":\"e\",\"k\":\"boom\",\"s\":5,\"i\":" + k.idx + ",\"hm\":" + NearMe(at, 6.5f) + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
     }
 
     // 突進の長さ: 16m と、縁（床の終わり）・穴の手前 ArrowEdgeMargin までの短い方
@@ -294,7 +297,7 @@ public partial class KomaBoot
     }
 
     // ---------- チェイン・バインド ----------
-    class Chain { public Koma a, b; public float t, len = ChainLen, swing, prevAng; public LineRenderer lr, glow; public float[] hitCd = new float[4]; public GameObject root; }
+    class Chain { public bool recover; public float dur, len0; public Koma a, b; public float t, len = ChainLen, swing, prevAng; public LineRenderer lr, glow; public float[] hitCd = new float[4]; public GameObject root; }
     readonly List<Chain> chains = new List<Chain>();
     Material chainMat, chainGlowMat;
     static Texture2D linkTex;
@@ -315,18 +318,43 @@ public partial class KomaBoot
         t.Apply(); linkTex = t; return t;
     }
 
-    void StartChain(Koma k, Koma t)
+    // ---------- 復帰（2026-11-28 本人「投げ飛ばされてやばいってとき、チェインバインドをうまく使ったら復帰できる」） ----------
+    const float RecoverRange = 10f, RecoverSec = 1.3f;
+    // 場外へ向かって飛んでいる・床の外の空中にいる（まだ落ち切っていない）
+    bool IsFalling(Koma k)
+    {
+        if (!k.alive || k.grounded || k.recoverUsed || phase != "fight" || k.specialPhase > 0 || k.chainTo != null) return false;
+        if (k.pos.y < -3.5f) return false;
+        float h = Arena.H(k.pos.x, k.pos.z);
+        Vector3 f = k.pos + new Vector3(k.vel.x, 0, k.vel.z) * 0.5f;
+        return h < -100 || Arena.H(f.x, f.z) < -100;
+    }
+    Koma NearestWithin(Koma k, float range)
+    {
+        Koma best = null; float bd = range * range;
+        foreach (var o in komas) { if (o == k || !o.alive || !o.root.activeSelf) continue; float d = (o.Center - k.Center).sqrMagnitude; if (d < bd) { bd = d; best = o; } }
+        return best;
+    }
+    void StartRecover(Koma k)
+    {
+        var t = NearestWithin(k, RecoverRange);
+        if (t == null) { k.gauge = 100f; k.specials--; if (k.isPlayer && !autoPlayer) EmitEv("deny", k, 2); return; }
+        k.recoverUsed = true;
+        StartChain(k, t, true);
+    }
+    void StartChain(Koma k, Koma t, bool recover = false)
     {
         if (chainMat == null) { chainMat = mats.AddGlow(new Color(0.75f, 1f, 0.5f, 1f), LinkTex()); chainGlowMat = mats.AddGlow(new Color(0.6f, 1f, 0.3f, 0.5f), mats.Dot); }
-        var c = new Chain { a = k, b = t, t = ChainSec };
+        var c = new Chain { a = k, b = t, t = recover ? RecoverSec : ChainSec, recover = recover };
+        if (recover) { c.dur = RecoverSec; c.len0 = Mathf.Max(2f, new Vector2(t.pos.x - k.pos.x, t.pos.z - k.pos.z).magnitude); c.len = c.len0; }
         c.root = new GameObject("Chain");
         c.lr = MakeLine(c.root.transform, chainMat, 0.34f, true);
         c.glow = MakeLine(c.root.transform, chainGlowMat, 0.9f, false);
         c.prevAng = Mathf.Atan2(k.pos.z - t.pos.z, k.pos.x - t.pos.x);
         chains.Add(c);
-        k.chainTo = t; t.chainFrom = k; k.chainT = ChainSec;
+        k.chainTo = t; t.chainFrom = k; k.chainT = c.t;
         // 初動: 相手を少しこちらへ引く
-        Vector3 d = k.pos - t.pos; d.y = 0; if (d.sqrMagnitude > 0.01f) t.vel += d.normalized * 5f / Mathf.Sqrt(t.st.mass) * (t.anchorT > 0 ? 0.1f : 1f);
+        Vector3 d = k.pos - t.pos; d.y = 0; if (d.sqrMagnitude > 0.01f) t.vel += d.normalized * 5f * Mathf.Clamp(Mathf.Sqrt(EffMass(k) / EffMass(t)), 0.6f, 1.5f) / Mathf.Sqrt(t.st.mass) * (t.anchorT > 0 ? 0.1f : 1f);
         EmitEv("special", k, 7); SpecialFx(k, 1.0f);
         EmitEv("chain", t, 0);
         Spark(t.Center, Vector3.up, 40, 1.2f); Wave(t.pos, 4f);
@@ -356,7 +384,8 @@ public partial class KomaBoot
     }
 
     // 物理の1刻みごと: 鎖の長さを超えたら引き合う（軽い方がよく動く）
-    float EffMass(Koma k) => k.st.mass * (k.anchorT > 0 ? AnchorMass : 1f);
+    // 2026-11-28 本人「チェインバインドで、重量と残りの回転数も考慮するように」: 実効の重さ = 質量 ×（0.6〜1.0）回転の残り（回転が多い方が踏ん張れて引き寄せる。減った側は振り回されやすい）
+    float EffMass(Koma k) => k.st.mass * (0.6f + 0.4f * k.SpinRatio) * (k.anchorT > 0 ? AnchorMass : 1f);
     void ChainConstrain(float h)
     {
         for (int i = 0; i < chains.Count; i++)
@@ -368,9 +397,9 @@ public partial class KomaBoot
             if (dist <= c.len || dist < 0.01f) continue;
             Vector3 n = d / dist;
             float ia = 1f / EffMass(a), ib = 1f / EffMass(b);
-            float ex = Mathf.Min(dist - c.len, 16f * h);
+            float ex = Mathf.Min(dist - c.len, (c.recover ? 24f : 16f) * h);
             Vector3 pa = a.pos + n * ex * ia / (ia + ib), pb = b.pos - n * ex * ib / (ia + ib);
-            if (Arena.WallH(pa.x, pa.z) - a.pos.y <= StepUp) a.pos = new Vector3(pa.x, a.pos.y, pa.z);
+            if (c.recover || Arena.WallH(pa.x, pa.z) - a.pos.y <= StepUp) a.pos = new Vector3(pa.x, a.pos.y, pa.z);
             if (Arena.WallH(pb.x, pb.z) - b.pos.y <= StepUp) b.pos = new Vector3(pb.x, b.pos.y, pb.z);
             float rel = Vector3.Dot(b.vel - a.vel, n);
             if (rel > 0) { float J = rel * 1.05f / (ia + ib); a.vel += n * J * ia; b.vel -= n * J * ib; }
@@ -382,7 +411,7 @@ public partial class KomaBoot
         foreach (var c in chains)
         {
             if (c.b != tgt) continue;
-            c.a.vel += dir * 7f / Mathf.Sqrt(c.a.st.mass) * (c.a.anchorT > 0 ? 0.1f : 1f);
+            c.a.vel += dir * 7f * Mathf.Clamp(Mathf.Sqrt(EffMass(tgt) / EffMass(c.a)), 0.6f, 1.5f) / Mathf.Sqrt(c.a.st.mass) * (c.a.anchorT > 0 ? 0.1f : 1f);
             c.t -= 0.5f; c.swing *= 0.6f;
             EmitEv("tug", tgt, 0);
             Spark((c.a.Center + tgt.Center) * 0.5f, Vector3.up, 24, 1.1f);
@@ -410,15 +439,17 @@ public partial class KomaBoot
     {
         var a = c.a; var b = c.b;
         Vector3 dir = ChainThrowDir(c);
-        float spd = 15f + 17f * Mathf.Clamp01(c.swing / 7f);
+        // 投げる速さ: 回した量 × （使った側の重さ÷相手の重さ）× （使った側の回転の残り）。重い相手・回転が減った使い手では遠くへ飛ばない（0.6〜1.3倍）
+        float throwF = Mathf.Clamp(Mathf.Sqrt(a.st.mass / b.st.mass) * (0.8f + 0.2f * a.SpinRatio), 0.8f, 1.3f);
+        float spd = (15f + 17f * Mathf.Clamp01(c.swing / 7f)) * throwF;
         float res = b.anchorT > 0 ? 0.15f : 1f;
         b.vel = dir * spd * res + Vector3.up * 7f; b.grounded = false; b.thrownT = 1.0f;
-        Damage(a, b, 10f * (spd / 25f) * a.st.atk / b.st.def); a.spin = Mathf.Min(a.spinMax, a.spin + a.spinMax * 0.05f);
+        Damage(a, b, 30f * (spd / 25f) * a.st.atk / b.st.def); a.spin = Mathf.Min(a.spinMax, a.spin + a.spinMax * 0.05f);
         b.hitFlash = 0.2f;
         Spark(b.Center, dir + Vector3.up, 70, 1.6f); Wave(b.pos, 6f); Pulse(b.pos, SpColors[7], 10f, 18f);
         float near = (a.isPlayer || b.isPlayer) ? 1f : 0.4f;
         shake = Mathf.Max(shake, 0.8f * near); fovKick = Mathf.Max(fovKick, 10f * near);
-        EmitEv("chainthrow", b, spd);
+        EmitEv("chainthrow", b, spd, a.idx.ToString());
         EndChain(c);
     }
 
@@ -446,6 +477,23 @@ public partial class KomaBoot
             var c = chains[i];
             if (!c.a.alive || !c.b.alive || phase != "fight") { EndChain(c); continue; }
             c.t -= dt; c.a.chainT = c.t;
+            if (c.recover)
+            {
+                // 復帰: 鎖が縮み、使った側は相手の高さへ持ち上げられながら床の上へ戻る。時間が来たら鎖は外れる（投げ無し）
+                c.len = 1.6f;   // 最初から全力で縮める（落ちる前に引き寄せる）
+                // 使った側は相手の方へ速く引かれる（相手が重く回転が残っているほど強く・軽い相手だと一緒に落ちかける）
+                { Vector3 to = c.b.pos - c.a.pos; to.y = 0f;
+                  if (to.magnitude > 0.8f)
+                  {
+                      float pull = 14f * Mathf.Clamp(Mathf.Sqrt(EffMass(c.b) / EffMass(c.a)), 0.6f, 1.5f);
+                      Vector3 tv = to.normalized * pull; float kf = 1f - Mathf.Exp(-10f * dt);
+                      c.a.vel.x = Mathf.Lerp(c.a.vel.x, tv.x, kf); c.a.vel.z = Mathf.Lerp(c.a.vel.z, tv.z, kf);
+                  } }
+                if (!c.a.grounded) c.a.vel.y = Mathf.Max(c.a.vel.y, (c.b.pos.y + 1.2f - c.a.pos.y) * 3.5f);
+                DrawChain(c);
+                if (c.t <= 0f || c.a.grounded && c.t < c.dur - 0.25f) { c.a.vel.x *= 0.3f; c.a.vel.z *= 0.3f; EndChain(c); }
+                continue;
+            }
             for (int q = 0; q < 4; q++) if (c.hitCd[q] > 0) c.hitCd[q] -= dt;
             // 自分が相手のまわりを回った角度（回すほど遠くへ飛ぶ）
             float ang = Mathf.Atan2(c.a.pos.z - c.b.pos.z, c.a.pos.x - c.b.pos.x);

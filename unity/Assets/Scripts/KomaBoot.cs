@@ -58,7 +58,7 @@ public partial class KomaBoot : MonoBehaviour
 
     class Brain
     {
-        public int target = -1; public float retarget, react, padGoal = -1, think;
+        public int target = -1; public float retarget, react, padGoal = -1, think, braceCd;
         public Vector2 jitter; public float boardT;
     }
 
@@ -210,7 +210,9 @@ public partial class KomaBoot : MonoBehaviour
             case "spec": SpectateSet((int)N(0)); break;   // 観戦: 誰を見るか
             case "specnext": SpectateStep((int)N(0) >= 0 ? 1 : -1); break;
             case "specexit": if (phase == "fight" && spectating) { phase = "end"; endT = EndHold - 0.001f; endWin = 0; endWhy = player.koWhy; endSubject = specTarget; spectating = false; } break;
+            case "brace": touchBrace = N(0) > 0; break;
             case "recenter": RecenterHalf = N(0) > 0 ? N(0) : 1e9f; break;   // 検査用: 寄せる速さ（半減秒）。0以下で切る
+            case "setparts": { var kk = komas[(int)N(0)]; kk.Rebuild((int)N(1), (int)N(2), (int)N(3), mats, kk.left); break; }   // 検査用: 指定のコマのパーツを変える
             case "leftmul": LeftSpinMul = N(0); break;   // 検査用
             case "runknock": RunHitKnock = N(0); break;
             case "cpusp": cpuSpMode = (int)N(0); break;   // 検査用: CPU の必殺を固定（-1 でランダム）
@@ -440,6 +442,8 @@ public partial class KomaBoot : MonoBehaviour
                 }
             }
             if (testMoveOn) move = testMove;
+            // 2026-11-28 本人「Fで踏ん張り」: PC は F を押している間。スマホは踏ん張りボタン（左のスティックを離している間だけ有効）
+            player.braceHold = !autoPlayer && ((!touchMode && Input.GetKey(KeyCode.F)) || (touchBrace && touchMove.sqrMagnitude < 0.01f));
             touchDash = false; touchSpecial = false;
             if (dash) TryDash(player, aimPoint);
             if (special) TrySpecial(player, aimPoint);
@@ -491,6 +495,14 @@ public partial class KomaBoot : MonoBehaviour
             if (k.alive && phase == "fight")
             {
                 k.spin -= (0.75f * k.st.decay + (sudden ? 1.2f : 0f)) * dt;
+                if (k.braceT > 0) k.braceT -= dt;
+                if (k.Bracing && k.grounded)
+                {
+                    k.spin -= BraceWear * BraceWearF(k) * dt; k.lossHit += BraceWear * BraceWearF(k) * dt;
+                    k.braceFxT -= dt;
+                    if (k.braceFxT <= 0) { k.braceFxT = 0.09f; Spark(k.pos + Vector3.up * 0.05f, new Vector3(Random.Range(-1f, 1f), 0.3f, Random.Range(-1f, 1f)), 4, 0.55f); }
+                    if (Random.value < 0.02f) EmitEv("brace", k, 0);
+                }
                 k.gauge = Mathf.Min(100f, k.gauge + 2.2f * k.st.gaugeRate * dt);
                 if (k.spin <= 0) { k.spin = 0; KO(k, "spin"); }
                 // 奇跡: 回転数が上限近くを保つと、数秒だけ通り道に炎が残る（本人は無傷）
@@ -629,7 +641,7 @@ public partial class KomaBoot : MonoBehaviour
                 if (sc < best) { best = sc; b.target = o.idx; }
             }
             b.boardT = Arena.BoardOn && !Arena.Collapsing && rng.NextDouble() < 0.15 ? 1.5f + (float)rng.NextDouble() * 1.5f : 0f;
-            b.padGoal = rng.NextDouble() < 0.12 ? rng.Next(Arena.Pads.Length + Arena.Mounds.Length) : -1;
+            b.padGoal = Arena.Stage != 1 && rng.NextDouble() < 0.12 ? rng.Next(Arena.Pads.Length + Arena.Mounds.Length) : -1;
             b.jitter = new Vector2((float)rng.NextDouble() - 0.5f, (float)rng.NextDouble() - 0.5f) * 2f;
         }
         if (b.target < 0) return;
@@ -675,6 +687,10 @@ public partial class KomaBoot : MonoBehaviour
         // 空中で相手の上近くなら急降下
         if (!k.grounded && k.airDashUsed < 1 && dist < 6f && k.pos.y > t.pos.y + 1f && k.vel.y < 3f) dash = true;
         if (SpecialReady(k) && b.think <= 0 && CpuWantsSpecial(k, dist)) { special = true; }
+        // 縁の近くで当てられそうなら踏ん張る
+        b.braceCd -= dt;
+        if (k.grounded && b.braceCd <= 0 && k.braceT <= 0 && dist < 5f && new Vector2(k.pos.x, k.pos.z).magnitude > Arena.R - 6f && Vector3.Dot(new Vector3(t.vel.x, 0, t.vel.z), (k.pos - t.pos).normalized) > 5f) { k.braceT = 0.7f; b.braceCd = 2.5f; }
+        if (k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null) special = true;   // 落ちそうな時は鎖で戻る
         if (b.think <= 0) b.think = 0.3f;
     }
 
@@ -720,7 +736,7 @@ public partial class KomaBoot : MonoBehaviour
     void TryDash(Koma k, Vector3 aim)
     {
         if (k.clingT > 0) { if (k.alive && k.isPlayer && !autoPlayer) ClingSave(k); return; }   // CPU は StartCling で決めた時刻に戻る
-        if (!k.alive || k.specialPhase > 0 || k.dashCd > 0) return;
+        if (!k.alive || k.specialPhase > 0 || k.dashCd > 0 || k.Bracing) return;
         if (!k.grounded && k.isPlayer)
         {
             // 空中の急降下: 狙う点を、水平の向きだけ補助で寄せる
@@ -784,6 +800,12 @@ public partial class KomaBoot : MonoBehaviour
         }
         return new Vector3(from.x, Mathf.Max(0, Arena.H(from.x, from.z)), from.z);
     }
+    int NearMe(Vector3 at, float r) { if (player == null || !player.alive) return 0; Vector3 d = player.pos - at; d.y = 0; return d.magnitude < r ? 1 : 0; }   // 効果線を出すか（自分が巻き込まれる近さ）
+    bool touchBrace;
+    // 踏ん張り: ノックバックを減らす代わりに、軸がすり減って回転が削れる（重い型は効きやすく減りが少ない）
+    const float BraceWear = 11f, BraceHitWear = 3f;
+    float BraceCut(Koma k) => Mathf.Clamp(0.35f * Mathf.Sqrt(k.st.mass / 1.1f), 0.25f, 0.45f);
+    float BraceWearF(Koma k) => Mathf.Clamp(1.1f / k.st.mass, 0.7f, 1.3f);
     float lastDenyT = -9;
     void TrySpecial(Koma k, Vector3 aim)
     {
@@ -879,7 +901,7 @@ public partial class KomaBoot : MonoBehaviour
                 shake = Mathf.Max(shake, 0.9f); fovKick = Mathf.Max(fovKick, 12f);
                 Spark(k.Center, Vector3.up, 110, 1.9f); Dust(k.pos, 36); Scorch(k.pos, 4.5f);
                 Pulse(k.pos, SpColors[1], 10f, 20f);
-                var sp = cam.WorldToViewportPoint(k.pos); Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
+                var sp = cam.WorldToViewportPoint(k.pos); Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"hm\":" + NearMe(k.pos, 9f) + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
             }
             if (Random.value < 0.5f) Dust(k.pos + new Vector3(Random.Range(-3f, 3f), 0, Random.Range(-3f, 3f)), 1);
             if (Random.value < 0.6f) Spark(k.pos + new Vector3(Random.Range(-2.5f, 2.5f), Random.Range(0.3f, 3.5f), Random.Range(-2.5f, 2.5f)), Vector3.up, 4, 0.6f);
@@ -1030,7 +1052,7 @@ public partial class KomaBoot : MonoBehaviour
         {
             float a = i * Mathf.PI / 8; Vector2 d = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
             float hh = Arena.WallH(q.x + d.x * 0.6f, q.y + d.y * 0.6f);
-            if (hh < -100) hh = -50f;   // 奈落側は選ばない（床の上の外を探す）
+            if (hh < -100) hh = 1e3f;   // 奈落側は選ばない（床の上の外を探す）
             if (hh < bh) { bh = hh; best = d; }
         }
         return best;
@@ -1055,7 +1077,7 @@ public partial class KomaBoot : MonoBehaviour
         if (ctrl && k.lockT <= 0)
         {
             // 2026-11-25 本人「シフトボタン押しながらの移動で少し早くなるように」: Shift で加速と上限を少し上げる
-            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.superT > 0 ? 4.5f : (k.isPlayer && sprint ? 2.2f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.6f : 1f) * (Arena.IceAt(p.x, p.z) ? 0.4f : 1f);   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
+            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.superT > 0 ? 4.5f : (k.isPlayer && sprint ? 2.2f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.6f : 1f) * (Arena.IceAt(p.x, p.z) ? 0.4f : 1f) * (k.Bracing ? 0.5f : 1f);   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
             Vector2 mv = move;
             if (k.superT > 0 && mv.sqrMagnitude < 0.04f) { var hv0 = new Vector2(v.x, v.z); if (hv0.magnitude > 1f) mv = hv0.normalized; }
             v.x += mv.x * acc * dt; v.z += mv.y * acc * dt;
@@ -1097,7 +1119,7 @@ public partial class KomaBoot : MonoBehaviour
                 k.boardT = 0.8f;
                 k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.01f * dt);
             }
-            float maxS = 9.5f * k.st.speed * (k.superT > 0 ? 2.3f : (k.isPlayer && sprint ? 1.35f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.7f : 1f), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+            float maxS = 9.5f * k.st.speed * (k.superT > 0 ? 2.3f : (k.isPlayer && sprint ? 1.35f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.7f : 1f) * (k.Bracing ? 0.5f : 1f), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
             if (hs > maxS && k.dashT <= 0 && k.boostCd < 0.35f && k.boardT <= 0)
             {
                 float f = Mathf.Max(maxS / hs, Mathf.Exp(-DashBrake * dt));
@@ -1413,14 +1435,14 @@ public partial class KomaBoot : MonoBehaviour
         float near = k.isPlayer ? 1f : Mathf.Clamp(1.1f - Vector3.Distance(player.pos, at) / 18f, 0.25f, 1f);
         shake = Mathf.Max(shake, 1.5f * near); fovKick = Mathf.Max(fovKick, 16f * near);
         var sp = cam.WorldToViewportPoint(at);
-        Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
+        Emit("{\"t\":\"e\",\"k\":\"boom\",\"i\":" + k.idx + ",\"hm\":" + NearMe(at, 6.5f) + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
     }
 
     const float HitScale = 0.36f;   // 当たりで減る量。試合の長さはここで決まる
     void Damage(Koma from, Koma to, float dmg)
     {
         if (phase == "end") return;
-        dmg *= HitScale; if (to.shieldT > 0) dmg *= 0.2f; if (to.anchorT > 0) dmg *= 0.35f; if (to.specialPhase == 30) dmg *= 0.4f; if (to.chainTo != null) dmg *= 0.7f;
+        dmg *= HitScale; if (to.shieldT > 0) dmg *= 0.2f; if (to.anchorT > 0) dmg *= 0.35f; if (to.specialPhase == 30) dmg *= 0.4f; if (to.chainTo != null) dmg *= 0.5f;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
         if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);
         from.dealt += dmg; PasSoul(from, to, dmg);
@@ -1538,8 +1560,8 @@ public partial class KomaBoot : MonoBehaviour
                 if (bAir) { a.vel -= nh * 9f; a.vel.y = Mathf.Min(a.vel.y, 1f); b.vel.y = 8f; b.vel.x *= 0.4f; b.vel.z *= 0.4f; b.airDashUsed = 1; b.aerialHits++; }
                 else if (!aAir) { a.vel.y += pop; a.grounded = false; }
                 // 傾けた側で当てた: かち上げ（相手を上へ浮かせて外へ大きく・自分はあまり弾かれない）
-                if (Upper(a, nh) && !aAir) { b.vel += nh * 9f / mb; b.vel.y = Mathf.Max(b.vel.y, 13.5f); b.grounded = false; a.vel = Vector3.Lerp(aV0, a.vel, 0.5f); dmgToB *= 1.2f; EmitEv("upper", b, 0); }
-                if (Upper(b, -nh) && !bAir) { a.vel -= nh * 9f / ma; a.vel.y = Mathf.Max(a.vel.y, 13.5f); a.grounded = false; b.vel = Vector3.Lerp(bV0, b.vel, 0.5f); dmgToA *= 1.2f; EmitEv("upper", a, 0); }
+                if (Upper(a, nh) && !aAir) { b.vel += nh * 9f / mb; b.vel.y = Mathf.Max(b.vel.y, 13.5f); b.grounded = false; a.vel = Vector3.Lerp(aV0, a.vel, 0.5f); dmgToB *= 1.2f; EmitEv("upper", b, a.idx); }
+                if (Upper(b, -nh) && !bAir) { a.vel -= nh * 9f / ma; a.vel.y = Mathf.Max(a.vel.y, 13.5f); a.grounded = false; b.vel = Vector3.Lerp(bV0, b.vel, 0.5f); dmgToA *= 1.2f; EmitEv("upper", a, b.idx); }
                 // 盾: 自分はほとんど弾かれず、相手を弾き返す
                 if (a.shieldT > 0) { a.vel = Vector3.Lerp(aV0, a.vel, 0.2f); b.vel += nh * 9f; }
                 if (b.shieldT > 0) { b.vel = Vector3.Lerp(bV0, b.vel, 0.2f); a.vel -= nh * 9f; }
@@ -1549,6 +1571,9 @@ public partial class KomaBoot : MonoBehaviour
                 // グラビティ・アンカー: 動かず、当てた方が弾かれる（少し反動も受ける）
                 if (a.anchorT > 0) { a.vel = Vector3.Lerp(aV0, a.vel, 0.05f); b.vel += nh * 7f; b.vel.y = Mathf.Max(b.vel.y, 3f); dmgToA *= 0.35f; dmgToB *= 1.3f; }
                 if (b.anchorT > 0) { b.vel = Vector3.Lerp(bV0, b.vel, 0.05f); a.vel -= nh * 7f; a.vel.y = Mathf.Max(a.vel.y, 3f); dmgToB *= 0.35f; dmgToA *= 1.3f; }
+                // 踏ん張り: 受けるノックバックを減らす（軸がすり減って回転も削れる）
+                if (a.Bracing && a.anchorT <= 0) { a.vel = aV0 + (a.vel - aV0) * (1f - BraceCut(a)); a.spin -= BraceHitWear; a.lossHit += BraceHitWear; Spark(a.pos + Vector3.up * 0.05f, Vector3.up, 12, 0.9f); EmitEv("bracehit", a, 0); }
+                if (b.Bracing && b.anchorT <= 0) { b.vel = bV0 + (b.vel - bV0) * (1f - BraceCut(b)); b.spin -= BraceHitWear; b.lossHit += BraceHitWear; Spark(b.pos + Vector3.up * 0.05f, Vector3.up, 12, 0.9f); EmitEv("bracehit", b, 0); }
                 // 逆鱗: 弾かれにくい／黒鉄の盾: 次の1発を無効に
                 if (a.rage) a.vel = Vector3.Lerp(aV0, a.vel, 0.6f);
                 if (b.rage) b.vel = Vector3.Lerp(bV0, b.vel, 0.6f);
@@ -1808,6 +1833,11 @@ public partial class KomaBoot : MonoBehaviour
         float baseY = Mathf.Max(p.y, -3f);
         float camD = 7.9f * Mathf.Lerp(1f, 0.62f, camClose);
         Vector3 want3 = new Vector3(p.x, baseY, p.z) + (-fwd * Mathf.Cos(camElev) + Vector3.up * Mathf.Sin(camElev)) * camD * portrait;
+        // 2026-11-28 本人の写真「外周で、床が台に乗った土手に見えて、外側の分厚い壁がむき出し」: 外周で中央を向くとカメラが縁の外へ出て、壁を外から見ていた。
+        // カメラは縁の上（縁の内側の高さ）より外へ出さず、縁より高くして、壁越しに中を見下ろす
+        { float rc = new Vector2(want3.x, want3.z).magnitude, rl = Arena.Edge - 0.4f;
+          if (rc > rl) { want3.x *= rl / rc; want3.z *= rl / rc; }
+          if (rc > Arena.R - 3f) want3.y = Mathf.Max(want3.y, Arena.Bowl(Arena.R) + (Arena.Stage == 1 ? 0.9f : Arena.LipH) + 1.6f); }
         float fh = Arena.H(want3.x, want3.z);
         if (fh > -100 && want3.y < fh + 1.4f) want3.y = fh + 1.4f;
         camRig.position = snap ? want3 : Vector3.SmoothDamp(camRig.position, want3, ref camVel, 0.12f, 200f, realDt);
@@ -1874,7 +1904,7 @@ public partial class KomaBoot : MonoBehaviour
             if (!first) sb.Append(','); first = false;
             var sp = cam.WorldToViewportPoint(k.pos + Vector3.up * 1.25f);
             sb.Append("{\"i\":").Append(k.idx).Append(",\"a\":").Append(k.alive ? 1 : 0).Append(",\"sp\":").Append(F(k.SpinRatio))
-              .Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
+              .Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"br\":").Append(k.Bracing ? 1 : 0).Append(",\"rc\":").Append(k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
               .Append(",\"vx\":").Append(F(k.vel.x)).Append(",\"vz\":").Append(F(k.vel.z)).Append(",\"yaw\":").Append(F(camYaw)).Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
               .Append(",\"ps\":").Append(k.pas).Append(",\"wg\":").Append(k.WingsOn ? 1 : 0).Append(",\"rg\":").Append(k.rage ? 1 : 0).Append(",\"sn\":").Append(k.stampN).Append(",\"lf\":").Append(k.left ? 1 : 0)

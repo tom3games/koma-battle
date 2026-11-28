@@ -221,11 +221,13 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         // 2026-11-26 本人「芯とか掠りとか出すのやめて」: 当たりの角度は数値だけに効かせ、文字は出さない
         // 2026-11-26 本人「他の人の効果音まで文字で出さなくていい」: 擬音の文字は自分が当てた・当てられた時だけ
         { const me = m.a === 0 || m.b === 0
-          if (air) { lines(m.x, m.y, 1); if (me) { onoma('ドゴォッ', m.x, m.y); flash() } Snd.duck(0.5, 0.8) }
-          else if (big) { lines(m.x, m.y, 0.7); if (me) onoma('ガギィン', m.x, m.y) } }
+          if (air) { if (me) lines(m.x, m.y, 1); if (me) { onoma('ドゴォッ', m.x, m.y); flash() } Snd.duck(0.5, 0.8) }
+          else if (big) { if (me) { lines(m.x, m.y, 0.7); onoma('ガギィン', m.x, m.y) } } }
         break
       }
       case 'wall': Snd.play('hit', { vol: 0.35 }); break
+      case 'brace': Snd.play('creak', { vol: m.i === 0 ? 0.35 : 0.12, rate: 1.3 }); break
+      case 'bracehit': Snd.play('clang', { vol: m.i === 0 ? 0.5 : 0.22, rate: 1.5 }); Snd.play('hit', { vol: m.i === 0 ? 0.4 : 0.15, rate: 0.9 }); break
       case 'wallsoft': Snd.play('hit', { vol: Math.min(0.2, 0.06 + m.p * 0.03), rate: 1.3 }); break
       case 'dash': if (m.p === 2) { Snd.play('whoosh', { vol: 0.5, rate: 1.2 + (rush = (rush + 1) % 3) * 0.25 }); if (m.i === 0) lines(m.x, m.y, 0.4) } if (m.i === 0) Snd.play('swish', { vol: 0.7 }); else Snd.play('swish', { vol: 0.25 }); break
       case 'dive': Snd.play('whoosh', { vol: m.i === 0 ? 0.8 : 0.4, rate: 1.4 }); if (m.i === 0 && !m.p) lines(m.x, m.y, 0.5); break
@@ -235,18 +237,18 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'miracle': Snd.play('boom', { vol: m.i === 0 ? 0.6 : 0.3, rate: 1.5 }); Snd.play('whoosh', { vol: 0.5, rate: 0.8 }); break
       // 2026-11-27 WASD 2回押しの傾けと、かち上げ
       case 'lean': if (m.i === 0) Snd.play('swish', { vol: 0.55, rate: 1.4 }); break
-      case 'upper': Snd.play('clang', { vol: 0.8, rate: 0.75 }); Snd.play('boom', { vol: 0.45, rate: 1.2 }); lines(m.x, m.y, 0.7); break
+      case 'upper': Snd.play('clang', { vol: 0.8, rate: 0.75 }); Snd.play('boom', { vol: 0.45, rate: 1.2 }); if (m.i === 0 || m.p === 0) lines(m.x, m.y, 0.7); break
       // 2026-11-27 場外ギリギリの踏ん張り: 縁できしむ → 戻れたら大きく、落ちたら重く
       case 'cling': { const me = m.i === 0; Snd.play('creak', { vol: me ? 1 : 0.45, rate: 0.9 }); Snd.play('clang', { vol: me ? 0.35 : 0.15, rate: 1.4 }); if (me) { Snd.duck(0.45, 1.1); shakeScreen() } break }
       case 'save': { const me = m.i === 0; Snd.play('spring', { vol: me ? 0.9 : 0.4, rate: 0.9 }); Snd.play('clang', { vol: me ? 0.8 : 0.35, rate: 1.1 }); Snd.play('whoosh', { vol: me ? 0.8 : 0.35, rate: 1.3 }); ring(m.x, m.y); if (me) { lines(m.x, m.y, 0.8); flash() } break }
-      case 'clingfall': if (m.p) { Snd.play('hit', { vol: 0.9, rate: 0.7 }); lines(m.x, m.y, 0.6) } break
+      case 'clingfall': if (m.p) { Snd.play('hit', { vol: 0.9, rate: 0.7 }); if (m.i === 0) lines(m.x, m.y, 0.6) } break
       case 'burn': Snd.play('hit', { vol: m.i === 0 ? 0.3 : 0.15, rate: 1.7 }); break
       case 'board': Snd.play('boom', { vol: 0.5, rate: 1.25 }); break
       case 'special': {
         // 発動の瞬間: 技の色の縁取り・輪・集中線・重い音。技の名前は自分が使った時だけ出す
         const me = m.i === 0, kind = m.p | 0
         if (me) banner(kind)
-        tint(kind, me ? 1 : 0.5); ring(m.x, m.y); lines(m.x, m.y, 1)
+        tint(kind, me ? 1 : 0.5); ring(m.x, m.y); if (me) lines(m.x, m.y, 1)
         if (me) { flash(); shakeScreen() }
         Snd.play('whoosh', { vol: me ? 1 : 0.6, rate: 0.7 })
         Snd.play('boom', { vol: me ? 0.8 : 0.45, rate: 0.6 })
@@ -257,7 +259,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'boom': {
         // 当たりの瞬間: 閃光・輪・画面の揺れ・低い爆発音（自分の技・近くの技は大きく）
         const me = m.i === 0
-        lines(m.x, m.y, 1); ring(m.x, m.y); tint(m.s | 0, me ? 0.9 : 0.4)
+        if (me || m.hm === 1) lines(m.x, m.y, 1); ring(m.x, m.y); tint(m.s | 0, me ? 0.9 : 0.4)
         if (me) { flash(); onoma('ズドォン', m.x, m.y); shakeScreen() }
         Snd.play('boom', { vol: 1, rate: 0.62 }); Snd.play('clang', { vol: 0.6, rate: 0.55 }); Snd.play('hit', { vol: 0.8, rate: 0.5 })
         break
@@ -309,7 +311,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'chain': Snd.play('chain', { vol: 0.9, rate: 0.9 }); Snd.play('chain', { vol: 0.6, rate: 1.2, delay: 0.08 }); Snd.play('clang', { vol: 0.5, rate: 1.4 }); break
       case 'tug': Snd.play('chain', { vol: 0.9, rate: 0.8 }); Snd.play('hit', { vol: 0.5, rate: 1.2 }); if (m.i === 0) shakeScreen(); break
       case 'chainhit': Snd.play('chain', { vol: 0.5, rate: 1.1 }); Snd.play('hit', { vol: 0.6, rate: 0.8 }); break
-      case 'chainthrow': Snd.play('whoosh', { vol: 0.9, rate: 0.9 }); Snd.play('chain', { vol: 0.9, rate: 0.7 }); Snd.play('boom', { vol: 0.7, rate: 0.8 }); lines(m.x, m.y, 0.9); if (m.i === 0) shakeScreen(); break
+      case 'chainthrow': Snd.play('whoosh', { vol: 0.9, rate: 0.9 }); Snd.play('chain', { vol: 0.9, rate: 0.7 }); Snd.play('boom', { vol: 0.7, rate: 0.8 }); if (m.i === 0 || m.why === '0') lines(m.x, m.y, 0.9); if (m.i === 0) shakeScreen(); break
       case 'anchorend': Snd.play('crack', { vol: 0.4, rate: 1.2 }); break
       case 'spiralgo': Snd.play('whoosh', { vol: 1, rate: 1.1 }); Snd.play('clang', { vol: 0.6, rate: 0.9 }); if (m.i === 0) { lines(m.x, m.y, 1); flash() } break
       case 'deny': { const e = [$('spChip'), $('tSpBtn')]; e.forEach(x => { x.classList.remove('deny'); void x.offsetWidth; x.classList.add('deny') }); Snd.play('clang', { vol: 0.3, rate: 0.6 }); break }
@@ -375,8 +377,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (document.activeElement !== $('nameIn')) $('nameIn').value = prof.name
     $('btnSound').textContent = muted ? 'オフ' : 'オン'
     $('how').innerHTML = isTouch
-      ? '<span><b>左</b>スティックで動く（外をなぞると視点）</span><span><b>右</b>倒して離すとダッシュ（空中なら急降下）</span><span><b>星</b>光ったら必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
-      : '<span><b>WASD</b>移動</span><span><b>Shift</b>速く</span><span><b>Shift2回</b>超加速</span><span><b>Space</b>ジャンプ</span><span><b>C</b>相手に照準</span><span><b>マウス</b>視点</span><span><b>左クリック</b>ダッシュ</span><span><b>右クリック</b>必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
+      ? '<span><b>左</b>スティックで動く（外をなぞると視点）</span><span><b>右</b>倒して離すとダッシュ（空中なら急降下）</span><span><b>星</b>光ったら必殺</span><span><b>踏ん張り</b>押している間（左のスティックは離す）</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
+      : '<span><b>WASD</b>移動</span><span><b>Shift</b>速く</span><span><b>Shift2回</b>超加速</span><span><b>Space</b>ジャンプ</span><span><b>F</b>踏ん張り（回転が減る）</span><span><b>C</b>相手に照準</span><span><b>マウス</b>視点</span><span><b>左クリック</b>ダッシュ</span><span><b>右クリック</b>必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
   }
 
   // ---------- 装備 ----------
@@ -476,7 +478,9 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       // 2026-11-25 本人「左上に残り回転数みたいなの出すのやめて」: 数字は出さない。回転は名札の細い線とコマの揺れで見せる
       const full = me.g >= 1 && me.a === 1 && me.ok === 1
       $('spChip').classList.toggle('wait', me.g >= 1 && me.a === 1 && me.ok === 0); $('tSpBtn').classList.toggle('wait', me.g >= 1 && me.a === 1 && me.ok === 0)
+      { const rc = me.rc === 1 && me.a === 1; $('spChip').classList.toggle('rescue', rc); $('tSpBtn').classList.toggle('rescue', rc); const tx = $('spTxt'); const want = rc ? '復帰！　右クリック' : '必殺　右クリック'; if (tx && tx.textContent !== want) tx.textContent = want }
       $('spChip').classList.toggle('full', full); $('spFill').style.width = Math.min(100, me.g * 100).toFixed(0) + '%'
+      $('tBrace').classList.toggle('on', me.br === 1)
       $('tSpBtn').classList.toggle('full', full)
       $('tSpBtn').style.setProperty('--g', (me.g * 100).toFixed(0) + '%')
       $('flickArrow').classList.toggle('cd', me.cd > 0)
@@ -769,6 +773,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   zc.addEventListener('pointermove', e => { if (e.pointerId !== cid) return; send(`tlook|${(e.clientX - cx).toFixed(1)},${(e.clientY - cy).toFixed(1)}`); cx = e.clientX; cy = e.clientY })
   const endCam = e => { if (e.pointerId === cid) cid = null }
   zc.addEventListener('pointerup', endCam); zc.addEventListener('pointercancel', endCam)
+  { const bb = $('tBrace'); let bid = null
+    bb.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Snd.init(); bid = e.pointerId; send('brace|1'); try { bb.setPointerCapture(e.pointerId) } catch (err) {} })
+    const bend = e => { if (e.pointerId !== bid) return; bid = null; send('brace|0') }
+    bb.addEventListener('pointerup', bend); bb.addEventListener('pointercancel', bend) }
   const spb = $('tSpBtn')
   spb.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation(); hintSeen()
