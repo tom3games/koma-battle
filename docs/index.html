@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@500;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="TemplateData/ui.css?v=32">
+<link rel="stylesheet" href="TemplateData/ui.css?v=33">
 </head>
 <body>
 <canvas id="unity-canvas" tabindex="-1"></canvas>
@@ -41,7 +41,7 @@
     <div class="tt-kicker">GYRO RAGNAROK</div>
     <h1 class="tt-name">ジャイロ<br>ラグナロク</h1>
     <p class="tt-lead">自分がコマになる。跳んで、上から落とせ。</p>
-    <button id="btnPlay" class="btn-main">はじめる</button>
+    <div class="tt-btns"><button id="btnPlay" class="btn-main">はじめる</button><button id="btnPractice" class="btn-sub" disabled>練習</button></div>
   </div>
 </div>
 
@@ -113,6 +113,19 @@
   <div id="stageTag" class="stage-tag"><small>STAGE</small><span id="stageName"></span></div>
   <div id="specBar" hidden><span class="sp-lbl">観戦中</span><button id="specPrev" aria-label="前の相手">&#9664;</button><b id="specName"></b><button id="specNext" aria-label="次の相手">&#9654;</button><button id="specExit">結果へ</button></div>
   <div id="sudden" class="sudden" hidden>最終局面　外側の床が崩れる</div>
+</div>
+
+<div id="prac" hidden>
+  <div class="pr-col">
+  <div class="pr-top">
+    <button id="prBack" class="pr-btn">タイトルへ</button>
+    <button id="prReset" class="pr-btn">リセット</button>
+    <div class="pr-seg" id="prDummy" role="group" aria-label="的"><button data-d="0" class="on">動かない</button><button data-d="1">回る</button><button data-d="2">体当たり</button></div>
+    <button id="prSp" class="pr-btn pr-sp">必殺</button>
+  </div>
+  <div id="prStat"><div><span class="lb">当てた</span><small>削り</small><b id="psD">-</b><small>初速</small><b id="psV">-</b><small>飛距離</small><b id="psR">-</b></div><div class="dim"><span class="lb">当てられた</span><small>削り</small><b id="psM">-</b></div></div>
+  <div id="prList"><button id="prHead" class="pr-head"><span>練習する技</span><b id="prCount">0/0</b><i></i></button><ul id="prItems"></ul><button id="prClear" class="pr-clear">印を消す</button></div>
+  </div>
 </div>
 
 <div id="fx" aria-hidden="true">
@@ -195,8 +208,8 @@
 })();
 window.KB_BUILD = { loader: "Build/docs.loader.js", data: "Build/docs.data.unityweb", framework: "Build/docs.framework.js.unityweb", code: "Build/docs.wasm.unityweb", company: "tom3games", product: "GYRO RAGNAROK", version: "1.0" };
 </script>
-<script src="TemplateData/sfx.js?v=32"></script>
-<script src="TemplateData/ng-words.js?v=32"></script>
-<script src="TemplateData/ui.js?v=32"></script>
+<script src="TemplateData/sfx.js?v=33"></script>
+<script src="TemplateData/ng-words.js?v=33"></script>
+<script src="TemplateData/ui.js?v=33"></script>
 </body>
 </html>

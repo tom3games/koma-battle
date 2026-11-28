@@ -333,6 +333,7 @@ public partial class KomaBoot : MonoBehaviour
             brains[i] = new Brain { react = 0.6f + (float)rng.NextDouble() * 0.6f };
         }
         countStarted = false;
+        if (practice) PracticeSetup();
     }
     const float StageIntro = 1.5f; bool countStarted;
 
@@ -388,13 +389,13 @@ public partial class KomaBoot : MonoBehaviour
         // 周回加速板: 40秒で外周が光る板になる（直前の3秒は点滅で知らせる）
         if (phase == "fight")
         {
-            bool bon = fightT >= BoardAt;
+            bool bon = fightT >= BoardAt && !practice;
             Arena.SetBoard(bon, fightT, fightT > BoardAt - 3f && !bon ? 1f : 0f);
             if (bon && !boardAnnounced && !Arena.Collapsing) { boardAnnounced = true; Emit("{\"t\":\"e\",\"k\":\"board\"}"); }
         }
         UpdateFires(dt);
         // 最終局面: 100秒たつか、4人の試合で50秒を過ぎて残り2人になったら外から床が崩れる
-        if (phase == "fight" && !sudden)
+        if (phase == "fight" && !sudden && !practice)
         {
             int act = 0, alv = 0; foreach (var k in komas) if (k.root.activeSelf) { act++; if (k.alive) alv++; }
             if (fightT > (Arena.Stage == 1 ? 70f : 100f) || (act >= 4 && alv <= 2 && fightT > (Arena.Stage == 1 ? 35f : 50f))) { sudden = true; suddenAt = fightT; Arena.StartCollapse(); Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
@@ -462,8 +463,10 @@ public partial class KomaBoot : MonoBehaviour
         {
             var k = komas[i];
             if (!k.alive || !k.root.activeSelf || phase != "fight" || cpuOff) continue;
-            Think(k, dt, out moves[i], out bool d2, out bool s2);
-            if (d2 && !(Arena.PitActive && CrossesPit(k.pos, AimFor(k)))) TryDash(k, k.chainFrom != null ? k.pos + (k.pos - k.chainFrom.pos) : AimFor(k));
+            bool d2, s2 = false;
+            if (practice) PracticeThink(k, dt, out moves[i], out d2); else Think(k, dt, out moves[i], out d2, out s2);
+            if (d2 && practice) TryDash(k, player.pos);
+            else if (d2 && !(Arena.PitActive && CrossesPit(k.pos, AimFor(k)))) TryDash(k, k.chainFrom != null ? k.pos + (k.pos - k.chainFrom.pos) : AimFor(k));
             if (s2) TrySpecial(k, AimFor(k));
         }
 
@@ -538,8 +541,9 @@ public partial class KomaBoot : MonoBehaviour
         keyBuf.Clear(); keyBuf.AddRange(pairCd.Keys);
         foreach (var key in keyBuf) { pairCd[key] -= dt; if (pairCd[key] <= 0) pairCd.Remove(key); }
 
-        // 決着
-        if (phase == "fight")
+        // 決着（練習場は決着なし）
+        if (practice && phase == "fight") PracticeUpdate(dt, realDt);
+        if (phase == "fight" && !practice)
         {
             int alive = 0; Koma last = null;
             foreach (var k in komas) if (k.root.activeSelf && k.alive) { alive++; last = k; }
@@ -1592,9 +1596,11 @@ public partial class KomaBoot : MonoBehaviour
                 // 2026-11-28 本人「移動の入力方向とは逆からの攻撃されたらほんの少しノックバック強く」: 逃げる向きの後ろから当てられたら ×1.05（背後の角度と重なる時は大きい方だけ）
                 if (!aAir && angA != 4 && b.specialPhase == 0 && b.inputMv.sqrMagnitude > 0.04f && Vector2.Dot(new Vector2(nh.x, nh.z), b.inputMv.normalized) >= 0.5f) { b.vel = bV0 + (b.vel - bV0) * RunHitKnock; EmitEv("runhit", b, 0); }
                 if (!bAir && angB != 4 && a.specialPhase == 0 && a.inputMv.sqrMagnitude > 0.04f && Vector2.Dot(new Vector2(-nh.x, -nh.z), a.inputMv.normalized) >= 0.5f) { a.vel = aV0 + (a.vel - aV0) * RunHitKnock; EmitEv("runhit", a, 0); }
+                float spA0 = a.spin, spB0 = b.spin;
                 Damage(a, b, dmgToB);
                 Damage(b, a, dmgToA);
                 PasOnHit(a, b, dmgToB > 0); PasOnHit(b, a, dmgToA > 0);
+                if (practice) PracticeHit(a, b, nh, aAir, bAir, spA0 - a.spin, spB0 - b.spin);
                 bool aSp = a.specialPhase == 2, bSp = b.specialPhase == 2;
                 if (aSp) SpecialImpact(a, a.pos);
                 if (bSp) SpecialImpact(b, b.pos);

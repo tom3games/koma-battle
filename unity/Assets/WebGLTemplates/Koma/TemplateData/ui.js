@@ -169,11 +169,14 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   }
 
   // ---------- 画面の切り替え ----------
+  let practice = false
   function show(id) {
     for (const s of ['title', 'hub', 'hud', 'result']) $(s).hidden = s !== id
     document.body.classList.toggle('playing', id === 'hud')
     document.body.classList.toggle('on-title', id === 'title')
     $('touch').hidden = !(id === 'hud' && isTouch)
+    $('prac').hidden = !(id === 'hud' && practice)
+    document.body.classList.toggle('practice', id === 'hud' && practice)
     if (id !== 'hud') { resetTouch(); $('hint').hidden = true }
     KB.screen = id
   }
@@ -182,6 +185,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     const b = $('btnFight')
     b.disabled = !KB.ready
     b.textContent = KB.ready ? '出撃' : `準備中 ${Math.round(progress * 100)}%`
+    $('btnPractice').disabled = !KB.ready
   }
 
   function ev(m) {
@@ -194,7 +198,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         send(camFor())
         fightBtn()
         break
-      case 'stage': { const t = $('stageTag'); $('stageName').textContent = ['アビス・ボウル', 'キングス・ヒル'][m.p | 0] || ''; KB.stage = m.p | 0; t.classList.remove('on'); void t.offsetWidth; t.classList.add('on'); document.body.classList.add('stage-intro'); setTimeout(() => document.body.classList.remove('stage-intro'), 2600); break }
+      case 'stage': { const t = $('stageTag'); $('stageName').textContent = practice ? '練習場' : ['アビス・ボウル', 'キングス・ヒル'][m.p | 0] || ''; KB.stage = m.p | 0; t.classList.remove('on'); void t.offsetWidth; t.classList.add('on'); document.body.classList.add('stage-intro'); setTimeout(() => document.body.classList.remove('stage-intro'), 2600); break }
       case 'count': document.body.classList.remove('stage-intro'); Snd.rate('bgm', 1); countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
       case 'go':
         countdown('勝負', true); Snd.play('go', { vol: 0.8 })
@@ -320,7 +324,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'pitfall': Snd.play('crumble', { vol: 1, rate: 0.9 }); Snd.play('boom', { vol: 0.9, rate: 0.5 }); Snd.play('down', { vol: 0.7, rate: 0.6 }); shakeScreen(); break
       case 'collapse': Snd.play('down', { vol: 0.9, rate: 0.6 }); Snd.play('boom', { vol: 0.7, rate: 0.7 }); break
       case 'end': result(m); break
+      case 'phit': pracHit(m); break
+      case 'pstat': pracStat(m); break
     }
+    if (practice) pracEv(m)
   }
 
   // ---------- タイトル → ハブ（読み込み中から触れる） ----------
@@ -454,9 +461,83 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     show('hud')
     if (isTouch && store.get('koma-hint', '') !== '1') showHint()
     send('move|0,0')
-    send(`start|${pick.top},${pick.core},${pick.leg},${nCpu},${pick.sp},${pick.dir},${pick.pas - 1}`)
+    send(practice ? `practice|1,${pracDummy}` : 'practice|0,0')
+    send(`start|${pick.top},${pick.core},${pick.leg},${nCpu},${practice ? pracSp : pick.sp},${pick.dir},${pick.pas - 1}`)
     lockMouse()
   }
+
+  // ---------- 練習場（タイトルの「練習」から。時間なし・的3種・技のチェック） ----------
+  const PRAC_ITEMS = [
+    { id: 'dash', n: 'ダッシュで当てる', h: 'PC: 左クリック　スマホ: 右を倒して離す' },
+    { id: 'air', n: '空中から当てる', h: 'ジャンプ台やスペースで跳び、空中でダッシュして上から' },
+    { id: 'upper', n: 'かち上げ', h: 'WASD を2回押して傾け、その側で当てる', pc: true },
+    { id: 'brace', n: '踏ん張りで耐える', h: 'PC: F を押しながら当てられる　スマホ: 踏ん張りボタン（左スティックは離す）' },
+    { id: 'cling', n: '縁で踏ん張る', h: '縁から外へ出かけると引っかかる' },
+    { id: 'sp', n: '必殺を撃つ', h: 'PC: 右クリック　スマホ: 星ボタン' },
+    { id: 'chain', n: 'チェイン・バインド', h: '必殺をチェイン・バインドにして撃つ' },
+    { id: 'out', n: '的を場外へ落とす', h: '縁の外へ押し出す' },
+  ].filter(x => !(isTouch && x.pc))
+  let pracDummy = 0, pracSp = 0
+  let pracDone = {}
+  try { pracDone = JSON.parse(store.get('koma-prac', '{}')) || {} } catch (e) { pracDone = {} }
+  function pracRender() {
+    const ul = $('prItems'); ul.innerHTML = ''
+    for (const it of PRAC_ITEMS) {
+      const li = document.createElement('li'); li.dataset.id = it.id; if (pracDone[it.id]) li.className = 'done'
+      li.innerHTML = '<i class="ck"></i><div><b></b><small></small></div>'
+      li.querySelector('b').textContent = it.n; li.querySelector('small').textContent = it.h
+      ul.appendChild(li)
+    }
+    $('prCount').textContent = `${PRAC_ITEMS.filter(x => pracDone[x.id]).length}/${PRAC_ITEMS.length}`
+  }
+  function pracMark(id) {
+    if (!PRAC_ITEMS.some(x => x.id === id) || pracDone[id]) return
+    pracDone[id] = 1; store.set('koma-prac', JSON.stringify(pracDone)); pracRender()
+    const li = document.querySelector(`#prItems li[data-id="${id}"]`); if (li) { li.classList.add('done'); Snd.play('ui', { vol: 0.5, rate: 1.5 }) }
+  }
+  function pracEv(m) {
+    switch (m.k) {
+      case 'phit': if (m.dash) pracMark('dash'); if (m.air) pracMark('air'); if (m.up) pracMark('upper'); break
+      case 'bracehit': if (m.i === 0) pracMark('brace'); break
+      case 'cling': if (m.i === 0) pracMark('cling'); break
+      case 'special': if (m.i === 0) { pracMark('sp'); if ((m.p | 0) === 7) pracMark('chain') } break
+      case 'ko': if (m.i === 1 && m.why === 'out') pracMark('out'); break
+    }
+  }
+  const fmt = (v, d) => (+v).toFixed(d)
+  function pracHit(m) {
+    $('psD').textContent = fmt(m.dd, 1) + '%'; $('psV').textContent = fmt(m.v, 1) + ' m/s'; $('psR').textContent = '…'
+    $('psM').textContent = fmt(m.dm, 1) + '%'
+  }
+  function pracStat(m) { $('psR').textContent = fmt(m.dist, 1) + ' m' }
+  function pracSpLabel() { $('prSp').textContent = '必殺　' + SPECIALS[pracSp] }
+  function pracStart() {
+    if (!KB.ready) return
+    practice = true; Snd.init(); Snd.play('ui', { vol: 0.6 })
+    pracSp = pick.sp; pracSpLabel()
+    $('psD').textContent = $('psV').textContent = $('psR').textContent = $('psM').textContent = '-'
+    document.querySelectorAll('#prDummy button').forEach(x => x.classList.toggle('on', +x.dataset.d === pracDummy))
+    if (isTouch) $('prList').classList.add('shut')
+    pracRender(); startMatch()
+  }
+  function pracExit() {
+    practice = false; resTok++
+    if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock()
+    send('practice|0,0'); send('title'); send('move|0,0'); send('aimoff'); send('brace|0')
+    $('onoma').classList.remove('on'); $('banner').classList.remove('on')
+    show('title')
+  }
+  $('btnPractice').onclick = pracStart
+  $('prBack').onclick = () => { Snd.play('ui', { vol: 0.5 }); pracExit() }
+  $('prReset').onclick = () => { Snd.play('ui', { vol: 0.5 }); send('pracreset'); $('psD').textContent = $('psV').textContent = $('psR').textContent = $('psM').textContent = '-' }
+  $('prSp').onclick = () => { pracSp = (pracSp + 1) % SPECIALS.length; pracSpLabel(); send(`setsp|${pracSp},0`); send('gauge|100'); Snd.play('ui', { vol: 0.5 }) }
+  document.querySelectorAll('#prDummy button').forEach(b => b.onclick = () => {
+    pracDummy = +b.dataset.d; send(`dummytype|${pracDummy}`); Snd.play('ui', { vol: 0.4 })
+    document.querySelectorAll('#prDummy button').forEach(x => x.classList.toggle('on', x === b))
+  })
+  $('prHead').onclick = () => $('prList').classList.toggle('shut')
+  $('prClear').onclick = () => { pracDone = {}; store.set('koma-prac', '{}'); pracRender() }
+  // 画面の外へ出てもキー入力が残らないように、練習から戻る時は上で全部止める
 
   // ---------- HUD ----------
   const tagEls = []
@@ -493,7 +574,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         el = tagEls[k.i] = document.createElement('div')
         el.className = 'tag' + (k.i === 0 ? ' me' : '')
         el.style.setProperty('--c', COLORS[k.i])
-        { const sp = document.createElement('span'); sp.textContent = k.i === 0 ? myName() : NAMES[k.i]; el.appendChild(sp) }
+        { const sp = document.createElement('span'); sp.textContent = k.i === 0 ? myName() : practice ? 'ダミー' : NAMES[k.i]; el.appendChild(sp) }
         $('tags').appendChild(el)
       }
       el.classList.toggle('out', k.a === 0)

@@ -423,3 +423,45 @@ body.stage-intro #tags{visibility:hidden}
 /* 2026-11-28 踏ん張り（F / スマホは左のボタン。左のスティックを離している間だけ効く＝2本の指を同時に使わない） */
 #tBrace{left:calc(22px + var(--sl));bottom:calc(var(--vh) * .46);width:68px;height:68px;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.35);color:#fff;font-weight:900;font-size:11px;letter-spacing:0;line-height:1.1;padding:0}
 #tBrace.on{background:rgba(255,120,40,.55);border-color:#fff;box-shadow:0 0 18px 4px rgba(255,140,60,.7)}
+
+/* 練習場 */
+.tt-btns{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap}
+#btnPractice:disabled{opacity:.45}
+#prac{position:fixed;inset:0;z-index:9;pointer-events:none}
+#prac button{pointer-events:auto;touch-action:manipulation}
+.pr-col{position:absolute;left:calc(10px + var(--sl));top:calc(10px + var(--st));width:min(330px,calc(100vw - 76px - var(--sl)));display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.pr-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pr-btn,.pr-seg button{min-height:40px;border:1px solid rgba(255,255,255,.5);background:rgba(12,13,17,.72);color:#fff;font-weight:800;font-size:13px;padding:6px 12px;clip-path:var(--cut);border-radius:0;white-space:nowrap}
+.pr-btn:active,.pr-seg button:active{transform:scale(.96)}
+.pr-seg{display:flex;gap:2px}
+.pr-seg button.on{background:var(--gold);color:#16130c;border-color:#fff}
+.pr-sp{border-color:rgba(217,164,65,.8)}
+#prStat{background:rgba(12,13,17,.72);padding:6px 12px;clip-path:var(--cut);font-weight:800;font-size:13px;line-height:1.7;pointer-events:none;white-space:nowrap}
+#prStat .lb{display:inline-block;min-width:4.6em;font-size:12px}
+#prStat small{opacity:.7;font-size:11px;margin:0 3px 0 6px}
+#prStat b{font-size:14px;font-variant-numeric:tabular-nums;color:var(--gold)}
+#prStat .dim b{color:#ff9d8f}
+#prList{width:100%;background:rgba(12,13,17,.78);clip-path:var(--cut);pointer-events:auto}
+.pr-head{width:100%;display:flex;align-items:center;gap:10px;min-height:40px;border:0;background:none;color:#fff;font-weight:900;font-size:14px;padding:6px 12px;text-align:left}
+.pr-head b{color:var(--gold);margin-left:auto}
+.pr-head i{width:8px;height:8px;border-right:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(45deg);margin-top:-4px;transition:transform .15s}
+#prList.shut .pr-head i{transform:rotate(-45deg);margin-top:0}
+#prList.shut #prItems,#prList.shut .pr-clear{display:none}
+#prItems{list-style:none;margin:0;padding:0 12px 4px}
+#prItems li{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid rgba(255,255,255,.1)}
+#prItems .ck{flex:0 0 18px;height:18px;margin-top:2px;border:2px solid rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center}
+#prItems li.done .ck{background:var(--gold);border-color:var(--gold)}
+#prItems li.done .ck::after{content:"";width:9px;height:5px;border-left:3px solid #16130c;border-bottom:3px solid #16130c;transform:rotate(-45deg) translate(1px,-1px)}
+#prItems li.done b{opacity:.55}
+#prItems b{display:block;font-size:13px;font-weight:900}
+#prItems small{display:block;font-size:11px;opacity:.75;font-weight:500;line-height:1.35}
+.pr-clear{display:block;margin:0 12px 8px auto;border:0;background:none;color:#fff;opacity:.6;font-size:11px;font-weight:700;text-decoration:underline;min-height:32px}
+body.practice .hud-time,body.practice #sudden{display:none!important}
+@media (max-aspect-ratio:4/5){
+  .pr-btn,.pr-seg button{font-size:12px;padding:4px 9px;min-height:38px}
+  #prStat{font-size:12px;padding:5px 8px;white-space:normal}
+  #prStat small{margin:0 2px 0 4px}
+}
+@media (max-height:520px){
+  .pr-col{width:min(330px,46vw)}
+}

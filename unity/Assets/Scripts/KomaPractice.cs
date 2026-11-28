@@ -1,32 +1,33 @@
 using UnityEngine;
 
-// 2026-11-28 練習場（本人のアイデア）: 時間無し・負け無し。ダミー3種（動かない／歩き回る／軽く当ててくる）。
-// 当てた時に押し出した距離・削った回転・自分の残り回転を数字で出し（pstat）、倒れたらすぐ戻す。必殺はすぐたまる
+// 2026-11-28 練習場（本人のアイデア）: 時間無し・負け無し。ダミー3種（動かない／ゆっくり回る／軽く当ててくる）。
+// 当てた時に削った回転・初速を数字で出し（phit）、1.6秒後に押し出した距離（pstat）。倒れたらすぐ戻す。必殺はすぐたまる
 public partial class KomaBoot
 {
     bool practice; int dummyType; Koma dummy;
     readonly float[] pracDeadT = new float[4];
-    float pracGoalT; Vector3 pracGoal;
-    // 当てた時の計測: 当てた瞬間の相手の位置・回転 → 1.6秒後に 押し出した距離・削った回転(%) を出す
+    float pracGoalT, pracAng; Vector3 pracGoal;
     float pracWinT = -1f, pracSpin0; Vector3 pracPos0;
 
     void PracticeSetup()
     {
-        // ダミーの装備は固定（標準的な型）
         dummy = komas[1];
         dummy.Rebuild(3, 1, 0, mats, false); dummy.sp = 0; dummy.pas = -1;
-        pracWinT = -1f;
+        pracWinT = -1f; pracGoalT = 0; pracAng = 0;
         for (int i = 0; i < 4; i++) pracDeadT[i] = 0;
-        pracGoalT = 0;
+        player.Place(new Vector3(-6f, Arena.H(-6f, 0) + 2.5f, 0));
+        dummy.Place(new Vector3(6f, Arena.H(6f, 0) + 2.5f, 0));
+        brains[1] = new Brain { react = 2f };
     }
 
     // 毎フレーム（fight の間）
     void PracticeUpdate(float dt, float realDt)
     {
         if (phase != "fight") return;
-        player.gauge = Mathf.Min(100f, player.gauge + 45f * dt);   // 必殺はすぐたまる
-        if (dummy != null && dummy.alive) dummy.gauge = 0f;
-        // 倒れたらすぐ戻す（負け無し）
+        if (player.alive) { player.gauge = Mathf.Min(100f, player.gauge + 45f * dt); player.spin = Mathf.Min(player.spinMax, player.spin + player.spinMax * 0.05f * dt); }   // 必殺はすぐたまる・回転も少しずつ戻る
+        if (dummy != null && dummy.alive) { dummy.gauge = 0f; dummy.spin = Mathf.Min(dummy.spinMax, dummy.spin + dummy.spinMax * 0.06f * dt); }
+        // 動かない的: 当てられて1.2秒たったら止まる（すり鉢で転がらない）
+        if (dummyType == 0 && dummy != null && dummy.alive && dummy.grounded && fightT - dummy.lastHitT > 1.2f) { dummy.vel.x = 0; dummy.vel.z = 0; }
         for (int i = 0; i < 2; i++)
         {
             var k = komas[i];
@@ -36,11 +37,9 @@ public partial class KomaBoot
             {
                 float x = i == 0 ? -6f : 6f;
                 k.Place(new Vector3(x, Arena.H(x, 0) + 2.5f, 0));
-                if (i == 0) { pAliveLast = true; deathT = -1f; }
                 pracDeadT[i] = 0;
             }
         }
-        // 当てた計測の締め
         if (pracWinT >= 0f)
         {
             pracWinT += realDt;
@@ -48,45 +47,47 @@ public partial class KomaBoot
             {
                 Vector3 d = dummy.pos - pracPos0; d.y = 0;
                 float cut = (pracSpin0 - dummy.spin) / Mathf.Max(1f, dummy.spinMax) * 100f;
-                Emit("{\"t\":\"e\",\"k\":\"pstat\",\"dist\":" + F(d.magnitude) + ",\"cut\":" + F(Mathf.Max(0f, cut)) + ",\"me\":" + F(player.SpinRatio * 100f) + "}");
+                Emit("{\"t\":\"e\",\"k\":\"pstat\",\"dist\":" + F(d.magnitude) + ",\"cut\":" + F(Mathf.Max(0f, cut)) + "}");
                 pracWinT = -1f;
             }
         }
-        else if (dummy != null && dummy.alive) dummy.spin = Mathf.Min(dummy.spinMax, dummy.spin + dummy.spinMax * 0.06f * dt);   // ダミーの回転はゆっくり戻る
     }
 
-    // 当たった瞬間（Collide から）: 自分とダミーのぶつかりを計測し始める
-    void PracticeHit(Koma a, Koma b)
+    // 当たった瞬間（Collide から）。lossA/lossB はそれぞれが減らした回転の量
+    void PracticeHit(Koma a, Koma b, Vector3 nh, bool aAir, bool bAir, float lossA, float lossB)
     {
-        if (!practice || dummy == null) return;
+        if (dummy == null) return;
         if (!((a.isPlayer && b == dummy) || (b.isPlayer && a == dummy))) return;
-        if (pracWinT >= 0f) return;   // 計測中は重ねない
-        pracWinT = 0f; pracPos0 = dummy.pos; pracSpin0 = dummy.spin;
+        bool pa = a.isPlayer;
+        Koma me = pa ? a : b;
+        float toDummy = pa ? lossB : lossA, toMe = pa ? lossA : lossB;
+        bool air = pa ? aAir : bAir, up = pa ? Upper(a, nh) && !aAir : Upper(b, -nh) && !bAir;
+        Vector3 dv = dummy.vel; dv.y = 0;
+        Emit("{\"t\":\"e\",\"k\":\"phit\",\"dd\":" + F(Mathf.Max(0f, toDummy) / Mathf.Max(1f, dummy.spinMax) * 100f) + ",\"dm\":" + F(Mathf.Max(0f, toMe) / Mathf.Max(1f, me.spinMax) * 100f)
+             + ",\"v\":" + F(dv.magnitude) + ",\"dash\":" + (me.dashT > 0 ? 1 : 0) + ",\"air\":" + (air ? 1 : 0) + ",\"up\":" + (up ? 1 : 0) + ",\"sp\":" + (me.specialPhase >= 2 ? 1 : 0) + "}");
+        if (pracWinT >= 0f) return;
+        pracWinT = 0f; pracPos0 = dummy.pos; pracSpin0 = dummy.spin + toDummy;
     }
 
     // ダミーの動き
     void PracticeThink(Koma k, float dt, out Vector2 move, out bool dash)
     {
         move = Vector2.zero; dash = false;
+        if (k != dummy || dummyType == 0) return;
         var b = brains[k.idx];
-        if (dummyType == 0) return;
         if (dummyType == 1)
         {
-            pracGoalT -= dt;
-            if (pracGoalT <= 0f || (new Vector2(k.pos.x - pracGoal.x, k.pos.z - pracGoal.z)).magnitude < 1f)
-            {
-                pracGoalT = 2.5f + (float)rng.NextDouble() * 2f;
-                float a = (float)rng.NextDouble() * Mathf.PI * 2, r = 3f + (float)rng.NextDouble() * 6f;
-                pracGoal = new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r);
-            }
+            // ゆっくり中央のまわりを回る
+            pracAng += 0.32f * dt;
+            pracGoal = new Vector3(Mathf.Cos(pracAng) * 7f, 0, Mathf.Sin(pracAng) * 7f);
             Vector2 w = new Vector2(pracGoal.x - k.pos.x, pracGoal.z - k.pos.z);
-            move = w.normalized * 0.55f;
+            move = w.magnitude > 0.2f ? w.normalized * Mathf.Min(0.6f, w.magnitude * 0.3f + 0.2f) : Vector2.zero;
             return;
         }
         // 軽く当ててくる: 自分へ向かい、たまにだけダッシュ
         Vector3 to = player.pos - k.pos; to.y = 0;
-        move = new Vector2(to.x, to.z).normalized * 0.8f;
+        move = new Vector2(to.x, to.z).normalized * 0.7f;
         b.react -= dt;
-        if (k.grounded && k.dashCd <= 0 && to.magnitude < 7f && b.react <= 0) { dash = true; b.react = 3.5f; }
+        if (k.grounded && k.dashCd <= 0 && to.magnitude < 6f && b.react <= 0) { dash = true; b.react = 6f; }
     }
 }
