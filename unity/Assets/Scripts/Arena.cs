@@ -502,7 +502,7 @@ public static class Arena
         return "\"stage\":" + Stage + ",\"built\":" + builtStage + ",\"bad\":" + bad + ",\"verts\":" + verts + ",\"pieces\":" + pieces.Count + ",\"pOn\":" + pOn + ",\"pOk\":" + pOk
             + ",\"base\":" + (baseObj && baseObj.activeSelf ? 1 : 0) + ",\"arc\":" + arcOn + ",\"arcN\":" + arcObjs.Count + ",\"ice\":" + iceOn + ",\"iceN\":" + iceObjs.Count
             + ",\"turn\":" + turnOn + ",\"turnN\":" + turnObjs.Count + ",\"mat\":" + matOk + ",\"crOK\":" + (CollapseR > 1e8f ? 1 : 0) + ",\"pitOK\":" + (PitR <= 0f && pitT < 0 ? 1 : 0)
-            + ",\"ghost\":" + ghost + ",\"pitPiece\":" + (pitPiece && pitPiece.activeSelf ? 1 : 0);
+            + ",\"bg\":" + Backdrop.ActiveCount() + ",\"bgN\":" + Backdrop.PartCount + ",\"bgOK\":" + (Backdrop.ColorOk(Stage) ? 1 : 0) + ",\"ghost\":" + ghost + ",\"pitPiece\":" + (pitPiece && pitPiece.activeSelf ? 1 : 0);
     }
 
     public static GameObject BuildVisual(Materials m)

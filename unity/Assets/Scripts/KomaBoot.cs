@@ -59,7 +59,7 @@ public partial class KomaBoot : MonoBehaviour
     class Brain
     {
         public int target = -1; public float retarget, react, padGoal = -1, think, braceCd;
-        public Vector2 jitter; public float boardT;
+        public Vector2 jitter; public float boardT, lastPlayerT;
     }
 
     static string F(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
@@ -95,19 +95,8 @@ public partial class KomaBoot : MonoBehaviour
         rim.type = LightType.Directional; rim.color = new Color(0.55f, 0.68f, 0.9f); rim.intensity = 0.35f; rim.renderMode = LightRenderMode.ForceVertex;
         rim.transform.rotation = Quaternion.Euler(18f, 160f, 0);
 
-        // 観客席（暗い段々）と照明塔
-        var stands = MeshKit.Obj("Stands", null, MeshKit.Frustum(Arena.Edge + 6f, Arena.Edge + 26f, 14f, 96, false), mats.Stands);
-        stands.transform.position = new Vector3(0, -4f, 0);
-        stands.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        for (int i = 0; i < 8; i++)
-        {
-            float a = (i + 0.5f) * Mathf.PI * 2 / 8;
-            var tower = MeshKit.Obj("Tower", null, MeshKit.Box(new Vector3(0.7f, 22f, 0.7f)), mats.Truss);
-            tower.transform.position = new Vector3(Mathf.Cos(a) * (Arena.Edge + 14f), 5f, Mathf.Sin(a) * (Arena.Edge + 14f));
-            var lamp = MeshKit.Obj("Lamp", null, MeshKit.Box(new Vector3(3.2f, 1.4f, 0.3f)), mats.Emis(new Color(0.2f, 0.2f, 0.2f), new Color(1f, 0.95f, 0.85f) * 1.4f));
-            lamp.transform.position = new Vector3(Mathf.Cos(a) * (Arena.Edge + 13.6f), 15.5f, Mathf.Sin(a) * (Arena.Edge + 13.6f));
-            lamp.transform.rotation = Quaternion.LookRotation(new Vector3(-Mathf.Cos(a), -0.6f, -Mathf.Sin(a)));
-        }
+        // 背景は地下闘技場（ArenaBackdrop.cs）
+        Backdrop.Build(mats);
 
         Arena.BuildVisual(mats);
 
@@ -353,6 +342,7 @@ public partial class KomaBoot : MonoBehaviour
         Time.timeScale = paused ? 0f : scale * testScale;
         float dt = Mathf.Min(Time.deltaTime, 0.05f * testScale);
         phaseT += realDt * testScale;
+        Backdrop.Tick(Time.unscaledTime);
 
         if (phase == "title" || phase == "select")
         {
@@ -653,11 +643,13 @@ public partial class KomaBoot : MonoBehaviour
         {
             b.retarget = 1.5f + (float)rng.NextDouble() * 1.5f;
             // 近くて回転の少ない相手をねらう
-            float best = 1e9f; b.target = -1;
+            float best = 1e9f; b.target = -1; bool nearPick = rng.NextDouble() < 0.2;
             foreach (var o in komas)
             {
                 if (o == k || !o.alive || !o.root.activeSelf) continue;
                 float sc = (o.pos - k.pos).magnitude + o.SpinRatio * 6f + (float)rng.NextDouble() * 3f;
+                // 2026-11-28 本人「コンピューター同士でばっかり戦ってる」: プレイヤーが生きている間は狙いの重みを2倍に（距離を半分に見る）、しばらく当たっていなければさらに寄る。たまに（2割）は近い相手を普通に選ぶ
+                if (o.isPlayer && !nearPick) { sc *= 0.5f; if (fightT - b.lastPlayerT > 8f) sc -= 6f; }
                 if (sc < best) { best = sc; b.target = o.idx; }
             }
             b.boardT = Arena.BoardOn && !Arena.Collapsing && rng.NextDouble() < 0.15 ? 1.5f + (float)rng.NextDouble() * 1.5f : 0f;
@@ -1625,6 +1617,7 @@ public partial class KomaBoot : MonoBehaviour
                 Damage(b, a, dmgToA);
                 PasOnHit(a, b, dmgToB > 0); PasOnHit(b, a, dmgToA > 0);
                 PartsHit(a, b, nh, aAir, bAir, vn);
+                if (a.isPlayer && brains[b.idx] != null) brains[b.idx].lastPlayerT = fightT; else if (b.isPlayer && brains[a.idx] != null) brains[a.idx].lastPlayerT = fightT;
                 if (practice) PracticeHit(a, b, nh, aAir, bAir, spA0 - a.spin, spB0 - b.spin);
                 bool aSp = a.specialPhase == 2, bSp = b.specialPhase == 2;
                 if (aSp) SpecialImpact(a, a.pos);
@@ -1789,6 +1782,7 @@ public partial class KomaBoot : MonoBehaviour
     }
     void ApplyStageLook(int st)
     {
+        Backdrop.SetStage(st);
         bool hill = st == 1, turn = st == 2;
         if (sunL != null) { sunL.color = hill ? new Color(1f, 0.78f, 0.5f) : turn ? new Color(0.85f, 0.95f, 1f) : new Color(1f, 0.96f, 0.9f); sunL.intensity = hill ? 1.5f : 1.35f; sunL.transform.rotation = Quaternion.Euler(hill ? 38f : 72f, hill ? 55f : -25f, 0); }
         RenderSettings.ambientSkyColor = hill ? new Color(0.36f, 0.3f, 0.25f) : turn ? new Color(0.24f, 0.32f, 0.42f) : new Color(0.27f, 0.29f, 0.34f);

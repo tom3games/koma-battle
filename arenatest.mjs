@@ -27,6 +27,7 @@ for (let i = 0; i < N; i++) {
   ok(a.arc === (st === 0 ? a.arcN : 0), `${tag}: 加速の弧 ${a.arc}/${a.arcN}`)
   ok(a.ice === (st === 1 ? a.iceN : 0), `${tag}: 氷の帯 ${a.ice}/${a.iceN}`)
   ok(a.turn === (st === 2 ? a.turnN : 0), `${tag}: 回転盤の部品 ${a.turn}/${a.turnN}`)
+  ok(a.bgN >= 10 && a.bg === a.bgN && a.bgOK === 1, `${tag}: 背景（観覧席・壁・梁・縦穴・照明）の部品 ${a.bg}/${a.bgN} 色=${a.bgOK}`)
   await wait(1600)
   await p.screenshot({ path: `shots/arena_${String(i + 1).padStart(2, '0')}_s${st}.png` })
   console.log(`${NG.length ? '..' : 'ok'} ${tag} bad=${a.bad} pieces=${a.pOk}/${a.pieces} turn=${a.turn}/${a.turnN} arc=${a.arc} ice=${a.ice}`)
