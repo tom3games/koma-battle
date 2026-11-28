@@ -497,6 +497,8 @@ public class Koma
         ghostMat.SetColor("_TintColor", gc * 0.5f);
         ghost.localRotation = Quaternion.Euler(0, (left ? -1f : 1f) * spinAngle * 0.37f, 0);
 
+        // 着地の潰れが終わっている間は等倍に戻す（毎フレーム掛け続けて大きくなるのを防ぐ。2026-11-28 本人「ステージ全体を覆うエフェクト」の原因）
+        if (landT >= 3f) tilt.localScale = Vector3.one;
         // 重くなる: 少し沈んで平たく潰れる
         if (anchorT > 0 && alive)
         {

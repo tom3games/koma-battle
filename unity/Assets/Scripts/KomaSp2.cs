@@ -21,8 +21,11 @@ public partial class KomaBoot
     public bool SpecialReady(Koma k) => k.alive && k.gauge >= 100f && (k.sp != 5 || k.SpinRatio < 0.3f);
 
     // ---------- 粒（氷・火花・ほこり）。速度と色を指定して出す ----------
+    int ActiveWaves() { int n = 0; for (int i = 0; i < waveT.Count; i++) if (waveT[i] >= 0) n++; return n; }
+    int ActiveRings() { int n = 0; foreach (var r in arrowRings) if (r.t >= 0) n++; return n; }
     void Fleck(Vector3 at, Vector3 vel, Color c, float size, float life, bool glow)
     {
+        cFleck++;
         var ep = new ParticleSystem.EmitParams { position = at, velocity = vel, startSize = size, startLifetime = life, startColor = c };
         (glow ? sparks : dust).Emit(ep, 1);
     }

@@ -867,6 +867,7 @@ public partial class KomaBoot : MonoBehaviour
 
     void FireBurst(Vector3 at, int n)
     {
+        cFire += n;
         var ep = new ParticleSystem.EmitParams();
         for (int i = 0; i < n; i++)
         {
@@ -1242,6 +1243,7 @@ public partial class KomaBoot : MonoBehaviour
     Light fxLight; float fxLightT, fxLightI;
     void Pulse(Vector3 at, Color c, float intensity, float range = 14f)
     {
+        cPulse++;
         if (fxLight == null)
         {
             fxLight = new GameObject("FxLight").AddComponent<Light>();
@@ -1523,8 +1525,10 @@ public partial class KomaBoot : MonoBehaviour
 #pragma warning restore CS0162
     }
 
+    public static int cSpark, cDust, cFleck, cWave, cFire, cPulse;   // 検査用: 生成した数の累計
     void Spark(Vector3 at, Vector3 bias, int n, float power)
     {
+        cSpark += n;
         var ep = new ParticleSystem.EmitParams();
         for (int i = 0; i < n; i++)
         {
@@ -1541,6 +1545,7 @@ public partial class KomaBoot : MonoBehaviour
 
     void Dust(Vector3 at, int n)
     {
+        cDust += n;
         var ep = new ParticleSystem.EmitParams();
         for (int i = 0; i < n; i++)
         {
@@ -1556,6 +1561,7 @@ public partial class KomaBoot : MonoBehaviour
 
     void Wave(Vector3 at, float size)
     {
+        cWave++;
         for (int i = 0; i < waves.Count; i++)
         {
             if (waveT[i] >= 0) continue;
@@ -1696,10 +1702,31 @@ public partial class KomaBoot : MonoBehaviour
               .Append(",\"ps\":").Append(k.pas).Append(",\"wg\":").Append(k.WingsOn ? 1 : 0).Append(",\"rg\":").Append(k.rage ? 1 : 0).Append(",\"sn\":").Append(k.stampN).Append(",\"lf\":").Append(k.left ? 1 : 0)
               .Append(",\"p\":[").Append(k.top).Append(',').Append(k.core).Append(',').Append(k.leg).Append("]")
               .Append(",\"why\":\"").Append(k.koWhy).Append("\"");
+            if (debugState && k.idx == 0) sb.Append(",\"fx\":[").Append(cSpark).Append(',').Append(cDust).Append(',').Append(cFleck).Append(',').Append(cWave).Append(',').Append(cFire).Append(',').Append(cPulse).Append(',').Append(sparks.particleCount).Append(',').Append(dust.particleCount).Append(',').Append(fireP.particleCount).Append(',').Append(ActiveWaves()).Append(',').Append(chains.Count).Append(',').Append(ActiveRings()).Append("]");
             if (debugState) sb.Append(",\"wh\":").Append(F(Arena.WallH(k.pos.x, k.pos.z))).Append(",\"cc\":").Append(F(k.clingCd)).Append(",\"wy\":").Append(F(k.pos.y)).Append(",\"tl\":").Append(F(k.TiltDeg)).Append(",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]");
             sb.Append('}');
         }
-        sb.Append("]}");
+        sb.Append("]");
+        if (debugState)
+        {
+            // 検査用: 描画範囲（bounds）が大きい物（ステージ並み）を拾う
+            bigT -= realDt;
+            if (bigT <= 0)
+            {
+                bigT = 0.4f; bigS = "";
+                foreach (var r in FindObjectsOfType<Renderer>())
+                {
+                    if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                    string n = r.gameObject.name;
+                    if (n == "Sky" || n == "Stands" || n == "Floor" || n == "FloorPiece" || n == "Base" || n == "Arc" || n == "Board" || n == "Tower" || n == "Lamp" || n == "WarnRing" || n == "PitPiece" || n == "PitWall") continue;
+                    float m = Mathf.Max(r.bounds.size.x, r.bounds.size.z);
+                    if (m > 16f) bigS += (bigS.Length > 0 ? "," : "") + "\"" + n + ":" + Mathf.RoundToInt(m) + "\"";
+                }
+            }
+            sb.Append(",\"big\":[").Append(bigS).Append(']');
+        }
+        sb.Append("}");
         Emit(sb.ToString());
     }
+    float bigT; string bigS = "";
 }
