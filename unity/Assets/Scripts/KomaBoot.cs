@@ -1509,6 +1509,8 @@ public partial class KomaBoot : MonoBehaviour
                 float pop = Mathf.Min(3.2f, 1f + vn * 0.1f);
                 float multA = (a.dashT > 0 ? 1.4f : 1f) * (aAir ? 2.4f * a.st.aerial * (a.pas == 1 ? 1.3f : 1f) : 1f) * (a.specialPhase == 2 ? 1.6f : 1f) * (a.specialPhase == 20 ? 1.35f : 1f) * (a.specialPhase == 31 ? ArrowDmg : 1f) * (a.specialPhase == 41 ? 1.4f * a.lsPow : 1f);
                 float multB = (b.dashT > 0 ? 1.4f : 1f) * (bAir ? 2.4f * b.st.aerial * (b.pas == 1 ? 1.3f : 1f) : 1f) * (b.specialPhase == 2 ? 1.6f : 1f) * (b.specialPhase == 20 ? 1.35f : 1f) * (b.specialPhase == 31 ? ArrowDmg : 1f) * (b.specialPhase == 41 ? 1.4f * b.lsPow : 1f);
+                // 丘: 坂を駆け下りながら当てると強い（軽い・速い型が坂を使って重い相手に当たる）
+                if (Arena.Stage == 1) { float da = -a.vel.y, db = -b.vel.y; if (da > 1.5f) multA *= 1f + Mathf.Min(0.6f, (da - 1.5f) * 0.15f); if (db > 1.5f) multB *= 1f + Mathf.Min(0.6f, (db - 1.5f) * 0.15f); }
                 // 丘: 高い所から当てると強い（頂上の取り合い）
                 if (Arena.Stage == 1) { float dh = a.Center.y - b.Center.y; if (dh > 1f) multA *= 1f + Mathf.Min(0.35f, (dh - 1f) * 0.15f); else if (dh < -1f) multB *= 1f + Mathf.Min(0.35f, (-dh - 1f) * 0.15f); }
                 float shareA = sa / (sa + sb + 0.01f);

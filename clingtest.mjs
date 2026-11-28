@@ -5,7 +5,7 @@ const url = process.argv[2] || 'http://localhost:5392/'
 const { b, p, errs } = await open(url)
 await p.click('#btnPlay'); await wait(500)
 await p.evaluate(() => { document.querySelector('#vsPick button[data-n="1"]').click() })
-await p.click('#btnFight')
+await p.evaluate(() => KB.send('stage|0')); await p.click('#btnFight')
 await p.waitForFunction(() => window.KB.events.some(e => e.k === 'go'), null, { timeout: 30000 })
 await send(p, 'cpuoff|1')
 const NG = []; const ok = (c, m) => { console.log((c ? 'OK ' : 'NG ') + m); if (!c) NG.push(m) }

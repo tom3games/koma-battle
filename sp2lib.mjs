@@ -1,12 +1,12 @@
 // 2026-11-28 必殺4つ・中央の崩落の検査の共通部品
 import { open, wait, send } from './lib.mjs'
 export { wait, send }
-export async function begin(url, { sp = 0, n = 1, w = 1280, h = 720, mobile = false, pas = 0, cpuoff = true, ts = 1 } = {}) {
+export async function begin(url, { sp = 0, n = 1, w = 1280, h = 720, mobile = false, pas = 0, cpuoff = true, ts = 1, stage = +(process.env.STAGE ?? -1) } = {}) {
   const o = await open(url + (url.includes('?') ? '&' : '?') + 'lv=10', { w, h, mobile })
   const { p } = o
   await p.click('#btnPlay'); await wait(300)
   await p.evaluate(n => { document.querySelector(`#vsPick button[data-n="${n}"]`).click() }, n)
-  await p.evaluate(([sp, pas]) => { Object.assign(KB.pick, { top: 3, core: 4, leg: 4, dir: 0, sp, pas }); KB.result = null; KB.startMatch() }, [sp, pas])
+  await p.evaluate(([sp, pas, stage]) => { Object.assign(KB.pick, { top: 3, core: 4, leg: 4, dir: 0, sp, pas }); KB.result = null; KB.send('stage|' + stage); KB.startMatch() }, [sp, pas, stage])
   await p.waitForFunction(() => window.KB.events.some(e => e.k === 'go'), null, { timeout: 120000 })
   if (cpuoff) await send(p, 'cpuoff|1')
   await send(p, 'debugstate|1'); await send(p, 'timescale|' + ts)

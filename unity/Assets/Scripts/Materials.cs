@@ -25,7 +25,7 @@ public class Materials
         Funnel = FunnelTex();
         Floor = Lit(Color.white, 0.48f, 0.5f, FloorTex(1024));
         Floor2 = Lit(new Color(1f, 0.74f, 0.48f), 0.3f, 0.15f, Floor.mainTexture);   // 丘: 砂岩のような暖かい色
-        Ice = Lit(new Color(0.62f, 0.86f, 1f), 0.97f, 0.25f);                        // 氷の帯
+        Ice = Emis(new Color(0.42f, 0.66f, 0.85f), new Color(0.03f, 0.08f, 0.14f));                        // 氷の帯
         Base = Lit(new Color(0.09f, 0.1f, 0.12f), 0.5f, 0.6f, Brushed);
         Arc = Lit(Color.white, 0.55f, 0.7f, ArcTex());
         Pad = Lit(new Color(0.32f, 0.34f, 0.37f), 0.7f, 0.9f, Brushed);
