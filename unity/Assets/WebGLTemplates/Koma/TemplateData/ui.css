@@ -465,3 +465,9 @@ body.practice .hud-time,body.practice #sudden{display:none!important}
 @media (max-height:520px){
   .pr-col{width:min(330px,46vw)}
 }
+
+/* 必殺ごとのゲージ量: 要る量の所に目盛り。それより右はゲージの余り（暗め）。スマホの星は輪が要る量で一周し、右下に数字 */
+#spChip:not(.full):not(.wait):not(.rescue){background:linear-gradient(90deg,rgba(12,13,17,.78) var(--nd,100%),rgba(70,56,28,.55) var(--nd,100%))}
+#spTick{position:absolute;top:0;bottom:0;left:var(--nd,100%);width:3px;margin-left:-2px;background:var(--gold);box-shadow:0 0 6px rgba(255,200,60,.9)}
+#spChip.full #spTick{background:#16130c;box-shadow:none}
+#tNd{position:absolute;right:-2px;bottom:-4px;min-width:24px;padding:1px 4px;border-radius:9px;background:rgba(12,13,17,.85);border:1px solid rgba(255,200,58,.7);color:#ffd36a;font-size:11px;font-weight:900;line-height:1.3;text-align:center;pointer-events:none}

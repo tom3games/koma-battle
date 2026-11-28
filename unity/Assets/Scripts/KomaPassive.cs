@@ -123,11 +123,11 @@ public partial class KomaBoot
         return true;
     }
 
-    // 不屈: 1試合1回、回転0か場外の瞬間に踏みとどまる。true なら倒れない
+    // 不屈: 1試合1回、回転0の瞬間に踏みとどまる（場外・穴では発動しない）。回転15%で復活。true なら倒れない
     bool PassiveKo(Koma k, string why)
     {
-        if (k.pas != 4 || k.gutsUsed || phase != "fight" || !k.alive) return false;
-        k.gutsUsed = true; k.spin = k.spinMax * 0.05f; k.pasCd = 0;
+        if (k.pas != 4 || k.gutsUsed || phase != "fight" || !k.alive || why != "spin") return false;   // 2026-11-28 本人「コースアウトでは発動しないように」: 回転0の時だけ
+        k.gutsUsed = true; k.spin = k.spinMax * 0.15f; k.pasCd = 0;
         if (why == "out")
         {
             Vector2 d = new Vector2(k.pos.x, k.pos.z); d = d.sqrMagnitude > 0.01f ? d.normalized : Vector2.right;

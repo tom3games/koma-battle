@@ -54,7 +54,7 @@ public static class Arena
     }
     public static float Bowl(float r)
     {
-        if (Stage == 2) { float tt = r / R; return 1.0f * tt * tt; }   // ターンテーブル: ほぼ平らな円盤（縁だけ少し反る）
+        if (Stage == 2) { float tt = r / R; return 3.2f * tt * tt; }   // ターンテーブル: ほぼ平らな円盤（縁だけ少し反る）
         if (Stage == 1)
         {
             if (r <= HillTopR) return HillTop;
@@ -515,7 +515,7 @@ public static class Arena
     }
 
     // ターンテーブル: 回転の向き（上から見て時計回り）と速さ。床の流れは Step 側
-    public const float TurnW = 0.38f;           // 床の回転（rad/s）
+    public const float TurnW = 0.26f;           // 床の回転（rad/s）
     public const float TurnSplitR = 11.0f;     // 内（反時計回り）と外（時計回り）の境目の半径
     public static float TurnDirAt(float r) => r < TurnSplitR ? -1f : 1f;
     public static float TurnAngle;

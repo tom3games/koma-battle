@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1:wght@500;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="TemplateData/ui.css?v=35">
+<link rel="stylesheet" href="TemplateData/ui.css?v=36">
 </head>
 <body>
 <canvas id="unity-canvas" tabindex="-1"></canvas>
@@ -108,7 +108,7 @@
 <div id="hud" class="scr" hidden>
   <div id="tags"></div>
   <div class="hud-time" id="hudTime"></div>
-  <div id="spChip" class="pc-only"><i id="spFill"></i><span id="spTxt">必殺　右クリック</span></div>
+  <div id="spChip" class="pc-only"><i id="spFill"></i><u id="spTick"></u><span id="spTxt">必殺　右クリック</span></div>
   <div id="count" class="count"></div>
   <div id="stageTag" class="stage-tag"><small>STAGE</small><span id="stageName"></span></div>
   <div id="specBar" hidden><span class="sp-lbl">観戦中</span><button id="specPrev" aria-label="前の相手">&#9664;</button><b id="specName"></b><button id="specNext" aria-label="次の相手">&#9654;</button><button id="specExit">結果へ</button></div>
@@ -146,7 +146,7 @@
   <div id="stick"><i></i></div>
   <svg id="flickArrow" aria-hidden="true"><line id="faLine" x1="0" y1="0" x2="0" y2="0"/><circle id="faOrigin" r="28"/><circle id="faDot" r="12"/></svg>
   <button id="tBrace" class="tb" aria-label="踏ん張り">踏ん張り</button>
-  <button id="tSpBtn" class="tb sp" aria-label="必殺"><svg viewBox="0 0 48 48"><path d="M24 4l5 13 14 1-11 9 4 14-12-8-12 8 4-14-11-9 14-1z" fill="#fff"/></svg></button>
+  <button id="tSpBtn" class="tb sp" aria-label="必殺"><svg viewBox="0 0 48 48"><path d="M24 4l5 13 14 1-11 9 4 14-12-8-12 8 4-14-11-9 14-1z" fill="#fff"/></svg><b id="tNd"></b></button>
 </div>
 
 <div id="hint" hidden>
@@ -208,8 +208,8 @@
 })();
 window.KB_BUILD = { loader: "Build/{{{ LOADER_FILENAME }}}", data: "Build/{{{ DATA_FILENAME }}}", framework: "Build/{{{ FRAMEWORK_FILENAME }}}", code: "Build/{{{ CODE_FILENAME }}}", company: "{{{ COMPANY_NAME }}}", product: "{{{ PRODUCT_NAME }}}", version: "{{{ PRODUCT_VERSION }}}" };
 </script>
-<script src="TemplateData/sfx.js?v=35"></script>
-<script src="TemplateData/ng-words.js?v=35"></script>
-<script src="TemplateData/ui.js?v=35"></script>
+<script src="TemplateData/sfx.js?v=36"></script>
+<script src="TemplateData/ng-words.js?v=36"></script>
+<script src="TemplateData/ui.js?v=36"></script>
 </body>
 </html>

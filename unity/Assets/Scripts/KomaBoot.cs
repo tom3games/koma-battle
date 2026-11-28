@@ -197,7 +197,7 @@ public partial class KomaBoot : MonoBehaviour
                 if (nums.Length >= 6) pLeft = N(5) > 0; if (nums.Length >= 7) pPas = (int)N(6);
                 if (nums.Length >= 3) { pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); player.Rebuild(pTop, pCore, pLeg, mats, pLeft); if (pLeft) { player.spinMax *= LeftSpinMul; player.spin = player.spinMax; } }   // 2026-11-28 本人「左回転強すぎ。自分の回転数のデフォが少し下がるように」: 左回転を選んだ自分だけ回転の総量を下げる（割合の判定はそのまま）
                 if (nums.Length >= 4) nCpu = Mathf.Clamp((int)N(3), 1, 3);
-                if (nums.Length >= 5) pSp = Mathf.Clamp((int)N(4), 0, 7);
+                if (nums.Length >= 5) pSp = Mathf.Clamp((int)N(4), 0, 9);
                 player.sp = pSp; player.pas = Mathf.Clamp(pPas, -1, 7);
                 StartMatch();
                 break;
@@ -325,7 +325,7 @@ public partial class KomaBoot : MonoBehaviour
             var k = komas[i];
             if (i >= n) { k.root.SetActive(false); k.alive = false; continue; }
             if (i > 0 && practice) { /* 練習: ダミーは PracticeSetup で固定の装備 */ }
-            else if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = cpuSpMode >= 0 ? cpuSpMode : rng.Next(8); k.pas = cpuPasMode == -2 ? (rng.NextDouble() < 0.5 ? rng.Next(8) : -1) : cpuPasMode; }
+            else if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = cpuSpMode >= 0 ? cpuSpMode : rng.Next(10); k.pas = cpuPasMode == -2 ? (rng.NextDouble() < 0.5 ? rng.Next(8) : -1) : cpuPasMode; }
             float ang = -Mathf.PI / 2 + Mathf.PI / 8 + i * Mathf.PI * 2 / n;
             float r = 11f;
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
@@ -397,14 +397,14 @@ public partial class KomaBoot : MonoBehaviour
             if (bon && !boardAnnounced && !Arena.Collapsing) { boardAnnounced = true; Emit("{\"t\":\"e\",\"k\":\"board\"}"); }
         }
         UpdateFires(dt);
-        Arena.TurnUpdate(realDt * testScale);
+        if (phase != "end") Arena.TurnUpdate(realDt * testScale);
         // 最終局面: 100秒たつか、4人の試合で50秒を過ぎて残り2人になったら外から床が崩れる
         if (phase == "fight" && !sudden && !practice)
         {
             int act = 0, alv = 0; foreach (var k in komas) if (k.root.activeSelf) { act++; if (k.alive) alv++; }
             if (fightT > (Arena.Stage == 1 ? 70f : Arena.Stage == 2 ? TurnSudden : 100f) || (act >= 4 && alv <= 2 && fightT > (Arena.Stage == 1 ? 35f : Arena.Stage == 2 ? TurnSudden * 0.5f : 50f))) { sudden = true; suddenAt = fightT; Arena.StartCollapse(); Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
         }
-        if (phase == "fight" || phase == "end")
+        if (phase == "fight")   // 2026-11-28 本人「勝った後、ステージの崩壊とかコマの移動は止めて」: 決着後は崩落・穴・床の回転を止める
         {
             UpdatePitFlow(dt);
             if (Arena.UpdateCollapse(dt)) { shake = Mathf.Max(shake, 0.55f); fovKick = Mathf.Max(fovKick, 5f); Emit("{\"t\":\"e\",\"k\":\"collapse\"}"); }
@@ -543,7 +543,7 @@ public partial class KomaBoot : MonoBehaviour
             PassiveUpdate(k, dt);
             k.Visual(dt, realDt);
         }
-        UpdateStrikes(dt); UpdateClones(dt); UpdateArrowRings(realDt); UpdateAimMark(realDt);
+        UpdateStrikes(dt); UpdateClones(dt); UpdateSp3(dt); UpdateArrowRings(realDt); UpdateAimMark(realDt);
         keyBuf.Clear(); keyBuf.AddRange(pairCd.Keys);
         foreach (var key in keyBuf) { pairCd[key] -= dt; if (pairCd[key] <= 0) pairCd.Remove(key); }
 
@@ -678,7 +678,7 @@ public partial class KomaBoot : MonoBehaviour
         }
         // 端に寄りすぎたら内へ
         float r = new Vector2(k.pos.x, k.pos.z).magnitude;
-        float lim = Mathf.Min(Arena.R, Arena.SafeR) - 3.5f;
+        float lim = Mathf.Min(Arena.R, Arena.SafeR) - (Arena.Stage == 2 ? 8.5f : 3.5f);
         if (!riding && r > lim) want += -new Vector2(k.pos.x, k.pos.z).normalized * (r - lim) * 1.2f;
         // 丘: 頂上（中央）を取りに行く。外周に寄ったら上へ戻る
         if (Arena.Stage == 1 && !riding && dist > 3f) { float rr2 = new Vector2(k.pos.x, k.pos.z).magnitude; if (rr2 > 5f) want += -new Vector2(k.pos.x, k.pos.z).normalized * Mathf.Clamp01((rr2 - 5f) / 10f) * 0.9f; }
@@ -826,13 +826,13 @@ public partial class KomaBoot : MonoBehaviour
     void TrySpecial(Koma k, Vector3 aim)
     {
         if (!k.alive || k.specialPhase > 0 || k.tornadoT > 0 || k.shieldT > 0 || k.anchorT > 0 || k.chainTo != null) return;
-        if (k.gauge < 100f || (k.sp == 5 && k.SpinRatio >= 0.3f))
+        if (k.gauge < NeedOf(k) || (k.sp == 5 && k.SpinRatio >= 0.3f))
         {
             // ラスト・スパイラルは回転が3割を切るまで撃てない（押したら「撃てない」と分かる）
-            if (k.isPlayer && k.sp == 5 && !autoPlayer && Time.unscaledTime - lastDenyT > 0.4f) { lastDenyT = Time.unscaledTime; EmitEv("deny", k, k.gauge >= 100f ? 1 : 0); }
+            if (k.isPlayer && k.sp == 5 && !autoPlayer && Time.unscaledTime - lastDenyT > 0.4f) { lastDenyT = Time.unscaledTime; EmitEv("deny", k, k.gauge >= NeedOf(k) ? 1 : 0); }
             return;
         }
-        k.gauge = 0; k.specials++;
+        k.gauge = Mathf.Max(0f, k.gauge - NeedOf(k)); k.specials++;
         if (k.sp >= 4) { SpecialNew(k, aim); return; }
         if (k.sp == 1)
         {
@@ -1118,12 +1118,13 @@ public partial class KomaBoot : MonoBehaviour
         if (k.grounded)
         {
             Vector2 gr = Arena.Grad(p.x, p.z);
-            if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
-            float fr = Mathf.Exp(-0.9f * k.st.grip * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * (Arena.IceAt(p.x, p.z) ? 0.12f : 1f) * dt);
+            if (phase == "end" && k.alive) { float dm = Mathf.Exp(-5f * dt); v.x *= dm; v.z *= dm; }   // 決着後、残ったコマはその場で減速して止まる
+            else if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
+            float fr = Mathf.Exp(-0.9f * k.st.grip * (Arena.Stage == 2 && p.x * p.x + p.z * p.z > (Arena.R - 3.5f) * (Arena.R - 3.5f) ? 1.6f : 1f) * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * (Arena.IceAt(p.x, p.z) ? 0.12f : 1f) * dt);
             if (Arena.Stage == 2 && k.alive && phase == "fight")
             {
                 // ターンテーブル: 床が時計回りに回り、足の摩擦（グリップ）の分だけ床の速さに引きずられる。外ほど速い（中心は弱い）。グリップの低い（速い）コマは流されにくい
-                Vector2 fl = new Vector2(p.z, -p.x) * Arena.TurnW * Arena.TurnDirAt(Mathf.Sqrt(p.x * p.x + p.z * p.z)) * Mathf.Clamp(k.st.grip, 0.5f, 1.3f);
+                Vector2 fl = new Vector2(p.z, -p.x) * Arena.TurnW * Arena.TurnDirAt(Mathf.Sqrt(p.x * p.x + p.z * p.z)) * Mathf.Clamp(k.st.grip, 0.5f, 1.3f) * (p.x * p.x + p.z * p.z > (Arena.R - 3.5f) * (Arena.R - 3.5f) ? 0.45f : 1f);   // 縁の赤い帯の手前は流れが弱い（粘れる）
                 v.x = fl.x + (v.x - fl.x) * fr; v.z = fl.y + (v.z - fl.y) * fr;
             }
             else { v.x *= fr; v.z *= fr; }
@@ -1401,12 +1402,13 @@ public partial class KomaBoot : MonoBehaviour
 
     static readonly Color[] SpColors = {
         new Color(1f, 0.55f, 0.2f), new Color(0.55f, 0.9f, 1f), new Color(0.75f, 0.45f, 1f), new Color(1f, 0.82f, 0.4f),
-        new Color(0.9f, 0.28f, 0.75f), new Color(1f, 0.15f, 0.25f), new Color(0.7f, 0.93f, 1f), new Color(0.6f, 1f, 0.3f) };
+        new Color(0.9f, 0.28f, 0.75f), new Color(1f, 0.15f, 0.25f), new Color(0.7f, 0.93f, 1f), new Color(0.6f, 1f, 0.3f),
+        new Color(0.45f, 0.95f, 1f), new Color(0.72f, 0.5f, 1f) };
 
     // 必殺技を出した瞬間の演出（溜めのオーラ・光・輪・火花・ズーム）
     void SpecialFx(Koma k, float charge)
     {
-        var c = SpColors[Mathf.Clamp(k.sp, 0, 7)];
+        var c = SpColors[Mathf.Clamp(k.sp, 0, 9)];
         k.SetAura(c, charge);
         Pulse(k.pos, c, 6f);
         Spark(k.Center, Vector3.up, 70, 1.5f);
@@ -1933,7 +1935,7 @@ public partial class KomaBoot : MonoBehaviour
             if (!first) sb.Append(','); first = false;
             var sp = cam.WorldToViewportPoint(k.pos + Vector3.up * 1.25f);
             sb.Append("{\"i\":").Append(k.idx).Append(",\"a\":").Append(k.alive ? 1 : 0).Append(",\"sp\":").Append(F(k.SpinRatio))
-              .Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"br\":").Append(k.Bracing ? 1 : 0).Append(",\"rc\":").Append(k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
+              .Append(",\"nd\":").Append(F(NeedOf(k) / 100f)).Append(",\"g\":").Append(F(k.gauge / 100f)).Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"br\":").Append(k.Bracing ? 1 : 0).Append(",\"rc\":").Append(k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
               .Append(",\"vx\":").Append(F(k.vel.x)).Append(",\"vz\":").Append(F(k.vel.z)).Append(",\"yaw\":").Append(F(camYaw)).Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
               .Append(",\"ps\":").Append(k.pas).Append(",\"wg\":").Append(k.WingsOn ? 1 : 0).Append(",\"rg\":").Append(k.rage ? 1 : 0).Append(",\"sn\":").Append(k.stampN).Append(",\"lf\":").Append(k.left ? 1 : 0)

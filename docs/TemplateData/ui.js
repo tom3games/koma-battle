@@ -33,14 +33,16 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       { n: 'グラビティ・アンカー', d: '重くなって動かない', f: '5秒だけ超重量になって地面に刺さる。当てられても動かず、当てた相手の方が吹っ飛ぶ。縁の攻防で強い。', x: '5秒 重さ×14 受けるダメージ-65% 移動が遅くなる' },
       { n: 'ラスト・スパイラル', d: 'ピンチの逆転の一撃', f: '回転が残り3割を切った時だけ撃てる。回転が少ないほど威力が上がる。撃てる時だけゲージが光る。', x: '残り30%で威力×1.0、0%に近いほど最大×2.4 範囲5.5m' },
       { n: 'グレイシャル・アロー', d: '氷の矢で突進', f: '狙った向きに輪が並び、開き終わると氷の矢になって一直線に突進する。当たった相手は弾かれて凍える。輪が開いている間に避けられる。', x: '展開0.95秒 突進約16m 凍え2秒（速さ・加速が半分）' },
-      { n: 'チェイン・バインド', d: '鎖で振り回して投げる', f: '一番近い相手と鎖でつながる。自分が回るほど相手を振り回し、最後に狙いの向きへ放り投げる。つながれた側もダッシュで引っ張り返せる。', x: '4秒 鎖の長さ6.8m 回した数だけ遠くへ' } ] },
+      { n: 'チェイン・バインド', d: '鎖で振り回して投げる', f: '一番近い相手と鎖でつながる。自分が回るほど相手を振り回し、最後に狙いの向きへ放り投げる。つながれた側もダッシュで引っ張り返せる。', x: '4秒 鎖の長さ6.8m 回した数だけ遠くへ' },
+      { n: 'ソニック・トレイル', d: '光の軌跡で削る', f: '5秒のあいだ、通った道に光の帯が残る。帯は4秒で消え、触れた相手を削って弾く。自分は当たらない。相手の周りを駆け抜けるように使う。', x: '5秒 帯は4秒残る 触れるとダメージ6＋弾き' },
+      { n: 'ファントム・ミラージュ', d: '光の分身が2体', f: '6秒のあいだ、左右に光の分身が2体ついて同じ動きをする。分身にも当たり判定があり、相手に触れるとダメージ。', x: '6秒 分身2体 触れるとダメージ2.5＋速さ分' } ] },
     { key: 'pas', name: 'パッシブ', parts: [
       { n: 'なし', d: 'なし', f: 'パッシブを使わない。', x: '' },
       { n: '逆鱗', d: 'ピンチで強化', f: '回転が3割を切ると赤黒いオーラが噴き出し、芯が赤く光る。', x: '回転30%以下で発動 攻撃+25% 弾かれにくい' },
       { n: '天翔', d: '空中で強化', f: '空中にいる間、光の羽が広がる。急降下が強くなり、着地で衝撃波が出る。', x: '急降下のダメージ+30% 着地の衝撃波 範囲4.5m' },
       { n: '魂喰らい', d: '当てて回復', f: '当てた相手から光の粒を吸い出し、削った回転の一部を自分に戻す。', x: '削った分の40%を回復' },
       { n: '雷鳴の刻印', d: '3回当てて雷', f: '同じ相手に当てるたび紫の紋章がつき、3つで雷が落ちる。落ちる前に床へ円が出るので、円の外へ逃げれば外れる。円の中にいる全員に当たる（使った本人は除く）。', x: '予告0.55秒 範囲2.4m ダメージ14 当たると0.9秒止まる' },
-      { n: '不屈', d: '1度だけ復活', f: '1試合に1度、回転が0か場外になる瞬間に踏みとどまり、回転5%で復活する。場外なら台の上へ戻る。', x: '1試合1回 回転5%で復活' },
+      { n: '不屈', d: '1度だけ復活', f: '1試合に1度、回転が0になる瞬間に踏みとどまり、回転15%で復活する。場外（コースアウト）では発動しない。', x: '1試合1回 回転15%で復活 場外では発動しない' },
       { n: '紅蓮の轍', d: '炎の跡', f: '回転が7割以上の間、通った跡に炎が残り、踏んだ相手の回転を少しずつ削る。', x: '回転70%以上で発動 炎は2.5秒残る' },
       { n: '影分身', d: '残像で弾く', f: 'ダッシュの後に残像が0.5秒その場に残り、触れた相手を弾く。', x: '残像0.5秒 ダメージ5' },
       { n: '黒鉄の盾', d: '次の1発を無効', f: '3回当てられるごとに六角形の光の盾が浮かび、次の1発を無効にして砕ける。', x: '3回被弾ごとに1枚（最大1枚）' } ] },
@@ -49,6 +51,9 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   const COLORS = ['#c8432f', '#3d6aa8', '#5f8a4e', '#b8902e']
   const PAS_RGB = ['255,40,30', '255,220,110', '100,255,150', '180,90,255', '255,255,255', '255,130,30', '100,150,255', '100,230,255']
   const PAS_HEX = ['#ff2a22', '#ffdc6e', '#64ff96', '#b45aff', '#ffffff', '#ff821e', '#6496ff', '#64e6ff']
+  // 必殺ごとに要るゲージ（0〜100）。強い技ほど多い。Unity の SpNeed と同じ並び
+  const SP_NEED = [90, 100, 70, 80, 85, 70, 100, 80, 75, 90]
+  SLOTS.find(x => x.key === 'sp').parts.forEach((p, i) => { p.x = (p.x ? p.x + '　' : '') + `必要ゲージ${SP_NEED[i]}%` })
   const SPECIALS = SLOTS.find(x => x.key === 'sp').parts.map(p => p.n)
   const isTouch = matchMedia('(pointer: coarse)').matches
   const DEBUG = /debug/.test(location.search)
@@ -110,7 +115,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   const LV_XP = [0, 80, 200, 360, 560, 800, 1100, 1400, 1700, 2000]   // そのレベルに届く累計の経験値
   const MAXLV = LV_XP.length
   // レベルで解放される物（[段の名前, 何番目]）。Lv1 では右回転・必殺は1つ・パーツは一部だけ
-  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1], ['pas', 1]], 4: [['top', 4], ['leg', 3], ['pas', 2], ['sp', 4]], 5: [['sp', 2], ['pas', 3]], 6: [['core', 3], ['core', 4], ['pas', 4], ['sp', 5]], 7: [['sp', 3], ['pas', 5]], 8: [['pas', 6], ['sp', 6]], 9: [['pas', 7], ['sp', 7]], 10: [['pas', 8]] }
+  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1], ['pas', 1]], 4: [['top', 4], ['leg', 3], ['pas', 2], ['sp', 4]], 5: [['sp', 2], ['pas', 3]], 6: [['core', 3], ['core', 4], ['pas', 4], ['sp', 5]], 7: [['sp', 3], ['pas', 5], ['sp', 8]], 8: [['pas', 6], ['sp', 6]], 9: [['pas', 7], ['sp', 7]], 10: [['pas', 8], ['sp', 9]] }
   const needLv = (key, i) => { for (const lv in UNLOCKS) if (UNLOCKS[lv].some(u => u[0] === key && u[1] === i)) return +lv; return 1 }
   const slotOf = key => SLOTS.find(x => x.key === key)
   const unlockName = ([k, i]) => k === 'dir' ? '左回転のコマ' : k === 'pas' ? `パッシブ「${slotOf(k).parts[i].n}」` : k === 'sp' ? `必殺「${slotOf(k).parts[i].n}」` : `${slotOf(k).name}パーツ「${slotOf(k).parts[i].n}」`
@@ -330,6 +335,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'collapse': Snd.play('down', { vol: 0.9, rate: 0.6 }); Snd.play('boom', { vol: 0.7, rate: 0.7 }); break
       case 'end': result(m); break
       case 'phit': pracHit(m); break
+      case 'trailhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.6 }); Snd.play('hit', { vol: 0.25, rate: 1.3 }); break
+      case 'mirhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.2 }); Snd.play('hit', { vol: 0.3, rate: 1.0 }); break
       case 'pstat': pracStat(m); break
     }
     if (practice) pracEv(m)
@@ -562,13 +569,15 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     const me = m.k.find(k => k.i === 0)
     if (me) {
       // 2026-11-25 本人「左上に残り回転数みたいなの出すのやめて」: 数字は出さない。回転は名札の細い線とコマの揺れで見せる
-      const full = me.g >= 1 && me.a === 1 && me.ok === 1
-      $('spChip').classList.toggle('wait', me.g >= 1 && me.a === 1 && me.ok === 0); $('tSpBtn').classList.toggle('wait', me.g >= 1 && me.a === 1 && me.ok === 0)
+      const nd = me.nd || 1, ready = me.g >= nd - 1e-6
+      const full = ready && me.a === 1 && me.ok === 1
+      $('spChip').classList.toggle('wait', ready && me.a === 1 && me.ok === 0); $('tSpBtn').classList.toggle('wait', ready && me.a === 1 && me.ok === 0)
+      { const nn = Math.round(nd * 100); if ($('spChip').dataset.nd !== String(nn)) { $('spChip').dataset.nd = nn; $('spChip').style.setProperty('--nd', nn + '%'); $('tNd').textContent = nn } }
       { const rc = me.rc === 1 && me.a === 1; $('spChip').classList.toggle('rescue', rc); $('tSpBtn').classList.toggle('rescue', rc); const tx = $('spTxt'); const want = rc ? '復帰！　右クリック' : '必殺　右クリック'; if (tx && tx.textContent !== want) tx.textContent = want }
       $('spChip').classList.toggle('full', full); $('spFill').style.width = Math.min(100, me.g * 100).toFixed(0) + '%'
       $('tBrace').classList.toggle('on', me.br === 1)
       $('tSpBtn').classList.toggle('full', full)
-      $('tSpBtn').style.setProperty('--g', (me.g * 100).toFixed(0) + '%')
+      $('tSpBtn').style.setProperty('--g', (Math.min(1, me.g / nd) * 100).toFixed(0) + '%')
       $('flickArrow').classList.toggle('cd', me.cd > 0)
       KB.me = me
     }
@@ -623,7 +632,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     o.className = cls; void o.offsetWidth; o.classList.add('on')
   }
   // 技ごとの色（メテオ=橙 / テンペスト=水色 / ファントム=紫 / イージス=金 / アンカー=赤紫 / スパイラル=赤 / アロー=氷の白 / チェイン=黄緑）
-  const SP_RGB = ['255,110,40', '60,190,240', '170,90,240', '240,180,50', '230,70,190', '255,40,64', '180,238,255', '150,255,76']
+  const SP_RGB = ['255,110,40', '60,190,240', '170,90,240', '240,180,50', '230,70,190', '255,40,64', '180,238,255', '150,255,76', '110,240,255', '185,130,255']
   // 2026-11-26 本人「他の人が使ってる必殺技の名前は出さなくていい」: 名前の帯は自分の技だけ
   function banner(kind) {
     const b = $('banner')

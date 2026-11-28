@@ -18,7 +18,7 @@ public partial class KomaBoot
     static readonly Color IceW = new Color(0.9f, 0.98f, 1f);
 
     // 撃てるか（ゲージと、ラスト・スパイラルは回転が3割を切っていること）
-    public bool SpecialReady(Koma k) => k.alive && k.gauge >= 100f && (k.sp != 5 || k.SpinRatio < 0.3f);
+    public bool SpecialReady(Koma k) => k.alive && k.gauge >= NeedOf(k) && (k.sp != 5 || k.SpinRatio < 0.3f);
 
     // ---------- 粒（氷・火花・ほこり）。速度と色を指定して出す ----------
     int ActiveWaves() { int n = 0; for (int i = 0; i < waveT.Count; i++) if (waveT[i] >= 0) n++; return n; }
@@ -42,6 +42,7 @@ public partial class KomaBoot
     void SpecialNew(Koma k, Vector3 aim)
     {
         Vector3 h = aim - k.pos; h.y = 0;
+        if (k.sp >= 8) { Sp3Start(k); return; }
         if (k.sp == 4)
         {
             // グラビティ・アンカー: 5秒だけ超重量。当てられても動かず、当てた相手の方が弾かれる
@@ -83,7 +84,7 @@ public partial class KomaBoot
             if (IsFalling(k)) { StartRecover(k); return; }
             // チェイン・バインド: 一番近い相手と鎖でつながる
             var t = Nearest(k);
-            if (t == null) { k.gauge = 100f; k.specials--; return; }
+            if (t == null) { k.gauge += NeedOf(k); k.specials--; return; }
             StartChain(k, t);
             return;
         }
@@ -338,7 +339,7 @@ public partial class KomaBoot
     void StartRecover(Koma k)
     {
         var t = NearestWithin(k, RecoverRange);
-        if (t == null) { k.gauge = 100f; k.specials--; if (k.isPlayer && !autoPlayer) EmitEv("deny", k, 2); return; }
+        if (t == null) { k.gauge += NeedOf(k); k.specials--; if (k.isPlayer && !autoPlayer) EmitEv("deny", k, 2); return; }
         k.recoverUsed = true;
         StartChain(k, t, true);
     }
@@ -381,6 +382,7 @@ public partial class KomaBoot
     {
         for (int i = chains.Count - 1; i >= 0; i--) EndChain(chains[i]);
         foreach (var k in komas) { k.chainTo = null; k.chainFrom = null; k.chainT = 0; k.thrownT = 0; }
+        ClearSp3();
     }
 
     // 物理の1刻みごと: 鎖の長さを超えたら引き合う（軽い方がよく動く）
@@ -582,6 +584,8 @@ public partial class KomaBoot
             case 5: return dist < 14f;
             case 6: return dist > 4.5f && dist < 14f;
             case 7: return dist < 16f;
+            case 8: return dist < 11f;
+            case 9: return dist < 10f;
             case 0: return dist < MeteorRange;
             default: return dist < 9f;
         }
