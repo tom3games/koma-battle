@@ -201,9 +201,22 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         break
       case 'hit': {
         const big = m.big, air = m.air
-        // 2026-11-25「当たりの手応え」: 低めに鳴らして重く、強い当たりは金属音を重ねる
-        Snd.play('hit', { vol: Math.min(1, 0.5 + m.p / 20), rate: big ? 0.8 : 0.9 })
-        if (big || m.vn > 14) Snd.play('clang', { vol: Math.min(1, 0.4 + m.p / 22), rate: 0.85 })
+        // 2026-11-28 本人「コマ同士がぶつかったときのもうちょっと金属音みたいなのが欲しい。もうちょっと甲高い感じの」:
+        // 低い「ゴッ」だけだった（素材の中心 約1.5〜2kHz・半分以上が1kHz未満・0.4〜1.2秒の長い尾・さらに0.8〜0.9倍で低く再生）。
+        // 高い金属の「チン」「カキィン」を主にして、低い当たりは500Hz以下を削って短く下に敷く。軽い当たりは小さく「チン」、強い当たりは大きく「カキィン」
+        { const nowT = performance.now(); hitVoices = hitVoices.filter(t => nowT - t < 150)
+          if (hitVoices.length < 3) {
+            hitVoices.push(nowT)
+            const k = Math.min(1, m.p / 10), strong = big || m.vn > 14
+            if (strong) {
+              Snd.play('kakiin', { vol: 0.4 + 0.2 * k, rate: 0.95, dest: 'hi', cut: 0.4 })
+              Snd.play('tink', { vol: 0.3, rate: 1.05, dest: 'hi', cut: 0.25, delay: 0.012 })
+              Snd.play('hit', { vol: Math.min(1, 0.5 + m.p / 20) * 0.75, rate: 1.0, dest: 'hi', cut: 0.25 })
+            } else {
+              Snd.play('tink', { vol: 0.3 + 0.15 * k, rate: 1.05, jitter: 0.08, dest: 'hi', cut: 0.25 })
+              Snd.play('hit', { vol: (0.5 + m.p / 20) * 0.55, rate: 1.0, dest: 'hi', cut: 0.2 })
+            }
+          } }
         // 2026-11-26 本人「芯とか掠りとか出すのやめて」: 当たりの角度は数値だけに効かせ、文字は出さない
         // 2026-11-26 本人「他の人の効果音まで文字で出さなくていい」: 擬音の文字は自分が当てた・当てられた時だけ
         { const me = m.a === 0 || m.b === 0
@@ -444,7 +457,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
 
   // ---------- HUD ----------
   const tagEls = []
-  let rush = 0
+  let rush = 0, hitVoices = []
   const tagParts = []
   let lastSpin = -1, frames = 0, fpsT = performance.now(), fps = 0
   function hud(m) {
@@ -615,6 +628,9 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     win: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL00')],
     lose: [S('85-short-music-jingles_jingleSounds_Kenney_OGG_jingles_STEEL_jingles_STEEL09')],
     ui: [S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_hit_01')],
+    // 2026-11-28 コマ同士の衝突: 軽い「チン」と強い「カキィン」（高い金属の録音）
+    tink: [S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_hit_02'), S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_06'), S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_03')],
+    kakiin: [S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_01'), S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_04'), S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_03')],
     // 2026-11-28 氷（ガラス）・鎖（金属）・ひび割れ（岩）の録音素材
     ice: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_hit_01'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_hit_02'), S('100-cc0-sfx-2_sfx_100_v2_sfx100v2_glass_01')],
     shatter: [S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_breaking_05'), S('75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_glass_breaking_02')],

@@ -23,6 +23,8 @@ const Snd = {
       this.sfxBus = c.createGain(); this.sfxBus.gain.value = this.sfxGain || 1; this.sfxBus.connect(this.master)
       this.bed = c.createGain(); this.bed.gain.value = 1; this.bed.connect(this.master)   // 環境音と BGM（duck で下げる）
       // こもらせる道（壁の向こう・ほかの音にかき消された時）
+      // 2026-11-28 コマ同士の衝突用: 低い所を削り（500Hz 以下）、刺さる所も少し丸める（9.5kHz 以上）
+      this.hi = c.createBiquadFilter(); this.hi.type = 'highpass'; this.hi.frequency.value = 500; this.hiLp = c.createBiquadFilter(); this.hiLp.type = 'lowpass'; this.hiLp.frequency.value = 9500; this.hi.connect(this.hiLp); this.hiLp.connect(this.sfxBus)
       this.muf = c.createBiquadFilter(); this.muf.type = 'lowpass'; this.muf.frequency.value = 420; this.muf.connect(this.sfxBus)
       // 部屋の響き（短い残響。部屋の広さで秒数を変える）
       this.room = c.createConvolver(); this.room.buffer = this.ir(0.35); const rw = c.createGain(); rw.gain.value = 0.5; this.room.connect(rw); rw.connect(this.sfxBus)
@@ -64,8 +66,9 @@ const Snd = {
     const c = this.ctx, s = c.createBufferSource(), g = c.createGain(), t = c.currentTime + (o.delay || 0)
     s.buffer = buf; const j = o.jitter == null ? 0.05 : o.jitter; s.playbackRate.value = (o.rate || 1) * (1 + (Math.random() * 2 - 1) * j)
     g.gain.value = o.vol == null ? 1 : o.vol
-    s.connect(g); const d = o.dest === 'muf' ? this.muf : this.sfxBus; g.connect(d); if (o.room) { const rg = c.createGain(); rg.gain.value = o.room; g.connect(rg); rg.connect(this.room) }
+    s.connect(g); const d = o.dest === 'muf' ? this.muf : o.dest === 'hi' ? this.hi : this.sfxBus; g.connect(d); if (o.room) { const rg = c.createGain(); rg.gain.value = o.room; g.connect(rg); rg.connect(this.room) }
     s.start(t, o.offset || 0)
+    if (o.cut) { const v0 = g.gain.value; g.gain.setValueAtTime(v0, t + o.cut * 0.5); g.gain.linearRampToValueAtTime(0.0001, t + o.cut); s.stop(t + o.cut + 0.03) }   // 長い尾を短く切る
     const rec = { s, g, name }; this.active.add(rec); s.onended = () => this.active.delete(rec)
     return s
   },

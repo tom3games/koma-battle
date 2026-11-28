@@ -36,3 +36,9 @@
 - snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_breaking_03.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
 - snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_breaking_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
 - snd/75-cc0-breaking-falling-hit-sfx_sfx_breaking_and_falling_bfh1_rock_falling_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_hit_02.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_06.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_03.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_01.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_04.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/100-cc0-sfx-2_sfx_100_v2_sfx100v2_metal_02.mp3: 100 CC0 SFX #2 / rubberduck / CC0
