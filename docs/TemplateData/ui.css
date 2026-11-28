@@ -409,5 +409,6 @@ body.spec #touch{display:none}
 .stage-tag{position:absolute;left:0;right:0;top:30%;text-align:center;opacity:0;pointer-events:none;z-index:6}
 .stage-tag small{display:block;font-weight:800;font-size:13px;letter-spacing:.5em;color:var(--gold);padding-left:.5em}
 .stage-tag span{display:inline-block;font-weight:900;font-size:min(9vw,13vh,72px);color:#fff;letter-spacing:.08em;-webkit-text-stroke:3px rgba(15,17,22,.9);paint-order:stroke fill;text-shadow:0 6px 0 rgba(0,0,0,.35)}
-.stage-tag.on{animation:stg 2.3s ease-out}
+.stage-tag.on{animation:stg 1.4s ease-out}
+body.stage-intro #tags{visibility:hidden}
 @keyframes stg{0%{opacity:0;transform:translateY(14px) scale(.94)}12%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}

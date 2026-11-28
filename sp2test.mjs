@@ -12,12 +12,13 @@ const sp = (k) => Math.hypot(k.vx, k.vz)
 if (want('arrow')) {
   for (const mode of ['hit', 'dodge']) {
     const o = await begin(url, { sp: 6 })
-    await o.place(0, -8, 0); await o.place(1, 6, 0); await wait(1500)
+    const hill = process.env.STAGE === '1', PX = hill ? -4 : -8, VX = hill ? 4 : 6   // 丘は相手が坂で流れるので、8m先で確かめる
+    await o.place(0, PX, 0); await o.place(1, VX, 0); await wait(1500)
     await send(o.p, 'gauge|100'); await o.clear()
     const t0 = await o.tm()
-    await send(o.p, 'spfire|0,6,0')
+    await send(o.p, `spfire|0,${VX},0`)
     await o.until(() => window.KB.events.filter(e => e.k === 'arrowring').length >= 2, 8000)
-    if (mode === 'dodge') await o.place(1, 6, 4.8, 0, 0, 2.5)   // 輪が開いている間に横へ逃げた
+    if (mode === 'dodge') await o.place(1, VX, 4.8, 0, 0, 2.5)   // 輪が開いている間に横へ逃げた
     await wait(2500)
     const fz = (await o.evs('freeze')).filter(e => e.i === 1).length
     const rings = (await o.evs('arrowring')).length

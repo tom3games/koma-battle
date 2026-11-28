@@ -5,9 +5,16 @@ const url = process.argv[2] || 'http://localhost:5392/'
 const { b, p, errs } = await open(url)
 await p.click('#btnPlay'); await wait(500)
 await p.evaluate(() => { document.querySelector('#vsPick button[data-n="1"]').click() })
-await p.evaluate(() => KB.send('stage|0')); await p.click('#btnFight')
+await p.evaluate(st => KB.send('stage|' + st), +(process.env.STAGE ?? 0)); await p.click('#btnFight')
 await p.waitForFunction(() => window.KB.events.some(e => e.k === 'go'), null, { timeout: 30000 })
 await send(p, 'cpuoff|1')
+// 縁の高さはステージで違うので、実際の床の高さを測って使う（丘でも通る）
+async function floorAt(x) {
+  await send(p, `tp|${x},15,0,0,0,0,1`)
+  for (let i = 0; i < 80; i++) { await wait(100); const k = await p.evaluate(() => window.KB.state.k[1]); if (k && k.air === 0 && k.wx > x - 0.6) return +k.gh.toFixed(2) }
+  return await p.evaluate(() => window.KB.state.k[1].gh)
+}
+const G23 = await floorAt(23.0), G24 = await floorAt(24.0); console.log('縁の床の高さ', G23, G24)
 const NG = []; const ok = (c, m) => { console.log((c ? 'OK ' : 'NG ') + m); if (!c) NG.push(m) }
 const evs = () => p.evaluate(() => window.KB.events.filter(e => ['cling', 'save', 'clingfall', 'ko'].includes(e.k) && e.i === 0).map(e => e.k + (e.why ? ':' + [e.why, e.r, e.vy, e.vh].join('/') : '')))
 const alive = () => p.evaluate(() => { const s = window.KB.state; return s && s.k && s.k[0] ? s.k[0] : null })
@@ -15,7 +22,7 @@ async function push(label) {
   await p.evaluate(() => { window.KB.events.length = 0 })
   // CPU は遠くへ。自分は切れ目（0度）の縁の内側から外向きに滑らせる
   await send(p, 'tp|-15,8,0,0,0,0,1')
-  await send(p, 'debugstate|1'); await send(p, 'tp|23.0,5.35,0,12,0,0,0')
+  await send(p, 'debugstate|1'); await send(p, `tp|23.0,${(G23 + 0.05).toFixed(2)},0,12,0,0,0`)
   for (let i = 0; i < 20; i++) { if ((await evs()).includes('cling')) break; await wait(50) }
   return await evs()
 }
@@ -40,7 +47,7 @@ for (const mode of ['jump', 'hit']) {
   await p.waitForFunction(() => window.KB.state.k[0].cc <= 0, null, { timeout: 60000 })
   e = await push(mode); ok(e.includes('cling'), `${mode}: 引っかかる ${e}`)
   if (mode === 'jump') { await send(p, 'jump'); await wait(1200); e = await evs(); ok(e.includes('save'), `スペースで戻る ${e}`) }
-  else { await send(p, 'tp|24.0,6.0,0,-6,0,0,1'); await p.waitForFunction(() => window.KB.events.some(e => e.k === 'ko' && e.i === 0), null, { timeout: 30000 }).catch(() => {}); e = await evs(); ok(e.includes('clingfall') && !e.includes('save'), `当てられて落ちる ${e}`) }
+  else { await send(p, `tp|24.0,${(G24 + 0.65).toFixed(2)},0,-6,0,0,1`); await p.waitForFunction(() => window.KB.events.some(e => e.k === 'ko' && e.i === 0), null, { timeout: 30000 }).catch(() => {}); e = await evs(); ok(e.includes('clingfall') && !e.includes('save'), `当てられて落ちる ${e}`) }
 }
 console.log('errs', errs); ok(errs.length === 0, 'エラー無し')
 await b.close(); console.log(NG.length ? `NG ${NG.length}件` : 'NG 0件')

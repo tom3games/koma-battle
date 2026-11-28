@@ -324,8 +324,9 @@ public partial class KomaBoot : MonoBehaviour
             k.Place(new Vector3(x, Arena.H(x, z) + 3.5f, z));
             brains[i] = new Brain { react = 0.6f + (float)rng.NextDouble() * 0.6f };
         }
-        Emit("{\"t\":\"e\",\"k\":\"count\",\"n\":3}");
+        countStarted = false;
     }
+    const float StageIntro = 1.5f; bool countStarted;
 
     // ---------- 毎フレーム ----------
     void Update()
@@ -356,11 +357,14 @@ public partial class KomaBoot : MonoBehaviour
 
         if (phase == "count")
         {
-            int before = Mathf.CeilToInt(3f - (phaseT - realDt * testScale));
-            int nowN = Mathf.CeilToInt(3f - phaseT);
-            if (nowN != before && nowN > 0) Emit("{\"t\":\"e\",\"k\":\"count\",\"n\":" + nowN + "}");
+            // 2026-11-28 本人「気になったところは直して」: 最初の StageIntro 秒はステージ名だけ見せ、そのあとにカウントダウンを始める（重ならない）
+            float ptc = Mathf.Max(0f, phaseT - StageIntro), ptb = Mathf.Max(0f, phaseT - realDt * testScale - StageIntro);
+            if (!countStarted && phaseT >= StageIntro) { countStarted = true; Emit("{\"t\":\"e\",\"k\":\"count\",\"n\":3}"); }
+            int before = Mathf.CeilToInt(3f - ptb);
+            int nowN = Mathf.CeilToInt(3f - ptc);
+            if (countStarted && nowN != before && nowN > 0 && nowN < 3) Emit("{\"t\":\"e\",\"k\":\"count\",\"n\":" + nowN + "}");
             foreach (var k in komas) if (k.root.activeSelf) { k.vel = Vector3.zero; k.Visual(realDt, realDt); }
-            if (phaseT >= 3f)
+            if (phaseT >= 3f + StageIntro)
             {
                 phase = "fight"; phaseT = 0;
                 Emit("{\"t\":\"e\",\"k\":\"go\"}");

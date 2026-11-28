@@ -70,6 +70,7 @@ public partial class KomaBoot
             // グレイシャル・アロー: 狙いの向きに輪が順に開き、開き終わると氷の矢になって一直線に突進する
             Vector3 dir = h.sqrMagnitude > 0.04f ? h.normalized : Vector3.forward;
             if (k.isPlayer && !autoPlayer) { var ad = AssistDir(k, dir); dir = new Vector3(ad.x, 0, ad.z).normalized; }
+            dir = ArrowLead(k, dir);   // 坂で動いている相手へは、輪を開いている間に動く分だけ先へ向ける
             k.arrowDir = dir; k.arrowFrom = k.pos; k.arrowT = 0; k.arrowRings = 0; k.specialPhase = 30;
             k.arrowLen = ArrowReach(k.pos, dir);   // 2026-11-28 本人「場外になるまで進むことはないように。端で耐えるくらいまでは入っていい」: 縁・穴の手前までに切る
             k.vel = new Vector3(0, Mathf.Min(k.vel.y, 0f), 0);
@@ -202,7 +203,26 @@ public partial class KomaBoot
     }
 
     // 突進の長さ: 16m と、縁（床の終わり）・穴の手前 ArrowEdgeMargin までの短い方
-    const float ArrowMaxLen = 16f, ArrowEdgeMargin = 1.4f;
+    // 狙いの向きに近い相手（22度以内・18m以内）がいたら、ArrowTeleSec のあいだに動く分を見込んだ向きへ寄せる（人は6割・CPU は全部）
+    Vector3 ArrowLead(Koma k, Vector3 dir)
+    {
+        Koma best = null; float ba = 22f;
+        foreach (var o in komas)
+        {
+            if (o == k || !o.alive || !o.root.activeSelf) continue;
+            Vector3 d = o.pos - k.pos; d.y = 0; if (d.magnitude > 18f || d.magnitude < 1f) continue;
+            float ang = Vector3.Angle(dir, d); if (ang < ba) { ba = ang; best = o; }
+        }
+        if (best == null) return dir;
+        // 動いている分に加えて、坂で転がり出す分（床の傾きから）も見込む（丘では相手が下へ流れる）
+        float T = ArrowTeleSec + 0.15f; Vector2 gr = Arena.Grad(best.pos.x, best.pos.z); if (gr.magnitude > 1.2f) gr = Vector2.zero;
+        Vector3 slide = new Vector3(-gr.x, 0, -gr.y) * (G * 0.5f) * 0.5f * T * T * 0.7f;
+        Vector3 pred = best.pos + new Vector3(best.vel.x, 0, best.vel.z) * T * 0.9f + slide - k.pos; pred.y = 0;
+        if (pred.sqrMagnitude < 0.25f) return dir;
+        float w = k.isPlayer && !autoPlayer ? 0.6f : 1f;
+        return Vector3.Slerp(dir, pred.normalized, w).normalized;
+    }
+    const float ArrowMaxLen = 17.5f, ArrowEdgeMargin = 1.4f;
     float ArrowReach(Vector3 from, Vector3 dir)
     {
         float lim = ArrowMaxLen;

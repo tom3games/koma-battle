@@ -194,8 +194,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         send(camFor())
         fightBtn()
         break
-      case 'stage': { const t = $('stageTag'); $('stageName').textContent = ['アビス・ボウル', 'キングス・ヒル'][m.p | 0] || ''; KB.stage = m.p | 0; t.classList.remove('on'); void t.offsetWidth; t.classList.add('on'); break }
-      case 'count': Snd.rate('bgm', 1); countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
+      case 'stage': { const t = $('stageTag'); $('stageName').textContent = ['アビス・ボウル', 'キングス・ヒル'][m.p | 0] || ''; KB.stage = m.p | 0; t.classList.remove('on'); void t.offsetWidth; t.classList.add('on'); document.body.classList.add('stage-intro'); setTimeout(() => document.body.classList.remove('stage-intro'), 2600); break }
+      case 'count': document.body.classList.remove('stage-intro'); Snd.rate('bgm', 1); countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
       case 'go':
         countdown('勝負', true); Snd.play('go', { vol: 0.8 })
         ensureBgm()
