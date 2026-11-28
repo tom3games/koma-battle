@@ -85,7 +85,7 @@ public class Koma
 
     public GameObject root; Transform tilt, spinner, ghost, shadow, marker, arrow, shield, funnel;
     TrailRenderer trail;
-    float spinAngle, wobblePhase, downT;
+    float spinAngle, wobblePhase, downT, downYaw;
     Vector3 downAxis;
     Materials mats;
     Material ghostMat, shadowMat;
@@ -395,7 +395,7 @@ public class Koma
 
     public void Place(Vector3 p)
     {
-        pos = p; vel = Vector3.zero; grounded = false; alive = true; down = false; downT = 0;
+        pos = p; vel = Vector3.zero; grounded = false; alive = true; down = false; downT = 0; downYaw = 0;
         spin = spinMax; gauge = 0; dashCd = 0; dashT = 0; airDashUsed = 0; specialPhase = 0; koWhy = ""; shieldT = 0; tornadoT = 0; rushLeft = 0;
         dealt = 0; aerialHits = 0; specials = 0; dashes = 0; lossWall = 0; lossHit = 0; lossDash = 0; diveTarget = -1; boostCd = 0;
         padCd = 0; hitFlash = 0; lastVy = 0; lastHitT = -99; specialT = 0;
@@ -446,18 +446,22 @@ public class Koma
     {
         root.transform.position = pos;
         float sr = SpinRatio;
-        float w = alive ? Mathf.Lerp(7f, 46f, Mathf.Sqrt(sr)) : (down ? Mathf.Max(0, 8f - downT * 10f) : 30f);
+        float w = alive ? Mathf.Lerp(7f, 46f, Mathf.Sqrt(sr)) : (down ? Mathf.Max(0f, 9f * Mathf.Exp(-downT * 1.7f) - 0.4f) : 30f);
         if (specialPhase > 0 || tornadoT > 0) w = 70f;
         spinAngle += w * dt * Mathf.Rad2Deg;
         spinner.localRotation = Quaternion.Euler(0, left ? -spinAngle : spinAngle, 0);
-        wobblePhase += dt * Mathf.Lerp(2f, 8f, 1 - sr);
-        float wob = alive ? Mathf.Lerp(0f, 22f, Mathf.Pow(1 - sr, 1.6f)) : 0;
+        wobblePhase += dt * Mathf.Lerp(2f, 11f, 1 - sr);   // 回転が落ちるほど首振り（歳差）が大きく・速くなる
+        float wob = alive ? Mathf.Lerp(0f, 30f, Mathf.Pow(1 - sr, 1.9f)) : 0;
         if (down)
         {
+            // 倒れたあとも床の上で縁をこすりながら回る（慣性）。傾きは大きくなり、回る速さはだんだん落ちて1.8秒ほどで止まる
             downT += dt;
-            float k = Mathf.Clamp01(downT / 0.7f);
-            float bounce = Mathf.Abs(Mathf.Sin(downT * 14f)) * (1 - k) * 12f;
-            tilt.localRotation = Quaternion.AngleAxis(Mathf.Lerp(0, 74f, k * k) + bounce, downAxis);
+            float k = Mathf.Clamp01(downT / 0.45f);
+            float roll = Mathf.Exp(-downT * 1.7f);
+            float bounce = Mathf.Abs(Mathf.Sin(downT * 16f)) * (1 - k) * 12f;
+            float ang = Mathf.Lerp(0, 66f, k * k) + 18f * (1f - roll) * k + Mathf.Sin(downT * 52f) * 3.2f * roll + bounce;
+            downYaw += dt * 15f * roll * Mathf.Rad2Deg * (left ? -1f : 1f);
+            tilt.localRotation = Quaternion.AngleAxis(downYaw, Vector3.up) * Quaternion.AngleAxis(ang, downAxis);
         }
         else if (leanT > 0 && clingT <= 0)
         {

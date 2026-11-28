@@ -41,7 +41,7 @@ public static class Arena
     // 2026-11-28 ステージを2つに（ランダム）: Stage 0 = すり鉢（今まで）／ Stage 1 = 王様の丘（中央が盛り上がり、何もしないと外へ転がる）。
     // 床の高さは Bowl() 1か所から出るので、ステージを切り替えたら床の形（頂点の高さ）を作り直す（SetStage）。ステージは配列で持つ（将来の選択に備える）
     public static int Stage;
-    public static readonly string[] StageNames = { "アビス・ボウル", "キングス・ヒル" };
+    public static readonly string[] StageNames = { "アビス・ボウル", "キングス・ヒル", "ターンテーブル" };
     public const float HillTop = 5.2f, HillTopR = 4.2f;
     static readonly float[] GapDeg1 = { 0, 45, 90, 135, 180, 225, 270, 315 };   // 丘は切れ目が多い（場外が起きやすい）
     public static float[] CurGaps => Stage == 1 ? GapDeg1 : GapDeg;
@@ -54,6 +54,7 @@ public static class Arena
     }
     public static float Bowl(float r)
     {
+        if (Stage == 2) { float tt = r / R; return 1.0f * tt * tt; }   // ターンテーブル: ほぼ平らな円盤（縁だけ少し反る）
         if (Stage == 1)
         {
             if (r <= HillTopR) return HillTop;
@@ -91,7 +92,7 @@ public static class Arena
     public static float MoundAdd(float x, float z, out int idx)
     {
         idx = -1; float best = 0;
-        if (Stage == 1) return 0f;   // 2026-11-28 本人「丘にジャンプ台いらん」
+        if (Stage != 0) return 0f;   // 2026-11-28 本人「丘にジャンプ台いらん」（ターンテーブルも無し）
         for (int i = 0; i < Mounds.Length; i++)
         {
             float d = (new Vector2(x, z) - Mounds[i]).magnitude;
@@ -427,7 +428,8 @@ public static class Arena
     class Deform { public Mesh mesh; public float off; }
     static readonly List<Deform> deforms = new List<Deform>();
     static readonly List<MeshRenderer> floorRends = new List<MeshRenderer>();
-    static readonly List<GameObject> arcObjs = new List<GameObject>(), iceObjs = new List<GameObject>();
+    static readonly List<GameObject> arcObjs = new List<GameObject>(), iceObjs = new List<GameObject>(), turnObjs = new List<GameObject>();
+    static Transform turnRoot;
     static Materials mat0;
     static void Reg(GameObject g, float off = 0f) { deforms.Add(new Deform { mesh = g.GetComponent<MeshFilter>().sharedMesh, off = off }); }
     static int builtStage = 0;
@@ -443,7 +445,9 @@ public static class Arena
             for (int i = 0; i < v.Length; i++) if (v[i].y > -3.3f) { float h = FloorH(v[i].x * 0.99999f, v[i].z * 0.99999f); v[i].y = (h < -100 ? v[i].y : h) + d.off; }
             d.mesh.vertices = v; d.mesh.RecalculateNormals(); d.mesh.RecalculateBounds();
         }
-        foreach (var r in floorRends) r.sharedMaterial = st == 1 ? mat0.Floor2 : mat0.Floor;
+        foreach (var r in floorRends) r.sharedMaterial = st == 1 ? mat0.Floor2 : st == 2 ? mat0.Floor3 : mat0.Floor;
+        foreach (var g in turnObjs) g.SetActive(st == 2);
+        TurnAngle = 0f; if (turnRoot) turnRoot.localRotation = Quaternion.identity;
         foreach (var g in arcObjs) g.SetActive(st == 0);
         foreach (var g in iceObjs) g.SetActive(st == 1);
         if (pitWall) pitWall.SetActive(false);
@@ -451,7 +455,7 @@ public static class Arena
 
     public static GameObject BuildVisual(Materials m)
     {
-        mat0 = m; deforms.Clear(); floorRends.Clear(); arcObjs.Clear(); iceObjs.Clear();
+        mat0 = m; deforms.Clear(); floorRends.Clear(); arcObjs.Clear(); iceObjs.Clear(); turnObjs.Clear();
         var root = new GameObject("Arena");
         // 床: 崩れない中央と、最終局面で外から崩れ落ちる輪（1周を8つに分けた破片）
         var floor = MeshKit.Obj("Floor", root.transform, FloorMesh(DipR, KeepR, 0, Mathf.PI * 2), m.Floor);
@@ -484,6 +488,11 @@ public static class Arena
             ice.GetComponent<MeshRenderer>().receiveShadows = true; ice.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             Reg(ice, 0.03f); iceObjs.Add(ice); ice.SetActive(false);
         }
+        // ターンテーブル: 回る円盤の見た目（矢印の輪3本と放射状の線。丸ごと回す。物理は円対称なので高さは変わらない）
+        { var tr = new GameObject("Turn"); tr.transform.SetParent(root.transform, false); turnRoot = tr.transform;
+          foreach (var band in new[] { new Vector2(4.6f, 6.0f), new Vector2(10.2f, 11.6f), new Vector2(15.8f, 17.2f) })
+          { var g = MeshKit.Obj("TurnBand", turnRoot, TurnBandMesh(band.x, band.y), m.TurnBand); g.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(g, 0.04f); turnObjs.Add(g); g.SetActive(false); }
+          var sp = MeshKit.Obj("TurnSpokes", turnRoot, TurnSpokeMesh(), m.TurnSpoke); sp.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; Reg(sp, 0.035f); turnObjs.Add(sp); sp.SetActive(false); }
         foreach (var p in Pads)
         {
             float y = BaseH(p.x, p.y);
@@ -497,6 +506,60 @@ public static class Arena
         }
 
         return root;
+    }
+
+    // ターンテーブル: 回転の向き（上から見て時計回り）と速さ。床の流れは Step 側
+    public const float TurnW = 0.5f;           // 床の回転（rad/s）
+    public static float TurnAngle;
+    public static void TurnUpdate(float dt)
+    {
+        if (Stage != 2 || !turnRoot) return;
+        TurnAngle += TurnW * dt * Mathf.Rad2Deg;
+        turnRoot.localRotation = Quaternion.Euler(0, TurnAngle, 0);
+    }
+    static Mesh TurnBandMesh(float r0, float r1)
+    {
+        int seg = 96, nr = 2;
+        var v = new List<Vector3>(); var uv = new List<Vector2>(); var t = new List<int>();
+        for (int i = 0; i <= nr; i++)
+        {
+            float rr = Mathf.Lerp(r0, r1, i / (float)nr);
+            for (int j = 0; j <= seg; j++)
+            {
+                float a = j * Mathf.PI * 2 / seg;
+                float x = Mathf.Cos(a) * rr, z = Mathf.Sin(a) * rr;
+                v.Add(new Vector3(x, 0.1f, z));
+                uv.Add(new Vector2(i / (float)nr, j / (float)seg * 48f));
+            }
+        }
+        int W = seg + 1;
+        for (int i = 0; i < nr; i++)
+            for (int j = 0; j < seg; j++)
+            {
+                int a = i * W + j, b = a + 1, cc = a + W, d = cc + 1;
+                t.Add(a); t.Add(cc); t.Add(b); t.Add(b); t.Add(cc); t.Add(d);
+            }
+        var m = new Mesh();
+        m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(t, 0);
+        m.RecalculateNormals(); m.RecalculateBounds();
+        return m;
+    }
+    static Mesh TurnSpokeMesh()
+    {
+        var mb = new MeshKit.Builder();
+        int n = 8; float hw = 0.007f;
+        for (int s = 0; s < n; s++)
+        {
+            float c = s * Mathf.PI * 2 / n, a0 = c - hw, a1 = c + hw;
+            float rs = 3.2f, re = R - 0.6f; int seg = 14;
+            for (int k = 0; k < seg; k++)
+            {
+                float r0 = Mathf.Lerp(rs, re, k / (float)seg), r1 = Mathf.Lerp(rs, re, (k + 1) / (float)seg);
+                System.Func<float, float, Vector3> P = (ang, r) => new Vector3(Mathf.Cos(ang) * r, 0.1f, Mathf.Sin(ang) * r);
+                mb.Quad(P(a0, r0), P(a0, r1), P(a1, r1), P(a1, r0), Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+            }
+        }
+        return mb.Mesh();
     }
 
     // 加速板の輪（床に沿わせる）。UV の u は周、v は内向き

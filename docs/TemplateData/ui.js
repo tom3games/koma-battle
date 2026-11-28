@@ -198,7 +198,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         send(camFor())
         fightBtn()
         break
-      case 'stage': { const t = $('stageTag'); $('stageName').textContent = practice ? '練習場' : ['アビス・ボウル', 'キングス・ヒル'][m.p | 0] || ''; KB.stage = m.p | 0; t.classList.remove('on'); void t.offsetWidth; t.classList.add('on'); document.body.classList.add('stage-intro'); setTimeout(() => document.body.classList.remove('stage-intro'), 2600); break }
+      case 'stage': { const t = $('stageTag'); $('stageName').textContent = practice ? '練習場' : ['アビス・ボウル', 'キングス・ヒル', 'ターンテーブル'][m.p | 0] || ''; KB.stage = m.p | 0; t.classList.remove('on'); void t.offsetWidth; t.classList.add('on'); document.body.classList.add('stage-intro'); setTimeout(() => document.body.classList.remove('stage-intro'), 2600); break }
       case 'count': document.body.classList.remove('stage-intro'); Snd.rate('bgm', 1); countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
       case 'go':
         countdown('勝負', true); Snd.play('go', { vol: 0.8 })
@@ -304,6 +304,11 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       }
       case 'ko':
         Snd.play('down', { vol: m.i === 0 ? 1 : 0.7 })
+        // 2026-11-28 本人「余韻がない」: 回転が尽きて倒れたら、床に当たる小さな金属音のあと、縁をこすって回る音が間隔を詰めながら小さくなる
+        if (m.why !== 'out' && m.why !== 'pit') { const v = m.i === 0 ? 1 : 0.5
+          Snd.play('tink', { vol: 0.34 * v, rate: 1.1, dest: 'hi', cut: 0.3, delay: 0.32 })
+          ;[[0.62, 1], [0.86, 1.08], [1.04, 1.16], [1.18, 1.25], [1.28, 1.35], [1.36, 1.45], [1.42, 1.55]].forEach(([d, r], n) => Snd.play(n % 2 ? 'tink' : 'clang', { vol: (0.22 - n * 0.02) * v, rate: r + 0.3, delay: d }))
+          Snd.play('creak', { vol: 0.22 * v, rate: 1.9, delay: 0.5 }) }
         onoma(m.why === 'out' ? '場外' : m.why === 'pit' ? '落下' : 'ダウン', m.x, Math.max(0.25, m.y))
         break
       case 'sudden': $('sudden').hidden = false; Snd.play('down', { vol: 0.6, rate: 0.7 }); Snd.rate('bgm', 1.12); break

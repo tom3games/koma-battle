@@ -7,7 +7,7 @@ using UnityEngine;
 public class Materials
 {
     Material std, stdE, vtx, add, alpha;
-    public Material Floor, Floor2, Ice, Base, Arc, Pad, PadSlot, Boost, Sky, Line, Stands, Truss, Warn;
+    public Material Floor, Floor2, Floor3, TurnBand, TurnSpoke, Ice, Base, Arc, Pad, PadSlot, Boost, Sky, Line, Stands, Truss, Warn;
     public Texture2D Dot, Streak, Brushed, Worn, Chevron, Funnel;
 
     public Materials()
@@ -25,6 +25,9 @@ public class Materials
         Funnel = FunnelTex();
         Floor = Lit(Color.white, 0.48f, 0.5f, FloorTex(1024));
         Floor2 = Lit(new Color(1f, 0.74f, 0.48f), 0.3f, 0.15f, FloorTex(1024, 1));   // 丘: 砂岩のような暖かい色
+        Floor3 = Lit(new Color(0.55f, 0.74f, 0.9f), 0.5f, 0.45f, FloorTex(1024, 1));   // ターンテーブル: 青みの鉄
+        TurnBand = AddGlow(new Color(0.3f, 0.85f, 1f, 1f), Chevron);
+        TurnSpoke = AddGlow(new Color(0.4f, 0.75f, 0.9f, 0.3f));
         Ice = Emis(new Color(0.42f, 0.66f, 0.85f), new Color(0.03f, 0.08f, 0.14f));                        // 氷の帯
         Base = Lit(new Color(0.09f, 0.1f, 0.12f), 0.5f, 0.6f, Brushed);
         Arc = Lit(Color.white, 0.55f, 0.7f, ArcTex());

@@ -316,7 +316,7 @@ public partial class KomaBoot : MonoBehaviour
         touchMove = Vector2.zero; touchAimOn = false; touchDash = false; touchSpecial = false;
         camInit = true; Arena.ResetCollapse(); boardAnnounced = false; fires.Clear(); ClearChains(); pitForced = false; suddenAt = -1f;
         if (practice) nCpu = 1;
-        { int st = practice ? 0 : PickStage(); Arena.SetStage(st); ApplyStageLook(st); BoardAt = st == 1 ? 1e9f : 40f; Emit("{\"t\":\"e\",\"k\":\"stage\",\"p\":" + st + "}"); }
+        { int st = practice ? 0 : PickStage(); Arena.SetStage(st); ApplyStageLook(st); BoardAt = st != 0 ? 1e9f : 40f; Emit("{\"t\":\"e\",\"k\":\"stage\",\"p\":" + st + "}"); }
         spectating = false; deathT = -1f; pAliveLast = true; specTarget = null; endSubject = null; camClose = 0f; placeAtDeath = 0; totalK = 1 + nCpu;
         pairCd.Clear();
         int n = 1 + nCpu;
@@ -335,6 +335,8 @@ public partial class KomaBoot : MonoBehaviour
         countStarted = false;
         if (practice) PracticeSetup();
     }
+    public float TurnSudden = 70f, TurnDecayMul = 0.8f, TurnWear = 0.8f, TurnGain = 0.6f, TurnSpeedK = 0.9f;
+    public float TurnSameDecay = 0.88f, TurnReverseDecay = 1.15f;
     const float StageIntro = 1.5f; bool countStarted;
 
     // ---------- 毎フレーム ----------
@@ -394,11 +396,12 @@ public partial class KomaBoot : MonoBehaviour
             if (bon && !boardAnnounced && !Arena.Collapsing) { boardAnnounced = true; Emit("{\"t\":\"e\",\"k\":\"board\"}"); }
         }
         UpdateFires(dt);
+        Arena.TurnUpdate(realDt * testScale);
         // 最終局面: 100秒たつか、4人の試合で50秒を過ぎて残り2人になったら外から床が崩れる
         if (phase == "fight" && !sudden && !practice)
         {
             int act = 0, alv = 0; foreach (var k in komas) if (k.root.activeSelf) { act++; if (k.alive) alv++; }
-            if (fightT > (Arena.Stage == 1 ? 70f : 100f) || (act >= 4 && alv <= 2 && fightT > (Arena.Stage == 1 ? 35f : 50f))) { sudden = true; suddenAt = fightT; Arena.StartCollapse(); Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
+            if (fightT > (Arena.Stage == 1 ? 70f : Arena.Stage == 2 ? TurnSudden : 100f) || (act >= 4 && alv <= 2 && fightT > (Arena.Stage == 1 ? 35f : Arena.Stage == 2 ? TurnSudden * 0.5f : 50f))) { sudden = true; suddenAt = fightT; Arena.StartCollapse(); Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
         }
         if (phase == "fight" || phase == "end")
         {
@@ -503,7 +506,9 @@ public partial class KomaBoot : MonoBehaviour
             UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
-                k.spin -= (0.75f * k.st.decay + (sudden ? 1.2f : 0f)) * dt;
+                k.spin -= (0.75f * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * (k.left ? TurnReverseDecay : TurnSameDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
+                if (Arena.Stage == 2 && k.grounded) k.spin -= TurnWear * Mathf.Max(0f, k.st.grip - 0.7f) * Mathf.Clamp01(new Vector2(k.pos.x, k.pos.z).magnitude / Arena.R) * dt;   // 回る床の摩擦: グリップの高い（重い）足ほど、外側で回転が削れる
+                if (Arena.Stage == 2 && k.alive) k.spin = Mathf.Min(k.spinMax, k.spin + TurnGain * Mathf.Max(0f, k.st.speed - 0.9f) * dt);   // 回る床の勢いをもらう: 速く動くコマほど回転が戻る
                 if (k.braceT > 0) k.braceT -= dt;
                 if (k.Bracing && k.grounded)
                 {
@@ -563,7 +568,7 @@ public partial class KomaBoot : MonoBehaviour
                 endSubject = last != null ? last : player; spectating = false;
                 if (player.alive) SlowFx(0.45f, 1.0f);
             }
-            else if (!player.alive && deathT > 1.4f && !spectating) { spectating = true; PickSpec(player.pos); }
+            else if (!player.alive && deathT > 2.2f && !spectating) { spectating = true; PickSpec(player.pos); }
             if (spectating && (specTarget == null || !specTarget.alive)) PickSpec(specTarget != null ? specTarget.pos : player.pos);
         }
         else if (phase == "end")
@@ -651,7 +656,7 @@ public partial class KomaBoot : MonoBehaviour
                 if (sc < best) { best = sc; b.target = o.idx; }
             }
             b.boardT = Arena.BoardOn && !Arena.Collapsing && rng.NextDouble() < 0.15 ? 1.5f + (float)rng.NextDouble() * 1.5f : 0f;
-            b.padGoal = Arena.Stage != 1 && rng.NextDouble() < 0.12 ? rng.Next(Arena.Pads.Length + Arena.Mounds.Length) : -1;
+            b.padGoal = Arena.Stage == 0 && rng.NextDouble() < 0.12 ? rng.Next(Arena.Pads.Length + Arena.Mounds.Length) : -1;
             b.jitter = new Vector2((float)rng.NextDouble() - 0.5f, (float)rng.NextDouble() - 0.5f) * 2f;
         }
         if (b.target < 0) return;
@@ -1114,7 +1119,13 @@ public partial class KomaBoot : MonoBehaviour
             Vector2 gr = Arena.Grad(p.x, p.z);
             if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
             float fr = Mathf.Exp(-0.9f * k.st.grip * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * (Arena.IceAt(p.x, p.z) ? 0.12f : 1f) * dt);
-            v.x *= fr; v.z *= fr;
+            if (Arena.Stage == 2 && k.alive && phase == "fight")
+            {
+                // ターンテーブル: 床が時計回りに回り、足の摩擦（グリップ）の分だけ床の速さに引きずられる。外ほど速い（中心は弱い）。グリップの低い（速い）コマは流されにくい
+                Vector2 fl = new Vector2(p.z, -p.x) * Arena.TurnW * Mathf.Clamp(k.st.grip, 0.5f, 1.3f);
+                v.x = fl.x + (v.x - fl.x) * fr; v.z = fl.y + (v.z - fl.y) * fr;
+            }
+            else { v.x *= fr; v.z *= fr; }
             // 周回加速板: 矢印の向き（時計回り）に強く押され、帯に沿って1周流れる。回転数が少しだけ戻る
             // 2026-11-26 本人「降りられない・加速が矢印と反対」: 向きを矢印に合わせ、中央へ引き戻すのは外へはみ出した時だけ（内側へはハンドルで降りられる）
             if (k.alive && phase == "fight" && Arena.OnBoard(p.x, p.z))
@@ -1452,7 +1463,8 @@ public partial class KomaBoot : MonoBehaviour
     void Damage(Koma from, Koma to, float dmg)
     {
         if (phase == "end") return;
-        dmg *= HitScale; if (to.shieldT > 0) dmg *= 0.2f; if (to.anchorT > 0) dmg *= 0.35f; if (to.specialPhase == 30) dmg *= 0.4f; if (to.chainTo != null) dmg *= 0.5f;
+        dmg *= HitScale; if (Arena.Stage == 2) dmg *= Mathf.Clamp(1.9f - TurnSpeedK * to.st.speed, 0.5f, 1.4f) * Mathf.Pow(Mathf.Max(0.5f, from.st.atk), -1.1f) * 0.85f;   // ターンテーブル: 速く動き回れるコマは回る床の上で衝撃をいなす（受けるダメージが減る）。遅いコマは受けが増える
+        if (to.shieldT > 0) dmg *= 0.2f; if (to.anchorT > 0) dmg *= 0.35f; if (to.specialPhase == 30) dmg *= 0.4f; if (to.chainTo != null) dmg *= 0.5f;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
         if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);
         from.dealt += dmg; PasSoul(from, to, dmg);
@@ -1744,12 +1756,12 @@ public partial class KomaBoot : MonoBehaviour
     }
     void ApplyStageLook(int st)
     {
-        bool hill = st == 1;
-        if (sunL != null) { sunL.color = hill ? new Color(1f, 0.78f, 0.5f) : new Color(1f, 0.96f, 0.9f); sunL.intensity = hill ? 1.5f : 1.35f; sunL.transform.rotation = Quaternion.Euler(hill ? 38f : 72f, hill ? 55f : -25f, 0); }
-        RenderSettings.ambientSkyColor = hill ? new Color(0.36f, 0.3f, 0.25f) : new Color(0.27f, 0.29f, 0.34f);
-        RenderSettings.ambientEquatorColor = hill ? new Color(0.24f, 0.18f, 0.13f) : new Color(0.17f, 0.17f, 0.19f);
-        RenderSettings.fogColor = hill ? new Color(0.2f, 0.12f, 0.08f) : new Color(0.04f, 0.045f, 0.06f);
-        if (cam != null) cam.backgroundColor = hill ? new Color(0.14f, 0.08f, 0.06f) : new Color(0.03f, 0.035f, 0.045f);
+        bool hill = st == 1, turn = st == 2;
+        if (sunL != null) { sunL.color = hill ? new Color(1f, 0.78f, 0.5f) : turn ? new Color(0.85f, 0.95f, 1f) : new Color(1f, 0.96f, 0.9f); sunL.intensity = hill ? 1.5f : 1.35f; sunL.transform.rotation = Quaternion.Euler(hill ? 38f : 72f, hill ? 55f : -25f, 0); }
+        RenderSettings.ambientSkyColor = hill ? new Color(0.36f, 0.3f, 0.25f) : turn ? new Color(0.24f, 0.32f, 0.42f) : new Color(0.27f, 0.29f, 0.34f);
+        RenderSettings.ambientEquatorColor = hill ? new Color(0.24f, 0.18f, 0.13f) : turn ? new Color(0.13f, 0.18f, 0.26f) : new Color(0.17f, 0.17f, 0.19f);
+        RenderSettings.fogColor = hill ? new Color(0.2f, 0.12f, 0.08f) : turn ? new Color(0.03f, 0.07f, 0.12f) : new Color(0.04f, 0.045f, 0.06f);
+        if (cam != null) cam.backgroundColor = hill ? new Color(0.14f, 0.08f, 0.06f) : turn ? new Color(0.02f, 0.05f, 0.09f) : new Color(0.03f, 0.035f, 0.045f);
     }
     float camIdleT; public float RecenterHalf = 1.0f; const float RecenterIdle = 0.6f, RecenterR = 0.68f;
     Vector3 camVel, camLook;

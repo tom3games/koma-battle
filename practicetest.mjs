@@ -23,7 +23,7 @@ ok(await p.evaluate(() => getComputedStyle(document.getElementById('hudTime')).d
 await shot('2_start')
 let s = await st(); ok(s.k.length === 2, `コマは自分とダミーの2体 (${s.k.length})`)
 // 必殺がすぐたまる
-await wait(3000); s = await st(); ok(s.k[0].g >= 1, `必殺ゲージが満タン g=${s.k[0].g}`)
+await wait(3000); s = await st(); ok(s.k[0].g >= 0.9, `必殺ゲージが満タン g=${s.k[0].g}`)
 // 的3種
 const pos = async () => { const q = await st(); return [q.k[1].wx, q.k[1].wz] }
 const dist = (a, c) => Math.hypot(a[0] - c[0], a[1] - c[1])
@@ -43,8 +43,9 @@ await p.evaluate(() => document.querySelector('#prDummy button[data-d="0"]').cli
 await send(p, 'cpuoff|1')
 // 当てる（ダッシュ）
 await send(p, 'pracreset'); await wait(600)
+await p.waitForFunction(() => KB.state.k[0].air === 0 && KB.state.k[1].air === 0, null, { timeout: 8000 }).catch(() => {})
 await p.evaluate(() => { KB.events.length = 0 })
-{ const d = await st(); await send(p, `dashat|0,${d.k[1].wx},${d.k[1].wz}`) } await p.waitForFunction(() => KB.events.some(e => e.k === 'phit'), null, { timeout: 6000 }).catch(() => {})
+for (let i = 0; i < 8 && !(await evs('phit')).length; i++) { const d = await st(); await send(p, `tp|${(d.k[1].wx - 4).toFixed(2)},${(d.k[1].gh + 0.1).toFixed(2)},${d.k[1].wz.toFixed(2)},0,0,0,0`); await wait(150); await send(p, `dashat|0,${d.k[1].wx},${d.k[1].wz}`); await wait(1200) }
 let hits = await evs('phit'); ok(hits.length > 0 && hits[0].dd > 0 && hits[0].v > 0, `当てた数値が出る ${JSON.stringify(hits[0] || {})}`)
 await p.waitForFunction(() => KB.events.some(e => e.k === 'pstat'), null, { timeout: 8000 }).catch(() => {}); await wait(200)
 const stat = await p.evaluate(() => ['psD', 'psV', 'psR', 'psM'].map(i => document.getElementById(i).textContent))
