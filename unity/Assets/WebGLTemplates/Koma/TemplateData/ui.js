@@ -35,7 +35,8 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       { n: 'グレイシャル・アロー', d: '氷の矢で突進', f: '狙った向きに輪が並び、開き終わると氷の矢になって一直線に突進する。当たった相手は弾かれて凍える。輪が開いている間に避けられる。', x: '展開0.95秒 突進約16m 凍え2秒（速さ・加速が半分）' },
       { n: 'チェイン・バインド', d: '鎖で振り回して投げる', f: '一番近い相手と鎖でつながる。自分が回るほど相手を振り回し、最後に狙いの向きへ放り投げる。つながれた側もダッシュで引っ張り返せる。', x: '4秒 鎖の長さ6.8m 回した数だけ遠くへ' },
       { n: 'ソニック・トレイル', d: '光の軌跡で削る', f: '5秒のあいだ、通った道に光の帯が残る。帯は3秒で消え、触れた相手を削って弾く。自分は当たらない。相手の周りを駆け抜けるように使う。', x: '5秒 帯は3秒残る 触れるとダメージ8＋強い弾き' },
-      { n: 'ファントム・ミラージュ', d: '光の分身が2体', f: '6秒のあいだ、左右に光の分身が2体ついて同じ動きをする。分身にも当たり判定があり、相手に触れるとダメージ。', x: '6秒 分身2体 触れるとダメージ2.5＋速さ分' } ] },
+      { n: 'ファントム・ミラージュ', d: '光の分身が2体', f: '6秒のあいだ、左右に光の分身が2体ついて同じ動きをする。分身にも当たり判定があり、相手に触れるとダメージ。', x: '6秒 分身2体 触れるとダメージ2.5＋速さ分' },
+      { n: '狂戦化', d: '暴走して戦う', f: '回転が5割を切った時だけ撃てる。8秒、速く・攻撃2倍・弾かれにくくなるが、操作が効きにくく一番近い相手へ引っぱられる。終わると回転が5%まで落ちてふらつく。黒い瘴気をまとい赤い目が灯る。', x: '8秒 速さ×1.6 攻撃×2 受ける弾き半分 ダッシュの待ちなし 終了後は回転5%・3秒ふらつく' } ] },
     { key: 'pas', name: 'パッシブ', parts: [
       { n: 'なし', d: 'なし', f: 'パッシブを使わない。', x: '' },
       { n: '逆鱗', d: 'ピンチで強化', f: '回転が3割を切ると赤黒いオーラが噴き出し、芯が赤く光る。', x: '回転30%以下で発動 攻撃+25% 弾かれにくい' },
@@ -52,7 +53,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   const PAS_RGB = ['255,40,30', '255,220,110', '100,255,150', '180,90,255', '255,255,255', '255,130,30', '100,150,255', '100,230,255']
   const PAS_HEX = ['#ff2a22', '#ffdc6e', '#64ff96', '#b45aff', '#ffffff', '#ff821e', '#6496ff', '#64e6ff']
   // 必殺ごとに要るゲージ（0〜100）。強い技ほど多い。Unity の SpNeed と同じ並び
-  const SP_NEED = [90, 100, 70, 80, 85, 70, 100, 80, 75, 90]
+  const SP_NEED = [90, 100, 70, 80, 85, 70, 100, 80, 75, 90, 85]
   SLOTS.find(x => x.key === 'sp').parts.forEach((p, i) => { p.x = (p.x ? p.x + '　' : '') + `必要ゲージ${SP_NEED[i]}%` })
   // 極大技（ゲージ5本・長押し）。n = 漢字の名前、r = ルビ（読み）。元の効果を全部残して、範囲・時間・威力を上げ、技ごとの追加効果がつく
   const EVO = [
@@ -66,7 +67,9 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     { n: '双鎖地獄', r: 'チェイン・ケルベロス', f: '2体を同時につなぐ。自分の回転と同じ向きに自動でぐるぐる振り回す。つながれた側はダッシュで抵抗できる。' },
     { n: '光速残響', r: 'ソニック・ゼロ', f: '7秒、帯が太く長く、触れた相手へのダメージが1.5倍。' },
     { n: '四重幻影', r: 'ミラージュ・クアッド', f: '光の分身が4体、9秒。' },
+    { n: '終焉狂神', r: 'ラグナ・ベルセルク', f: '10秒、速さ1.8倍・攻撃2.5倍・弾かれない。通った跡に黒紫の爪痕が3秒残り、触れた相手は回転が削られひるむ。暴走中に倒すたび+2秒・終了後の回転+5%（最大20%）。終わりに黒い瘴気の衝撃波。' },
   ]
+  const RUBY = { 10: 'ベルセルク・ドライブ' }   // 通常の必殺で漢字名のもののルビ
   const rubyHtml = (n, r) => `<ruby>${n}<rt>${r}</rt></ruby>`
   const SPECIALS = SLOTS.find(x => x.key === 'sp').parts.map(p => p.n)
   const isTouch = matchMedia('(pointer: coarse)').matches
@@ -129,7 +132,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   const LV_XP = [0, 80, 200, 360, 560, 800, 1100, 1400, 1700, 2000]   // そのレベルに届く累計の経験値
   const MAXLV = LV_XP.length
   // レベルで解放される物（[段の名前, 何番目]）。Lv1 では右回転・必殺は1つ・パーツは一部だけ
-  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1], ['pas', 1]], 4: [['top', 4], ['leg', 3], ['pas', 2], ['sp', 4]], 5: [['sp', 2], ['pas', 3]], 6: [['core', 3], ['core', 4], ['pas', 4], ['sp', 5]], 7: [['sp', 3], ['pas', 5], ['sp', 8]], 8: [['pas', 6], ['sp', 6]], 9: [['pas', 7], ['sp', 7]], 10: [['pas', 8], ['sp', 9]] }
+  const UNLOCKS = { 2: [['dir', 1]], 3: [['sp', 1], ['pas', 1]], 4: [['top', 4], ['leg', 3], ['pas', 2], ['sp', 4]], 5: [['sp', 2], ['pas', 3]], 6: [['core', 3], ['core', 4], ['pas', 4], ['sp', 5]], 7: [['sp', 3], ['pas', 5], ['sp', 8]], 8: [['pas', 6], ['sp', 6], ['sp', 10]], 9: [['pas', 7], ['sp', 7]], 10: [['pas', 8], ['sp', 9]] }
   const needLv = (key, i) => { for (const lv in UNLOCKS) if (UNLOCKS[lv].some(u => u[0] === key && u[1] === i)) return +lv; return 1 }
   const slotOf = key => SLOTS.find(x => x.key === key)
   const unlockName = ([k, i]) => k === 'dir' ? '左回転のコマ' : k === 'pas' ? `パッシブ「${slotOf(k).parts[i].n}」` : k === 'sp' ? `必殺「${slotOf(k).parts[i].n}」` : `${slotOf(k).name}パーツ「${slotOf(k).parts[i].n}」`
@@ -270,9 +273,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       case 'special': {
         // 発動の瞬間: 技の色の縁取り・輪・集中線・重い音。技の名前は自分が使った時だけ出す
         const me = m.i === 0, kind = m.p | 0
-        if (me) banner(kind)
-        tint(kind, me ? 1 : 0.5); ring(m.x, m.y); if (me) lines(m.x, m.y, 1)
-        if (me) { flash(); shakeScreen() }
+        const evoNow = performance.now() - evoAt < 400 && me   // 極大技の時は専用の演出だけ（白い覆いを重ねない）
+        if (me && !evoNow) banner(kind)
+        if (!evoNow) { tint(kind, me ? 1 : 0.5); ring(m.x, m.y); if (me) lines(m.x, m.y, 1) }
+        if (me && !evoNow) { flash(); shakeScreen() }
         Snd.play('whoosh', { vol: me ? 1 : 0.6, rate: 0.7 })
         Snd.play('boom', { vol: me ? 0.8 : 0.45, rate: 0.6 })
         Snd.play('clang', { vol: me ? 0.7 : 0.35, rate: 0.7 })
@@ -357,8 +361,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         break }
       case 'evo': { const me = m.i === 0, kind = m.p | 0
         Snd.play('boom', { vol: me ? 1 : 0.55, rate: 0.5 }); Snd.play('whoosh', { vol: me ? 1 : 0.5, rate: 0.6 }); Snd.play('clang', { vol: me ? 0.9 : 0.4, rate: 0.6, delay: 0.05 }); Snd.duck(0.3, 2)
-        if (me) { evoBanner(kind); flash(); shakeScreen() } else tint(kind, 0.7)
+        evoAt = performance.now()
+        if (me) { evoBanner(kind); shakeScreen() } else tint(kind, 0.5)
         break }
+      case 'evocancel': evoAt = 0; if (m.i === 0) { $('banner').classList.remove('on', 'evo'); $('evoGlow').classList.remove('on') } break
       case 'trailhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.6 }); Snd.play('hit', { vol: 0.25, rate: 1.3 }); break
       case 'mirhit': Snd.play('clang', { vol: m.i === 0 ? 0.6 : 0.35, rate: 1.2 }); Snd.play('hit', { vol: 0.3, rate: 1.0 }); break
       case 'pstat': pracStat(m); break
@@ -437,7 +443,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   function renderDetail() {
     const sl = slotOf(lastSlot), p = sl.parts[pick[lastSlot]]
     const ev = sl.key === 'sp' ? EVO[pick.sp] : null
-    $('detail').innerHTML = `<b>${sl.name}　${p.n}</b>${p.f}${p.x ? `<em>${p.x}</em>` : ''}${ev ? `<em class="evo">極大技（ゲージ5本・長押し）　${rubyHtml(ev.n, ev.r)}<br>${ev.f}</em>` : ''}`
+    $('detail').innerHTML = `<b>${sl.name}　${sl.key === 'sp' && RUBY[pick.sp] ? rubyHtml(p.n, RUBY[pick.sp]) : p.n}</b>${p.f}${p.x ? `<em>${p.x}</em>` : ''}${ev ? `<em class="evo">極大技（ゲージ5本・長押し）　${rubyHtml(ev.n, ev.r)}<br>${ev.f}</em>` : ''}`
   }
   function buildSlots() {
     const box = $('slots'); box.innerHTML = ''
@@ -548,7 +554,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (m.pw) $('psP').textContent = `刃 -${fmt(m.pw[0], 1)}　円盤 -${fmt(m.pw[1], 1)}　軸 -${fmt(m.pw[2], 1)}`
   }
   function pracStat(m) { $('psR').textContent = fmt(m.dist, 1) + ' m' }
-  function pracSpLabel() { $('prSp').textContent = '必殺　' + SPECIALS[pracSp]; $('prEvo').innerHTML = '極大　' + rubyHtml(EVO[pracSp].n, EVO[pracSp].r) }
+  function pracSpLabel() { $('prSp').innerHTML = '必殺　' + (RUBY[pracSp] ? rubyHtml(SPECIALS[pracSp], RUBY[pracSp]) : SPECIALS[pracSp]); $('prEvo').innerHTML = '極大　' + rubyHtml(EVO[pracSp].n, EVO[pracSp].r) }
   function pracStart() {
     if (!KB.ready) return
     practice = true; Snd.init(); Snd.play('ui', { vol: 0.6 })
@@ -597,6 +603,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (me) {
       // 2026-11-25 本人「左上に残り回転数みたいなの出すのやめて」: 数字は出さない。回転は名札の細い線とコマの揺れで見せる
       const nd = me.nd || 1, ready = me.g >= nd - 1e-6, evoR = me.ev === 1 && me.a === 1
+      document.body.classList.toggle('bz', me.bz === 1 || me.bz === 2); document.body.classList.toggle('bzevo', me.bz === 2)
       $('spChip').classList.toggle('evo', evoR); $('tSpBtn').classList.toggle('evo', evoR); $('spChip').style.setProperty('--ec', me.ec || 0)
       { const bars = Math.floor(me.g * 5 + 1e-6); if ($('tNd').dataset.b !== String(bars)) { $('tNd').dataset.b = bars; $('tNd').textContent = bars } }
       const full = ready && me.a === 1 && me.ok === 1
@@ -672,14 +679,15 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     o.className = cls; void o.offsetWidth; o.classList.add('on')
   }
   // 技ごとの色（メテオ=橙 / テンペスト=水色 / ファントム=紫 / イージス=金 / アンカー=赤紫 / スパイラル=赤 / アロー=氷の白 / チェイン=黄緑）
-  const SP_RGB = ['255,110,40', '60,190,240', '170,90,240', '240,180,50', '230,70,190', '255,40,64', '180,238,255', '150,255,76', '110,240,255', '185,130,255']
+  const SP_RGB = ['255,110,40', '60,190,240', '170,90,240', '240,180,50', '230,70,190', '255,40,64', '180,238,255', '150,255,76', '110,240,255', '185,130,255', '215,20,36']
   // 2026-11-26 本人「他の人が使ってる必殺技の名前は出さなくていい」: 名前の帯は自分の技だけ
   function banner(kind) {
     const b = $('banner')
-    b.querySelector('span').textContent = SPECIALS[kind | 0] || SPECIALS[0]
+    if (RUBY[kind | 0]) b.querySelector('span').innerHTML = rubyHtml(SPECIALS[kind | 0], RUBY[kind | 0]); else b.querySelector('span').textContent = SPECIALS[kind | 0] || SPECIALS[0]
     b.style.setProperty('--bc', SP_RGB[kind | 0] || SP_RGB[0])
     b.classList.remove('on'); void b.offsetWidth; b.classList.add('on')
   }
+  let evoAt = 0   // 極大技の直前の通知（直後の通常の special 演出を省く）
   function evoBanner(kind) {
     const b = $('banner'), ev = EVO[kind | 0] || EVO[0]
     b.querySelector('span').innerHTML = rubyHtml(ev.n, ev.r)

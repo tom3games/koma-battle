@@ -5,12 +5,12 @@ const [W, H] = (process.argv[3] || '1280x720').split('x').map(Number), mobile = 
 const tag = `${W}x${H}${mobile ? 't' : ''}`
 const NG = []; const ok = (c, m) => { console.log((c ? 'OK ' : 'NG ') + m); if (!c) NG.push(m) }
 const only = process.argv[5] ? process.argv[5].split(',').map(Number) : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-const names = ['メテオ', 'テンペスト', 'ファントム・レイド', 'イージス', 'アンカー', 'スパイラル', 'アロー', 'チェイン', 'トレイル', 'ミラージュ']
+const names = ['メテオ', 'テンペスト', 'ファントム・レイド', 'イージス', 'アンカー', 'スパイラル', 'アロー', 'チェイン', 'トレイル', 'ミラージュ', '狂戦化']
 for (const sp of only) {
   const o = await begin(url, { sp, n: 2, w: W, h: H, mobile, stage: 0 })
   await send(o.p, 'cpuoff|1')
   await o.place(0, -6, 0, 0, 0, 1); await o.place(1, 5, 2, 0, 0, 1); await o.place(2, 8, -4, 0, 0, 1); await wait(1200)
-  if (sp === 5) await send(o.p, 'spin|0.1,0')
+  if (sp === 5 || sp === 10) await send(o.p, 'spin|0.1,0')
   // 4本では撃てない
   await send(o.p, 'gauge|400'); await o.clear(); await send(o.p, 'specialx'); await wait(500)
   ok((await o.evs('evo')).length === 0, `${names[sp]}: 4本では極大技が出ない`)

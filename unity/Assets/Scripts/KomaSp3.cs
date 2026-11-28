@@ -10,7 +10,7 @@ public partial class KomaBoot
     const float TrailSec = 5f, TrailLife = 3f, TrailDmg = 8f, TrailKnock = 10f, TrailRadius = 1.4f, TrailGap = 0.7f;
     const float MirageSec = 6f, MirageSide = 2.4f, MirageDmg = 2.5f, MirageKnock = 6f;
     // 強い技ほど多く要る（ゲージは0〜100）。メテオ テンペスト ファントム・レイド イージス アンカー スパイラル アロー チェイン トレイル ミラージュ
-    public static readonly float[] SpNeed = { 90f, 100f, 70f, 80f, 85f, 70f, 100f, 80f, 75f, 90f };
+    public static readonly float[] SpNeed = { 90f, 100f, 70f, 80f, 85f, 70f, 100f, 80f, 75f, 90f, 85f };
     public static float NeedOf(Koma k) => SpNeed[Mathf.Clamp(k.sp, 0, SpNeed.Length - 1)];
 
     class TrailPt { public Vector3 p; public float t; public int owner; }

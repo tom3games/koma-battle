@@ -509,10 +509,16 @@ body:not(.playing) #koLog{display:none}
 #banner.evo::before{background:linear-gradient(90deg,transparent,rgba(120,50,220,.92) 12%,rgba(232,177,58,.92) 50%,rgba(120,50,220,.92) 88%,transparent)}
 #banner ruby{ruby-position:over}
 #banner rt{font-size:.3em;letter-spacing:.2em;-webkit-text-stroke:1px #3a1670;font-weight:800}
-#evoGlow{position:fixed;inset:0;z-index:7;pointer-events:none;opacity:0;box-shadow:inset 0 0 90px 26px rgba(170,90,255,.85),inset 0 0 200px 60px rgba(240,180,60,.45)}
-#evoGlow.on{animation:evoedge 1.6s ease-out}
-@keyframes evoedge{0%{opacity:0}10%{opacity:1}60%{opacity:.7}100%{opacity:0}}
+#evoGlow{position:fixed;inset:0;z-index:7;pointer-events:none;opacity:0;box-shadow:inset 0 0 70px 14px rgba(170,90,255,.55),inset 0 0 150px 30px rgba(240,180,60,.25)}
+#evoGlow.on{animation:evoedge .5s ease-out}
+@keyframes evoedge{0%{opacity:0}20%{opacity:1}100%{opacity:0}}
 #detail em.evo{display:block;margin-top:6px;color:#e6c8ff;font-style:normal;font-size:12px;line-height:1.5}
 #detail rt{font-size:.6em}
 .pr-evo ruby{ruby-position:over}
 .pr-evo rt{font-size:.55em}
+
+/* 狂戦化: 暴走中は画面の縁が赤く脈打つ（極大は黒紫）。炎は使わず瘴気の色 */
+#bzGlow{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:0;box-shadow:inset 0 0 90px 18px rgba(200,10,30,.8)}
+body.bz #bzGlow{animation:bzpulse .9s ease-in-out infinite}
+body.bzevo #bzGlow{box-shadow:inset 0 0 110px 26px rgba(60,0,70,.9),inset 0 0 60px 8px rgba(200,10,30,.6)}
+@keyframes bzpulse{0%,100%{opacity:.25}50%{opacity:.95}}

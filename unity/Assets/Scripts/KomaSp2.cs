@@ -18,7 +18,7 @@ public partial class KomaBoot
     static readonly Color IceW = new Color(0.9f, 0.98f, 1f);
 
     // 撃てるか（ゲージと、ラスト・スパイラルは回転が3割を切っていること）
-    public bool SpecialReady(Koma k) => k.alive && k.gauge >= NeedOf(k) && (k.sp != 5 || k.SpinRatio < 0.3f);
+    public bool SpecialReady(Koma k) => k.alive && k.gauge >= NeedOf(k) && (k.sp != 5 || k.SpinRatio < 0.3f) && (k.sp != 10 || k.SpinRatio < 0.5f);
 
     // ---------- 粒（氷・火花・ほこり）。速度と色を指定して出す ----------
     int ActiveWaves() { int n = 0; for (int i = 0; i < waveT.Count; i++) if (waveT[i] >= 0) n++; return n; }
@@ -42,6 +42,7 @@ public partial class KomaBoot
     void SpecialNew(Koma k, Vector3 aim)
     {
         Vector3 h = aim - k.pos; h.y = 0;
+        if (k.sp == 10) { BerserkStart(k); return; }
         if (k.sp >= 8) { Sp3Start(k); return; }
         if (k.sp == 4)
         {
@@ -382,7 +383,7 @@ public partial class KomaBoot
     {
         for (int i = chains.Count - 1; i >= 0; i--) EndChain(chains[i]);
         foreach (var k in komas) { k.chainTo = null; k.chainFrom = null; k.chainT = 0; k.thrownT = 0; }
-        ClearSp3(); ClearEvo();
+        ClearSp3(); ClearEvo(); ClearBerserk();
     }
 
     // 物理の1刻みごと: 鎖の長さを超えたら引き合う（軽い方がよく動く）
@@ -586,6 +587,7 @@ public partial class KomaBoot
             case 7: return dist < 16f;
             case 8: return dist < 11f;
             case 9: return dist < 10f;
+            case 10: return dist < 14f;
             case 0: return dist < MeteorRange;
             default: return dist < 9f;
         }

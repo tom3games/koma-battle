@@ -186,7 +186,7 @@ public partial class KomaBoot : MonoBehaviour
                 if (nums.Length >= 6) pLeft = N(5) > 0; if (nums.Length >= 7) pPas = (int)N(6);
                 if (nums.Length >= 3) { pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); player.Rebuild(pTop, pCore, pLeg, mats, pLeft); if (pLeft) { player.spinMax *= LeftSpinMul; player.spin = player.spinMax; } }   // 2026-11-28 本人「左回転強すぎ。自分の回転数のデフォが少し下がるように」: 左回転を選んだ自分だけ回転の総量を下げる（割合の判定はそのまま）
                 if (nums.Length >= 4) nCpu = Mathf.Clamp((int)N(3), 1, 3);
-                if (nums.Length >= 5) pSp = Mathf.Clamp((int)N(4), 0, 9);
+                if (nums.Length >= 5) pSp = Mathf.Clamp((int)N(4), 0, 10);
                 player.sp = pSp; player.pas = Mathf.Clamp(pPas, -1, 7);
                 StartMatch();
                 break;
@@ -317,7 +317,7 @@ public partial class KomaBoot : MonoBehaviour
             var k = komas[i];
             if (i >= n) { k.root.SetActive(false); k.alive = false; continue; }
             if (i > 0 && practice) { /* 練習: ダミーは PracticeSetup で固定の装備 */ }
-            else if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = cpuSpMode >= 0 ? cpuSpMode : rng.Next(10); k.pas = cpuPasMode == -2 ? (rng.NextDouble() < 0.5 ? rng.Next(8) : -1) : cpuPasMode; }
+            else if (i > 0) { k.Rebuild(rng.Next(Parts.Count), rng.Next(Parts.Count), rng.Next(Parts.Count), mats, rng.NextDouble() < 0.25); k.sp = cpuSpMode >= 0 ? cpuSpMode : rng.Next(11); k.pas = cpuPasMode == -2 ? (rng.NextDouble() < 0.5 ? rng.Next(8) : -1) : cpuPasMode; }
             float ang = -Mathf.PI / 2 + Mathf.PI / 8 + i * Mathf.PI * 2 / n;
             float r = 11f;
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
@@ -509,7 +509,7 @@ public partial class KomaBoot : MonoBehaviour
             UpdateSpecial(k, dt);
             if (k.alive && phase == "fight")
             {
-                k.spin -= (0.75f * (Arena.Stage == 1 ? 0.8f : 1f) * ShaftDecayMul(k) * (1f + HeavyDecayK * (Arena.Stage == 2 ? 0.4f : 1f) * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
+                k.spin -= (0.75f * (k.bzT > 0 ? 0f : 1f) * (Arena.Stage == 1 ? 0.8f : 1f) * ShaftDecayMul(k) * (1f + HeavyDecayK * (Arena.Stage == 2 ? 0.4f : 1f) * Mathf.Max(0f, k.st.mass - 1.4f)) * (Arena.Stage == 2 ? Mathf.Min(k.st.decay, 0.9f) : k.st.decay) * (Arena.Stage == 2 ? TurnDecayMul * ((k.left == (Arena.TurnDirAt(new Vector2(k.pos.x, k.pos.z).magnitude) < 0f)) ? TurnSameDecay : TurnReverseDecay) : 1f) + (sudden ? 1.2f : 0f)) * dt;   // ターンテーブル: 床と同じ向き（右回り）は減りが少し遅く、逆向き（左回り）は少し速い
                 if (Arena.Stage == 2 && k.grounded) k.spin -= TurnWear * Mathf.Max(0f, k.st.grip - 0.7f) * Mathf.Clamp01(new Vector2(k.pos.x, k.pos.z).magnitude / Arena.R) * dt;   // 回る床の摩擦: グリップの高い（重い）足ほど、外側で回転が削れる
                 if (Arena.Stage == 2 && k.alive) k.spin = Mathf.Min(k.spinMax, k.spin + TurnGain * Mathf.Max(0f, k.st.speed - 0.9f) * dt);   // 回る床の勢いをもらう: 速く動くコマほど回転が戻る
                 if (k.braceT > 0) k.braceT -= dt;
@@ -545,7 +545,7 @@ public partial class KomaBoot : MonoBehaviour
             PassiveUpdate(k, dt);
             k.Visual(dt, realDt);
         }
-        UpdateStrikes(dt); UpdateClones(dt); UpdateSp3(dt); UpdateEvo(dt); UpdateArrowRings(realDt); UpdateAimMark(realDt);
+        UpdateStrikes(dt); UpdateClones(dt); UpdateSp3(dt); UpdateEvo(dt); UpdateBerserk(dt); UpdateArrowRings(realDt); UpdateAimMark(realDt);
         keyBuf.Clear(); keyBuf.AddRange(pairCd.Keys);
         foreach (var key in keyBuf) { pairCd[key] -= dt; if (pairCd[key] <= 0) pairCd.Remove(key); }
 
@@ -682,7 +682,7 @@ public partial class KomaBoot : MonoBehaviour
         }
         // 端に寄りすぎたら内へ
         float r = new Vector2(k.pos.x, k.pos.z).magnitude;
-        float lim = Mathf.Min(Arena.R, Arena.SafeR) - (Arena.Stage == 2 ? 8.5f : 3.5f);
+        float lim = Mathf.Min(Arena.R, Arena.SafeR) - (Arena.Stage == 2 ? 8.5f : Arena.Stage == 1 ? 6f : 3.5f);
         if (!riding && r > lim) want += -new Vector2(k.pos.x, k.pos.z).normalized * (r - lim) * 1.2f;
         // 丘: 頂上（中央）を取りに行く。外周に寄ったら上へ戻る
         if (Arena.Stage == 1 && !riding && dist > 3f) { float rr2 = new Vector2(k.pos.x, k.pos.z).magnitude; if (rr2 > 5f) want += -new Vector2(k.pos.x, k.pos.z).normalized * Mathf.Clamp01((rr2 - 5f) / 10f) * 0.9f; }
@@ -830,13 +830,14 @@ public partial class KomaBoot : MonoBehaviour
     void TrySpecial(Koma k, Vector3 aim)
     {
         if (!k.alive || k.specialPhase > 0 || k.tornadoT > 0 || k.shieldT > 0 || k.anchorT > 0 || k.chainTo != null) return;
-        if (k.gauge < NeedOf(k) || (k.sp == 5 && k.SpinRatio >= 0.3f))
+        if (k.gauge < NeedOf(k) || (k.sp == 5 && k.SpinRatio >= 0.3f) || (k.sp == 10 && k.SpinRatio >= 0.5f))
         {
             // ラスト・スパイラルは回転が3割を切るまで撃てない（押したら「撃てない」と分かる）
-            if (k.isPlayer && k.sp == 5 && !autoPlayer && Time.unscaledTime - lastDenyT > 0.4f) { lastDenyT = Time.unscaledTime; EmitEv("deny", k, k.gauge >= NeedOf(k) ? 1 : 0); }
+            if (k.isPlayer && (k.sp == 5 || k.sp == 10) && !autoPlayer && Time.unscaledTime - lastDenyT > 0.4f) { lastDenyT = Time.unscaledTime; EmitEv("deny", k, k.gauge >= NeedOf(k) ? 1 : 0); }
             return;
         }
         k.gauge = Mathf.Max(0f, k.gauge - NeedOf(k)); k.specials++;
+        if (!evoCasting) EvoClearForNormal(k);
         if (k.sp >= 4) { SpecialNew(k, aim); return; }
         if (k.sp == 1)
         {
@@ -995,6 +996,7 @@ public partial class KomaBoot : MonoBehaviour
     {
         if (!k.alive || phase == "end") return;
         if (PassiveKo(k, why)) return;
+        BzOnKill(k);
         k.Knock(why);
         k.koTime = fightT;
         EmitEv("ko", k, 0, why + "\",\"r\":\"" + F(new Vector2(k.pos.x, k.pos.z).magnitude) + "\",\"vy\":\"" + F(k.vel.y) + "\",\"vh\":\"" + F(new Vector2(k.vel.x, k.vel.z).magnitude) + "\",\"ang\":\"" + F(Mathf.Atan2(k.pos.z, k.pos.x) * Mathf.Rad2Deg) + "\",\"lastHit\":\"" + F(fightT - k.lastHitT));
@@ -1097,8 +1099,9 @@ public partial class KomaBoot : MonoBehaviour
         if (ctrl && k.lockT <= 0)
         {
             // 2026-11-25 本人「シフトボタン押しながらの移動で少し早くなるように」: Shift で加速と上限を少し上げる
-            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.superT > 0 ? 4.5f : (k.isPlayer && sprint ? 2.2f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.6f : 1f) * (Arena.IceAt(p.x, p.z) ? 0.4f : 1f) * (k.Bracing ? 0.5f : 1f);   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
+            float acc = 26f * k.st.speed * BzSpeed(k) * (k.grounded ? 1f : 0.3f * k.st.air) * (k.superT > 0 ? 4.5f : (k.isPlayer && sprint ? 2.2f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.6f : 1f) * (Arena.IceAt(p.x, p.z) ? 0.4f : 1f) * (k.Bracing ? 0.5f : 1f);   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
             Vector2 mv = move;
+            mv = BzSteer(k, mv, dt);
             if (k.superT > 0 && mv.sqrMagnitude < 0.04f) { var hv0 = new Vector2(v.x, v.z); if (hv0.magnitude > 1f) mv = hv0.normalized; }
             v.x += mv.x * acc * dt; v.z += mv.y * acc * dt;
         }
@@ -1125,7 +1128,7 @@ public partial class KomaBoot : MonoBehaviour
             if (phase == "end" && k.alive) { float dm = Mathf.Exp(-5f * dt); v.x *= dm; v.z *= dm; }
             else if (!k.alive && k.down) { float dm = Mathf.Exp(-2.5f * dt); v.x *= dm; v.z *= dm; }   // 倒れたコマは摩擦が大きく、当てると少し転がって止まる   // 決着後、残ったコマはその場で減速して止まる
             else if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
-            float fr = Mathf.Exp(-0.9f * k.st.grip * (Arena.Stage == 2 && p.x * p.x + p.z * p.z > (Arena.R - 3.5f) * (Arena.R - 3.5f) ? 1.6f : 1f) * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * (Arena.IceAt(p.x, p.z) ? 0.12f : 1f) * dt);
+            float fr = Mathf.Exp(-0.9f * k.st.grip * (Arena.Stage >= 1 && p.x * p.x + p.z * p.z > (Arena.R - 3.5f) * (Arena.R - 3.5f) ? (Arena.Stage == 2 ? 1.6f : 1.5f) : 1f) * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * (Arena.IceAt(p.x, p.z) ? 0.12f : 1f) * dt);
             if (Arena.Stage == 2 && k.alive && phase == "fight")
             {
                 // ターンテーブル: 床が時計回りに回り、足の摩擦（グリップ）の分だけ床の速さに引きずられる。外ほど速い（中心は弱い）。グリップの低い（速い）コマは流されにくい
@@ -1147,7 +1150,7 @@ public partial class KomaBoot : MonoBehaviour
                 k.boardT = 0.8f;
                 k.spin = Mathf.Min(k.spinMax, k.spin + k.spinMax * 0.01f * dt);
             }
-            float maxS = 9.5f * k.st.speed * (k.superT > 0 ? 2.3f : (k.isPlayer && sprint ? 1.35f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.7f : 1f) * (k.Bracing ? 0.5f : 1f), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+            float maxS = 9.5f * k.st.speed * BzSpeed(k) * (k.superT > 0 ? 2.3f : (k.isPlayer && sprint ? 1.35f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.7f : 1f) * (k.Bracing ? 0.5f : 1f), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
             if (hs > maxS && k.dashT <= 0 && k.boostCd < 0.35f && k.boardT <= 0)
             {
                 float f = Mathf.Max(maxS / hs, Mathf.Exp(-DashBrake * dt));
@@ -1408,12 +1411,12 @@ public partial class KomaBoot : MonoBehaviour
     static readonly Color[] SpColors = {
         new Color(1f, 0.55f, 0.2f), new Color(0.55f, 0.9f, 1f), new Color(0.75f, 0.45f, 1f), new Color(1f, 0.82f, 0.4f),
         new Color(0.9f, 0.28f, 0.75f), new Color(1f, 0.15f, 0.25f), new Color(0.7f, 0.93f, 1f), new Color(0.6f, 1f, 0.3f),
-        new Color(0.45f, 0.95f, 1f), new Color(0.72f, 0.5f, 1f) };
+        new Color(0.45f, 0.95f, 1f), new Color(0.72f, 0.5f, 1f), new Color(0.85f, 0.08f, 0.14f) };
 
     // 必殺技を出した瞬間の演出（溜めのオーラ・光・輪・火花・ズーム）
     void SpecialFx(Koma k, float charge)
     {
-        var c = SpColors[Mathf.Clamp(k.sp, 0, 9)];
+        var c = SpColors[Mathf.Clamp(k.sp, 0, 10)];
         k.SetAura(c, charge);
         Pulse(k.pos, c, 6f);
         Spark(k.Center, Vector3.up, 70, 1.5f);
@@ -1462,6 +1465,7 @@ public partial class KomaBoot : MonoBehaviour
             Spark(o.Center, n + Vector3.up * 0.5f, 40, 1.4f);
         }
         if (k.evo) EvoSpikes(at);
+        if (k.sp == 0) k.evoT = 0;   // 極大のメテオは着地で終わり（効果を後に引き継がない）
         Slow(0.15f, 0.6f);
         float near = k.isPlayer ? 1f : Mathf.Clamp(1.1f - Vector3.Distance(player.pos, at) / 18f, 0.25f, 1f);
         shake = Mathf.Max(shake, 1.5f * near); fovKick = Mathf.Max(fovKick, 16f * near);
@@ -1476,6 +1480,8 @@ public partial class KomaBoot : MonoBehaviour
         dmg *= HitScale * Mathf.Clamp(1.4f - 0.4f * to.st.speed, 0.7f, 1.15f) * (Arena.Stage == 2 ? 1f : Mathf.Pow(Mathf.Max(0.6f, from.st.atk), Arena.Stage == 1 ? -0.9f : -0.5f));   // 攻撃型の与ダメを少し抑える（ターンテーブルは別式）   // 2026-11-29 速度型が受けるダメージを少し減らす（速いコマは当たりをいなす）。重い・遅いコマはわずかに増える
         if (Arena.Stage == 2) dmg *= Mathf.Clamp(1.9f - TurnSpeedK * to.st.speed, 0.5f, 1.4f) * Mathf.Pow(Mathf.Max(0.5f, from.st.atk), -1.1f) * 0.85f;   // ターンテーブル: 速く動き回れるコマは回る床の上で衝撃をいなす（受けるダメージが減る）。遅いコマは受けが増える
         if (to.shieldT > 0) dmg *= 0.2f; if (to.anchorT > 0) dmg *= 0.35f; if (to.specialPhase == 30) dmg *= 0.4f; if (to.chainTo != null) dmg *= 0.5f;
+        dmg *= BzAtk(from, 1f);
+        to.lastHitter = from;
         to.spin -= dmg; to.lossHit += dmg; to.lastHitT = fightT;
         if (to.evoShield && to.shieldT > 0 && from != to && from.alive) { float rf = dmg * EvoReflect; from.spin -= rf; from.lossHit += rf; Spark(from.Center, Vector3.up, 16, 1f); if (from.spin <= 0) { from.spin = 0; KO(from, "spin"); } }   // イージス進化版: 受けた分の一部を相手へ跳ね返す
         if (from.st.steal > 0 && from.alive) from.spin = Mathf.Min(from.spinMax, from.spin + dmg * from.st.steal);
@@ -1568,7 +1574,7 @@ public partial class KomaBoot : MonoBehaviour
                 b.vel += n * J / mb;
                 // 回転の弾き（おおげさ）
                 float sa = Mathf.Max(0, Vector3.Dot(a.vel + n * J / ma, n)), sb = Mathf.Max(0, Vector3.Dot(b.vel - n * J / mb, -n));
-                float spinPushA = spinK * a.st.atk * (0.4f + 0.6f * a.SpinRatio), spinPushB = spinK * b.st.atk * (0.4f + 0.6f * b.SpinRatio);
+                float spinPushA = spinK * a.st.atk * BzAtk(a, 0.6f) * (0.4f + 0.6f * a.SpinRatio), spinPushB = spinK * b.st.atk * BzAtk(b, 0.6f) * (0.4f + 0.6f * b.SpinRatio);
                 Vector3 tang = Vector3.Cross(Vector3.up, nh);
                 // 逆回り（左回転）どうしは接点が同じ向きに動いてかみ合わず、横へ大きく流れる
                 bool opp = a.left != b.left; float tk = opp ? 4.2f : 1.5f;
@@ -1617,6 +1623,8 @@ public partial class KomaBoot : MonoBehaviour
                 if (a.Bracing && a.anchorT <= 0) { a.vel = aV0 + (a.vel - aV0) * (1f - BraceCut(a)); a.spin -= BraceHitWear; a.lossHit += BraceHitWear; Spark(a.pos + Vector3.up * 0.05f, Vector3.up, 12, 0.9f); EmitEv("bracehit", a, 0); }
                 if (b.Bracing && b.anchorT <= 0) { b.vel = bV0 + (b.vel - bV0) * (1f - BraceCut(b)); b.spin -= BraceHitWear; b.lossHit += BraceHitWear; Spark(b.pos + Vector3.up * 0.05f, Vector3.up, 12, 0.9f); EmitEv("bracehit", b, 0); }
                 // 逆鱗: 弾かれにくい／黒鉄の盾: 次の1発を無効に
+                if (a.bzT > 0) a.vel = Vector3.Lerp(aV0, a.vel, a.evo ? 0.08f : 0.5f);
+                if (b.bzT > 0) b.vel = Vector3.Lerp(bV0, b.vel, b.evo ? 0.08f : 0.5f);
                 if (a.rage) a.vel = Vector3.Lerp(aV0, a.vel, 0.6f);
                 if (b.rage) b.vel = Vector3.Lerp(bV0, b.vel, 0.6f);
                 if (dmgToA > 0 && PasGuard(a)) { dmgToA = 0; a.vel = Vector3.Lerp(aV0, a.vel, 0.3f); }
@@ -1972,7 +1980,7 @@ public partial class KomaBoot : MonoBehaviour
             var sp = cam.WorldToViewportPoint(k.pos + Vector3.up * 1.25f);
             sb.Append("{\"i\":").Append(k.idx).Append(",\"a\":").Append(k.alive ? 1 : 0).Append(",\"sp\":").Append(F(k.SpinRatio))
               .Append(",\"pb\":[").Append(F(k.pb0 / Mathf.Max(1f, k.pbm0))).Append(',').Append(F(k.pb1 / Mathf.Max(1f, k.pbm1))).Append(',').Append(F(k.pb2 / Mathf.Max(1f, k.pbm2))).Append(']')
-              .Append(",\"nd\":").Append(F(NeedOf(k) / GaugeCap)).Append(",\"g\":").Append(F(k.gauge / GaugeCap)).Append(",\"ev\":").Append(EvoReady(k) ? 1 : 0).Append(",\"ec\":").Append(k.isPlayer ? F(evoCharge) : "0").Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"br\":").Append(k.Bracing ? 1 : 0).Append(",\"rc\":").Append(k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
+              .Append(",\"nd\":").Append(F(NeedOf(k) / GaugeCap)).Append(",\"g\":").Append(F(k.gauge / GaugeCap)).Append(",\"bz\":").Append(k.bzT > 0 ? (k.evo ? 2 : 1) : k.bzStagger > 0 ? 3 : 0).Append(",\"ev\":").Append(EvoReady(k) ? 1 : 0).Append(",\"ec\":").Append(k.isPlayer ? F(evoCharge) : "0").Append(",\"ok\":").Append(SpecialReady(k) ? 1 : 0).Append(",\"fz\":").Append(k.frostT > 0 ? 1 : 0).Append(",\"br\":").Append(k.Bracing ? 1 : 0).Append(",\"rc\":").Append(k.sp == 7 && SpecialReady(k) && IsFalling(k) && NearestWithin(k, RecoverRange) != null ? 1 : 0).Append(",\"cd\":").Append(F(Mathf.Clamp01(k.dashCd / (DashCdBase * k.st.dashCd))))
               .Append(",\"x\":").Append(F(sp.x)).Append(",\"y\":").Append(F(sp.y)).Append(",\"z\":").Append(F(sp.z))
               .Append(",\"vx\":").Append(F(k.vel.x)).Append(",\"vz\":").Append(F(k.vel.z)).Append(",\"yaw\":").Append(F(camYaw)).Append(",\"air\":").Append(k.grounded ? 0 : 1).Append(",\"h\":").Append(F(k.pos.y)).Append(",\"gh\":").Append(F(Arena.H(k.pos.x, k.pos.z))).Append(",\"wx\":").Append(F(k.pos.x)).Append(",\"wz\":").Append(F(k.pos.z)).Append(",\"r\":").Append(F(new Vector2(k.pos.x, k.pos.z).magnitude))
               .Append(",\"ps\":").Append(k.pas).Append(",\"wg\":").Append(k.WingsOn ? 1 : 0).Append(",\"rg\":").Append(k.rage ? 1 : 0).Append(",\"sn\":").Append(k.stampN).Append(",\"lf\":").Append(k.left ? 1 : 0)

@@ -20,20 +20,24 @@ public partial class KomaBoot
     const float EvoMirageSec = 9f;
 
     // 撃てるか（ゲージ満タン。スパイラルは回転が2割を切っている時だけ）
-    public bool EvoReady(Koma k) => k.alive && k.gauge >= GaugeCap - 0.01f && (k.sp != 5 || k.SpinRatio < 0.2f);
+    bool evoCasting;
+    public bool EvoReady(Koma k) => k.alive && k.gauge >= GaugeCap - 0.01f && (k.sp != 5 || k.SpinRatio < 0.2f) && (k.sp != 10 || k.SpinRatio < 0.5f);
 
     public void TryEvolved(Koma k, Vector3 aim)
     {
         if (!k.alive || k.specialPhase > 0 || k.tornadoT > 0 || k.shieldT > 0 || k.anchorT > 0 || k.chainTo != null || phase != "fight") return;
         if (k.gauge < GaugeCap - 0.01f) return;
-        if (k.sp == 5 && k.SpinRatio >= 0.2f) { if (k.isPlayer && !autoPlayer) EmitEv("deny", k, 1); return; }
+        if ((k.sp == 5 && k.SpinRatio >= 0.2f) || (k.sp == 10 && k.SpinRatio >= 0.5f)) { if (k.isPlayer && !autoPlayer) EmitEv("deny", k, 1); return; }
         int before = k.specials; k.evoT = 6f; k.gauge = NeedOf(k);   // 通常の撃ち出しを通して、消費は全部（NeedOf 引いて 0）
-        TrySpecial(k, aim);
-        if (k.specials == before) { k.evoT = 0; k.gauge = GaugeCap; return; }   // 撃てなかった（相手がいない等）
-        EmitEv("evo", k, k.sp);
+        EmitEv("evo", k, k.sp);   // 先に知らせる（画面側は続く通常の「special」の派手な演出を省く）
+        evoCasting = true; TrySpecial(k, aim); evoCasting = false;
+        if (k.specials == before) { k.evoT = 0; k.gauge = GaugeCap; EmitEv("evocancel", k, 0); return; }   // 撃てなかった（相手がいない等）
         SlowFx(0.28f, 0.5f);
         EvoStart(k);
     }
+
+    // 通常の必殺を撃つ時は、前の極大技の効果が残っていても引き継がない
+    void EvoClearForNormal(Koma k) { k.evoT = 0; k.evoShield = false; }
 
     void EvoStart(Koma k)
     {
@@ -41,7 +45,7 @@ public partial class KomaBoot
         k.SetAura(Color.Lerp(c, Color.white, 0.35f), 1.6f);
         Pulse(k.pos, c, 12f, 26f); Wave(k.pos, 6f); Wave(k.pos, 10f); Wave(k.pos, 15f);
         Spark(k.Center, Vector3.up, 160, 2.4f);
-        shake = Mathf.Max(shake, 1.2f); fovKick = Mathf.Max(fovKick, 14f);
+        shake = Mathf.Max(shake, 0.8f); fovKick = Mathf.Max(fovKick, 10f);
         k.evoCd = 0f;
         switch (k.sp)
         {
@@ -54,7 +58,8 @@ public partial class KomaBoot
             case 6: k.evoT = 5f; EvoBergs(k); break;
             case 7: k.evoT = ChainSec * EvoChainMul + 1f; EvoChain(k); break;
             case 8: k.evoT = EvoTrailSec + 0.5f; trailT[k.idx] = EvoTrailSec; break;
-            case 9: k.evoT = EvoMirageSec + 0.5f; break;   // 分身は Sp3Start が evo を見て4体出す
+            case 9: k.evoT = EvoMirageSec + 0.5f; break;
+            case 10: k.evoT = BzEvoSec + 6f; BerserkEvoStart(k); break;   // 分身は Sp3Start が evo を見て4体出す
         }
     }
 
@@ -84,7 +89,7 @@ public partial class KomaBoot
             if (k.slipT > 0) k.slipT -= dt;
             if (k.evoT <= 0) continue;
             if (!k.alive || phase != "fight") { k.evoT = 0; k.evoShield = false; continue; }
-            k.evoT -= dt;
+            if (!(k.sp == 10 && k.bzT > 0)) k.evoT -= dt;
             switch (k.sp)
             {
                 case 1:
