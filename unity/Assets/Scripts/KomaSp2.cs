@@ -473,7 +473,7 @@ public partial class KomaBoot
     bool pitForced;
     void UpdatePitFlow(float dt)
     {
-        if (phase == "fight" && !Arena.PitActive && ((sudden && fightT >= suddenAt + PitDelay) || pitForced || fightT >= PitAtT)) { Arena.StartPit(); Emit("{\"t\":\"e\",\"k\":\"pitstart\"}"); }
+        if (phase == "fight" && Arena.Stage == 0 && !Arena.PitActive && ((sudden && fightT >= suddenAt + PitDelay) || pitForced || fightT >= PitAtT)) { Arena.StartPit(); Emit("{\"t\":\"e\",\"k\":\"pitstart\"}"); }
         if (phase != "fight" && phase != "end") return;
         int r = Arena.UpdatePit(dt);
         if (Arena.PitCracking && Random.value < 0.35f * (0.4f + Arena.PitProgress))

@@ -35,7 +35,35 @@ public static class Arena
         return a;
     }
 
-    public static float Bowl(float r) { float t = r / R; return BowlH * t * t; }
+    // 2026-11-28 本人「ステージがありきたり。一番外側だけ、内側に向かうような傾斜をつけて」: 外周の帯（半径の80%〜100%＝BankR0〜R）にだけ、すり鉢の傾きに上乗せして内へ下る傾斜（バンク）を足す。
+    // 床の高さ・法線・見た目・当たりは全部この Bowl() から出るので食い違わない。上乗せは滑らかに（帯の頭と尻で傾きの上乗せ0）
+    public const float BankR0 = 18f, BankH = 0.7f;
+    // 2026-11-28 ステージを2つに（ランダム）: Stage 0 = すり鉢（今まで）／ Stage 1 = 王様の丘（中央が盛り上がり、何もしないと外へ転がる）。
+    // 床の高さは Bowl() 1か所から出るので、ステージを切り替えたら床の形（頂点の高さ）を作り直す（SetStage）。ステージは配列で持つ（将来の選択に備える）
+    public static int Stage;
+    public static readonly string[] StageNames = { "アビス・ボウル", "キングス・ヒル" };
+    public const float HillTop = 5.2f, HillTopR = 4.2f;
+    static readonly float[] GapDeg1 = { 0, 45, 90, 135, 180, 225, 270, 315 };   // 丘は切れ目が多い（場外が起きやすい）
+    public static float[] CurGaps => Stage == 1 ? GapDeg1 : GapDeg;
+    static float GapHalfNow => Stage == 1 ? 0.14f : GapHalf;
+    public static bool IceAt(float x, float z)
+    {
+        if (Stage != 1) return false;
+        float r = Mathf.Sqrt(x * x + z * z);
+        return (r >= 10.6f && r <= 12.4f) || (r >= 15.6f && r <= 17.4f);
+    }
+    public static float Bowl(float r)
+    {
+        if (Stage == 1)
+        {
+            if (r <= HillTopR) return HillTop;
+            float uu = Mathf.Clamp01((r - HillTopR) / (R - HillTopR));
+            return HillTop * (1f - uu * uu * (3f - 2f * uu));
+        }
+        float t = r / R, b = BowlH * t * t;
+        if (r > BankR0) { float u = Mathf.Clamp01((r - BankR0) / (R - BankR0)); b += BankH * u * u * (3f - 2f * u); }
+        return b;
+    }
     public static float Dip(float r) => r >= DipR ? 0f : Mathf.Sqrt(DipS * DipS - r * r) - Mathf.Sqrt(DipS * DipS - DipR * DipR);
 
     static float AngDist(float a, float deg) => Mathf.Abs(Mathf.DeltaAngle(a * Mathf.Rad2Deg, deg) * Mathf.Deg2Rad);
@@ -43,17 +71,17 @@ public static class Arena
     public static float GapFactor(float ang)
     {
         float g = 0;
-        foreach (var d in GapDeg) g = Mathf.Max(g, 1f - Mathf.SmoothStep(0, 1, (AngDist(ang, d) - GapHalf) / 0.04f));
+        foreach (var d in CurGaps) g = Mathf.Max(g, 1f - Mathf.SmoothStep(0, 1, (AngDist(ang, d) - GapHalfNow) / 0.04f));
         return g;
     }
 
-    public static float LipHeight(float ang) => Mathf.Lerp(LipH, GapLipH, GapFactor(ang));
+    public static float LipHeight(float ang) => Mathf.Lerp(Stage == 1 ? 0.9f : LipH, GapLipH, GapFactor(ang));
 
     public static float BaseH(float x, float z)
     {
         float r = Mathf.Sqrt(x * x + z * z);
         if (r > Edge || r > CollapseR || r < PitR) return -1000f;
-        if (r <= R) return Bowl(r) - Dip(r);
+        if (r <= R) return Bowl(r) - (Stage == 0 ? Dip(r) : 0f);
         float ang = Mathf.Atan2(z, x);
         float t = Mathf.Clamp01((r - R) / 0.36f);
         return Bowl(R) + LipHeight(ang) * t * t * (3 - 2 * t);
@@ -84,6 +112,7 @@ public static class Arena
 
     public static bool OnArc(float x, float z)
     {
+        if (Stage != 0) return false;
         float r = Mathf.Sqrt(x * x + z * z);
         if (r < ArcR0 || r > ArcR1) return false;
         float ang = Mathf.Atan2(z, x);
@@ -271,7 +300,7 @@ public static class Arena
     static void BuildPit(Transform root, Materials m)
     {
         pitPiece = MeshKit.Obj("PitPiece", root, FloorMesh(0, DipR, 0, Mathf.PI * 2), m.Floor);
-        pitPiece.GetComponent<MeshRenderer>().receiveShadows = true;
+        pitPiece.GetComponent<MeshRenderer>().receiveShadows = true; Reg(pitPiece); floorRends.Add(pitPiece.GetComponent<MeshRenderer>());
         // 穴の壁と底の赤い光
         var wb = new MeshKit.Builder { twoSided = true };
         int seg = 40; float top = BaseH(DipR + 0.01f, 0) , bot = -7.5f;
@@ -393,12 +422,39 @@ public static class Arena
     }
 
     // ---------- 見た目 ----------
+    // 床の形を作り直す物の一覧（頂点の高さを今のステージの FloorH に合わせて更新する）
+    class Deform { public Mesh mesh; public float off; }
+    static readonly List<Deform> deforms = new List<Deform>();
+    static readonly List<MeshRenderer> floorRends = new List<MeshRenderer>();
+    static readonly List<GameObject> arcObjs = new List<GameObject>(), iceObjs = new List<GameObject>();
+    static Materials mat0;
+    static void Reg(GameObject g, float off = 0f) { deforms.Add(new Deform { mesh = g.GetComponent<MeshFilter>().sharedMesh, off = off }); }
+    static int builtStage = 0;
+    // ステージを切り替える（試合の開始時。同じステージなら何もしない）
+    public static void SetStage(int st)
+    {
+        st = Mathf.Clamp(st, 0, StageNames.Length - 1);
+        if (st == Stage && builtStage == st) return;
+        Stage = st; builtStage = st;
+        foreach (var d in deforms)
+        {
+            var v = d.mesh.vertices;
+            for (int i = 0; i < v.Length; i++) if (v[i].y > -3.3f) { float h = FloorH(v[i].x * 0.99999f, v[i].z * 0.99999f); v[i].y = (h < -100 ? v[i].y : h) + d.off; }
+            d.mesh.vertices = v; d.mesh.RecalculateNormals(); d.mesh.RecalculateBounds();
+        }
+        foreach (var r in floorRends) r.sharedMaterial = st == 1 ? mat0.Floor2 : mat0.Floor;
+        foreach (var g in arcObjs) g.SetActive(st == 0);
+        foreach (var g in iceObjs) g.SetActive(st == 1);
+        if (pitWall) pitWall.SetActive(false);
+    }
+
     public static GameObject BuildVisual(Materials m)
     {
+        mat0 = m; deforms.Clear(); floorRends.Clear(); arcObjs.Clear(); iceObjs.Clear();
         var root = new GameObject("Arena");
         // 床: 崩れない中央と、最終局面で外から崩れ落ちる輪（1周を8つに分けた破片）
         var floor = MeshKit.Obj("Floor", root.transform, FloorMesh(DipR, KeepR, 0, Mathf.PI * 2), m.Floor);
-        floor.GetComponent<MeshRenderer>().receiveShadows = true;
+        floor.GetComponent<MeshRenderer>().receiveShadows = true; Reg(floor); floorRends.Add(floor.GetComponent<MeshRenderer>());
         BuildPit(root.transform, m);
         pieces.Clear();
         for (int ri = 0; ri < RingR.Length - 1; ri++)
@@ -406,7 +462,7 @@ public static class Arena
             {
                 float a0 = sg * Mathf.PI / 4, a1 = a0 + Mathf.PI / 4;
                 var go = MeshKit.Obj("FloorPiece", root.transform, FloorMesh(RingR[ri], RingR[ri + 1], a0, a1), m.Floor);
-                go.GetComponent<MeshRenderer>().receiveShadows = true;
+                go.GetComponent<MeshRenderer>().receiveShadows = true; Reg(go); floorRends.Add(go.GetComponent<MeshRenderer>());
                 pieces.Add(new Piece { go = go, ring = ri, center = new Vector3(Mathf.Cos((a0 + a1) / 2), 0, Mathf.Sin((a0 + a1) / 2)) * (RingR[ri] + RingR[ri + 1]) / 2 });
             }
         warnRing = MeshKit.Obj("WarnRing", root.transform, MeshKit.Ring(0.985f, 1.03f, 160), m.Warn);
@@ -415,11 +471,18 @@ public static class Arena
         boardMat = m.AddGlow(new Color(1f, 0.62f, 0.18f, 1f), m.Chevron);
         boardObj = MeshKit.Obj("Board", root.transform, BoardMesh(), boardMat);
         boardObj.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        boardObj.SetActive(false);
+        boardObj.SetActive(false); Reg(boardObj, 0.04f);
         var basePlate = MeshKit.Obj("Base", root.transform, MeshKit.Frustum(Edge + 4f, Edge + 2.2f, 3.4f, 128, true), m.Base);
         basePlate.transform.localPosition = new Vector3(0, -6.4f, 0);
         baseObj = basePlate;
-        foreach (var d in ArcDeg) MeshKit.Obj("Arc", root.transform, ArcMesh(d), m.Arc);
+        foreach (var d in ArcDeg) arcObjs.Add(MeshKit.Obj("Arc", root.transform, ArcMesh(d), m.Arc));
+        // 丘の氷の帯（滑る）。丘の時だけ出す
+        foreach (var band in new[] { new Vector2(10.6f, 12.4f), new Vector2(15.6f, 17.4f) })
+        {
+            var ice = MeshKit.Obj("IceBand", root.transform, FloorMesh(band.x, band.y, 0, Mathf.PI * 2), m.Ice);
+            ice.GetComponent<MeshRenderer>().receiveShadows = true; ice.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            Reg(ice, 0.03f); iceObjs.Add(ice); ice.SetActive(false);
+        }
         foreach (var p in Pads)
         {
             float y = BaseH(p.x, p.y);

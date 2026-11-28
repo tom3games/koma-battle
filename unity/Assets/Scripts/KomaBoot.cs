@@ -90,7 +90,7 @@ public partial class KomaBoot : MonoBehaviour
         var sun = new GameObject("Sun").AddComponent<Light>();
         sun.type = LightType.Directional; sun.color = new Color(1f, 0.96f, 0.9f); sun.intensity = 1.35f;
         sun.shadows = LightShadows.Soft; sun.shadowStrength = 0.85f;
-        sun.transform.rotation = Quaternion.Euler(72f, -25f, 0);
+        sun.transform.rotation = Quaternion.Euler(72f, -25f, 0); sunL = sun;
         var rim = new GameObject("Rim").AddComponent<Light>();
         rim.type = LightType.Directional; rim.color = new Color(0.55f, 0.68f, 0.9f); rim.intensity = 0.35f; rim.renderMode = LightRenderMode.ForceVertex;
         rim.transform.rotation = Quaternion.Euler(18f, 160f, 0);
@@ -206,6 +206,7 @@ public partial class KomaBoot : MonoBehaviour
             case "dashat": { var kk = komas[(int)N(0)]; TryDash(kk, new Vector3(N(1), kk.pos.y, N(2))); break; }   // 検査用: 指定のコマがダッシュ
             case "frost": komas[(int)N(1)].frostT = N(0); break;
             case "aimc": AimCycle(); break;   // 検査用: C キーと同じ
+            case "stage": stageForce = (int)N(0); break;   // 検査用: 次の試合のステージを固定（-1 でランダム）
             case "spec": SpectateSet((int)N(0)); break;   // 観戦: 誰を見るか
             case "specnext": SpectateStep((int)N(0) >= 0 ? 1 : -1); break;
             case "specexit": if (phase == "fight" && spectating) { phase = "end"; endT = EndHold - 0.001f; endWin = 0; endWhy = player.koWhy; endSubject = specTarget; spectating = false; } break;
@@ -299,6 +300,7 @@ public partial class KomaBoot : MonoBehaviour
         foreach (var k in komas) if (!k.isPlayer) k.root.SetActive(false);
         player.Place(new Vector3(0, Arena.H(0, 0), 0));
         player.grounded = true; player.SetArrow(Vector2.zero);
+        Arena.SetStage(0); ApplyStageLook(0);
         sudden = false; Arena.ResetCollapse(); boardAnnounced = false; fires.Clear(); ClearChains();
     }
 
@@ -307,6 +309,7 @@ public partial class KomaBoot : MonoBehaviour
         phase = "count"; phaseT = 0; fightT = 0; sudden = false; endWin = -1; endT = 0;
         touchMove = Vector2.zero; touchAimOn = false; touchDash = false; touchSpecial = false;
         camInit = true; Arena.ResetCollapse(); boardAnnounced = false; fires.Clear(); ClearChains(); pitForced = false; suddenAt = -1f;
+        { int st = PickStage(); Arena.SetStage(st); ApplyStageLook(st); BoardAt = st == 1 ? 1e9f : 40f; Emit("{\"t\":\"e\",\"k\":\"stage\",\"p\":" + st + "}"); }
         spectating = false; deathT = -1f; pAliveLast = true; specTarget = null; endSubject = null; camClose = 0f; placeAtDeath = 0; totalK = 1 + nCpu;
         pairCd.Clear();
         int n = 1 + nCpu;
@@ -382,7 +385,7 @@ public partial class KomaBoot : MonoBehaviour
         if (phase == "fight" && !sudden)
         {
             int act = 0, alv = 0; foreach (var k in komas) if (k.root.activeSelf) { act++; if (k.alive) alv++; }
-            if (fightT > 100f || (act >= 4 && alv <= 2 && fightT > 50f)) { sudden = true; suddenAt = fightT; Arena.StartCollapse(); Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
+            if (fightT > (Arena.Stage == 1 ? 70f : 100f) || (act >= 4 && alv <= 2 && fightT > (Arena.Stage == 1 ? 35f : 50f))) { sudden = true; suddenAt = fightT; Arena.StartCollapse(); Emit("{\"t\":\"e\",\"k\":\"sudden\"}"); }
         }
         if (phase == "fight" || phase == "end")
         {
@@ -645,6 +648,8 @@ public partial class KomaBoot : MonoBehaviour
         float r = new Vector2(k.pos.x, k.pos.z).magnitude;
         float lim = Mathf.Min(Arena.R, Arena.SafeR) - 3.5f;
         if (!riding && r > lim) want += -new Vector2(k.pos.x, k.pos.z).normalized * (r - lim) * 1.2f;
+        // 丘: 頂上（中央）を取りに行く。外周に寄ったら上へ戻る
+        if (Arena.Stage == 1 && !riding && dist > 3f) { float rr2 = new Vector2(k.pos.x, k.pos.z).magnitude; if (rr2 > 5f) want += -new Vector2(k.pos.x, k.pos.z).normalized * Mathf.Clamp01((rr2 - 5f) / 10f) * 0.9f; }
         // 鎖でつないだ時は、相手のまわりを回って振り回す
         if (k.chainTo != null)
         {
@@ -669,6 +674,17 @@ public partial class KomaBoot : MonoBehaviour
         if (b.think <= 0) b.think = 0.3f;
     }
 
+    // ダッシュの縁ガード: 向きの先で床が終わる（奈落・穴）までの距離 − 余白。何も無ければ大きい値
+    const float DashEdgeMargin = 0.8f;
+    float DashReach(Vector3 from, Vector3 dir)
+    {
+        for (float t = 0.5f; t <= 14f; t += 0.25f)
+        {
+            float qx = from.x + dir.x * t, qz = from.z + dir.z * t;
+            if (Arena.H(qx, qz) < -100 || (Arena.PitActive && new Vector2(qx, qz).magnitude < Arena.DipR + 0.3f)) return Mathf.Max(0f, t - DashEdgeMargin);
+        }
+        return 99f;
+    }
     // 左クリックの連打で出し続けられないよう、ダッシュと急降下で同じ待ち時間を使う
     const float DashCdBase = 1.3f;
     // 2026-11-28 本人「ダッシュの距離短くして」: 出だしの速さ（19）は変えず、続く時間を 0.32→DashSec に、速さの上限へ戻す減速を 3.2→DashBrake に
@@ -720,6 +736,8 @@ public partial class KomaBoot : MonoBehaviour
             float keep = stickDash ? 0f : 0.25f;   // スマホは倒した向きへまっすぐ（前の勢いを混ぜない）
             k.vel = new Vector3(dir.x * sp + k.vel.x * keep, k.vel.y, dir.z * sp + k.vel.z * keep);
             k.lockT = stickDash ? 0.2f : 0f;
+            // 2026-11-28 本人「ダッシュで場外になるのもやめて」: 狙いの向きで縁（床の終わり・穴）までを測り、その手前で止まる（自分の勢いだけ守る）
+            k.dashFrom = k.pos; k.dashDirG = dir; k.dashStop = DashReach(k.pos, dir); k.dashGuardT = DashSec + 1.4f;
             k.dashT = DashSec; k.dashBrakeT = DashSec + DashCoastSec; k.dashCd = DashCdBase * k.st.dashCd;
             k.spin -= 1.2f; k.dashes++; k.lossDash += 1.2f;
             EmitEv("dash", k, 0);
@@ -1033,7 +1051,7 @@ public partial class KomaBoot : MonoBehaviour
         if (ctrl && k.lockT <= 0)
         {
             // 2026-11-25 本人「シフトボタン押しながらの移動で少し早くなるように」: Shift で加速と上限を少し上げる
-            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.superT > 0 ? 4.5f : (k.isPlayer && sprint ? 2.2f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.6f : 1f);   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
+            float acc = 26f * k.st.speed * (k.grounded ? 1f : 0.3f * k.st.air) * (k.superT > 0 ? 4.5f : (k.isPlayer && sprint ? 2.2f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.6f : 1f) * (Arena.IceAt(p.x, p.z) ? 0.4f : 1f);   // 2026-11-26 本人「シフトの加速度をあげて」1.3→2.2
             Vector2 mv = move;
             if (k.superT > 0 && mv.sqrMagnitude < 0.04f) { var hv0 = new Vector2(v.x, v.z); if (hv0.magnitude > 1f) mv = hv0.normalized; }
             v.x += mv.x * acc * dt; v.z += mv.y * acc * dt;
@@ -1059,7 +1077,7 @@ public partial class KomaBoot : MonoBehaviour
         {
             Vector2 gr = Arena.Grad(p.x, p.z);
             if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
-            float fr = Mathf.Exp(-0.9f * k.st.grip * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * dt);
+            float fr = Mathf.Exp(-0.9f * k.st.grip * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * (Arena.IceAt(p.x, p.z) ? 0.12f : 1f) * dt);
             v.x *= fr; v.z *= fr;
             // 周回加速板: 矢印の向き（時計回り）に強く押され、帯に沿って1周流れる。回転数が少しだけ戻る
             // 2026-11-26 本人「降りられない・加速が矢印と反対」: 向きを矢印に合わせ、中央へ引き戻すのは外へはみ出した時だけ（内側へはハンドルで降りられる）
@@ -1097,6 +1115,23 @@ public partial class KomaBoot : MonoBehaviour
             Vector3 tg = k.specialTarget.y < -900 ? komas[(int)k.specialTarget.x].pos : k.specialTarget;
             if (k.specialTarget.y < -900 && !komas[(int)k.specialTarget.x].alive) tg = p + new Vector3(v.x, 0, v.z);
             Vector3 hd = tg - p; hd.y = 0; if (hd.sqrMagnitude > 0.01f) { hd.Normalize(); v.x = hd.x * 36f; v.z = hd.z * 36f; }
+        }
+        // ダッシュの縁ガード: 縁の手前の線へ近づいたら強く減速し、線を越える向きの速さは消す（踏ん張りに入れる縁ぎりぎりまでは入れる）
+        if (k.dashGuardT > 0 && k.dashStop < 90f && k.grounded)
+        {
+            k.dashGuardT -= dt;
+            float proj = Vector3.Dot(new Vector3(p.x - k.dashFrom.x, 0, p.z - k.dashFrom.z), k.dashDirG);
+            float left = k.dashStop - proj;
+            if (left < 2.5f)
+            {
+                float vOut = Vector3.Dot(new Vector3(v.x, 0, v.z), k.dashDirG);
+                if (vOut > 0f)
+                {
+                    float keep = left <= 0f ? 0f : Mathf.Clamp01(left / 2.5f);
+                    float want = Mathf.Min(vOut, keep * 6f);   // 残りが少ないほど外向きの速さを絞る
+                    float cut = vOut - want; v.x -= k.dashDirG.x * cut; v.z -= k.dashDirG.z * cut;
+                }
+            }
         }
         Vector3 np = p + v * dt;
         float h0 = Arena.H(p.x, p.z);
@@ -1474,6 +1509,8 @@ public partial class KomaBoot : MonoBehaviour
                 float pop = Mathf.Min(3.2f, 1f + vn * 0.1f);
                 float multA = (a.dashT > 0 ? 1.4f : 1f) * (aAir ? 2.4f * a.st.aerial * (a.pas == 1 ? 1.3f : 1f) : 1f) * (a.specialPhase == 2 ? 1.6f : 1f) * (a.specialPhase == 20 ? 1.35f : 1f) * (a.specialPhase == 31 ? ArrowDmg : 1f) * (a.specialPhase == 41 ? 1.4f * a.lsPow : 1f);
                 float multB = (b.dashT > 0 ? 1.4f : 1f) * (bAir ? 2.4f * b.st.aerial * (b.pas == 1 ? 1.3f : 1f) : 1f) * (b.specialPhase == 2 ? 1.6f : 1f) * (b.specialPhase == 20 ? 1.35f : 1f) * (b.specialPhase == 31 ? ArrowDmg : 1f) * (b.specialPhase == 41 ? 1.4f * b.lsPow : 1f);
+                // 丘: 高い所から当てると強い（頂上の取り合い）
+                if (Arena.Stage == 1) { float dh = a.Center.y - b.Center.y; if (dh > 1f) multA *= 1f + Mathf.Min(0.35f, (dh - 1f) * 0.15f); else if (dh < -1f) multB *= 1f + Mathf.Min(0.35f, (-dh - 1f) * 0.15f); }
                 float shareA = sa / (sa + sb + 0.01f);
                 float baseD = 1f + Mathf.Min(vn, 25f) * 0.25f;
                 float dmgToB = baseD * (0.5f + shareA) * a.st.atk / b.st.def * multA * 0.5f;
@@ -1648,6 +1685,25 @@ public partial class KomaBoot : MonoBehaviour
         aimMark.rotation = Quaternion.Euler(0, Time.unscaledTime * 240f, 0);
         aimMarkMat.SetColor("_TintColor", new Color(1f, 0.9f, 0.3f, 1f) * 0.9f * Mathf.Clamp01(aimMarkT / 0.2f));
     }
+    // ---------- ステージ（ランダムに2つから。同じ物が3回続かない） ----------
+    Light sunL; int stageForce = -1, lastStage = -1, stageRun;
+    int PickStage()
+    {
+        int n = Arena.StageNames.Length, s;
+        if (stageForce >= 0) s = Mathf.Clamp(stageForce, 0, n - 1);
+        else { s = rng.Next(n); if (s == lastStage && stageRun >= 2) s = (s + 1) % n; }
+        stageRun = s == lastStage ? stageRun + 1 : 1; lastStage = s;
+        return s;
+    }
+    void ApplyStageLook(int st)
+    {
+        bool hill = st == 1;
+        if (sunL != null) { sunL.color = hill ? new Color(1f, 0.78f, 0.5f) : new Color(1f, 0.96f, 0.9f); sunL.intensity = hill ? 1.5f : 1.35f; sunL.transform.rotation = Quaternion.Euler(hill ? 38f : 72f, hill ? 55f : -25f, 0); }
+        RenderSettings.ambientSkyColor = hill ? new Color(0.36f, 0.3f, 0.25f) : new Color(0.27f, 0.29f, 0.34f);
+        RenderSettings.ambientEquatorColor = hill ? new Color(0.24f, 0.18f, 0.13f) : new Color(0.17f, 0.17f, 0.19f);
+        RenderSettings.fogColor = hill ? new Color(0.2f, 0.12f, 0.08f) : new Color(0.04f, 0.045f, 0.06f);
+        if (cam != null) cam.backgroundColor = hill ? new Color(0.14f, 0.08f, 0.06f) : new Color(0.03f, 0.035f, 0.045f);
+    }
     float camIdleT; public float RecenterHalf = 1.0f; const float RecenterIdle = 0.6f, RecenterR = 0.68f;
     Vector3 camVel, camLook;
     float camYaw, camElev = 0.43f, fovKick, camFov = 60f; bool camInit, mouseLook, sprint; float touchLookT;
@@ -1819,6 +1875,7 @@ public partial class KomaBoot : MonoBehaviour
               .Append(",\"p\":[").Append(k.top).Append(',').Append(k.core).Append(',').Append(k.leg).Append("]")
               .Append(",\"why\":\"").Append(k.koWhy).Append("\"");
             if (debugState && k.idx == 0) sb.Append(",\"fx\":[").Append(cSpark).Append(',').Append(cDust).Append(',').Append(cFleck).Append(',').Append(cWave).Append(',').Append(cFire).Append(',').Append(cPulse).Append(',').Append(sparks.particleCount).Append(',').Append(dust.particleCount).Append(',').Append(fireP.particleCount).Append(',').Append(ActiveWaves()).Append(',').Append(chains.Count).Append(',').Append(ActiveRings()).Append("]");
+            if (debugState) sb.Append(",\"dg\":[").Append(F(k.dashStop)).Append(',').Append(F(k.dashGuardT)).Append(',').Append(F(k.dashBrakeT)).Append("]");
             if (debugState) sb.Append(",\"wh\":").Append(F(Arena.WallH(k.pos.x, k.pos.z))).Append(",\"cc\":").Append(F(k.clingCd)).Append(",\"wy\":").Append(F(k.pos.y)).Append(",\"tl\":").Append(F(k.TiltDeg)).Append(",\"L\":[").Append(F(k.lossHit)).Append(',').Append(F(k.lossWall)).Append(',').Append(F(k.lossDash)).Append(',').Append(F(k.spinMax)).Append("]");
             sb.Append('}');
         }
