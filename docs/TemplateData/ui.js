@@ -24,7 +24,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
       { n: 'クレイモアスパイク', d: '踏ん張りと跳び', f: '踏ん張りと跳びが、どちらも少し高い。', x: '踏ん張り×1.3 跳び×1.15 急降下×1.15' } ] },
     { key: 'dir', name: '回転', parts: [
       { n: '右回転', d: '標準', f: 'ふつうの回り。クセがなく扱いやすい。', x: '特別な効果なし' },
-      { n: '左回転', d: '逆回り', f: '逆回り。右回りの相手を強く削り、当たると相手が横へ流れる。', x: '右回りの相手へのダメージ+12% 相手を流す力×2.8' } ] },
+      { n: '左回転', d: '逆回り', f: '逆回り。右回りの相手を強く削り、当たると相手が横へ流れる。', x: '右回りの相手へのダメージ+12% 相手を流す力×2.8 自分の回転の総量×0.9' } ] },
     { key: 'sp', name: '必殺', parts: [
       { n: 'メテオ・ジャッジメント', d: '真上から落下', f: '真上へ跳んで相手めがけて落ちる。着地で衝撃波が広がる。', x: '範囲6m ダメージ10（攻撃÷防御）' },
       { n: 'テンペスト・ヴォルテックス', d: '竜巻で巻き上げ', f: '竜巻で周りを引き寄せて巻き上げ、最後に吹き飛ばす。', x: '3.5秒 範囲8.5m 自分の回転+15%' },
@@ -194,10 +194,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
         send(camFor())
         fightBtn()
         break
-      case 'count': countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
+      case 'count': Snd.rate('bgm', 1); countdown(String(m.n), false); Snd.play('tick', { vol: 0.5 }); break
       case 'go':
         countdown('勝負', true); Snd.play('go', { vol: 0.8 })
-        Snd.loop('bgm', 'TemplateData/snd/gyro_ragnarok_bgm.mp3', 0.55)
+        ensureBgm()
         break
       case 'hit': {
         const big = m.big, air = m.air
@@ -375,7 +375,7 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     $('btnSound').textContent = muted ? 'オフ' : 'オン'
     $('how').innerHTML = isTouch
       ? '<span><b>左</b>スティックで動く（外をなぞると視点）</span><span><b>右</b>倒して離すとダッシュ（空中なら急降下）</span><span><b>星</b>光ったら必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
-      : '<span><b>WASD</b>移動</span><span><b>Shift</b>速く</span><span><b>Shift2回</b>超加速</span><span><b>Space</b>ジャンプ</span><span><b>マウス</b>視点</span><span><b>左クリック</b>ダッシュ</span><span><b>右クリック</b>必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
+      : '<span><b>WASD</b>移動</span><span><b>Shift</b>速く</span><span><b>Shift2回</b>超加速</span><span><b>Space</b>ジャンプ</span><span><b>C</b>相手に照準</span><span><b>マウス</b>視点</span><span><b>左クリック</b>ダッシュ</span><span><b>右クリック</b>必殺</span><p>跳んで相手の頭上から落とすと大ダメージ。回転が尽きるか場外で負け。</p>'
   }
 
   // ---------- 装備 ----------
@@ -466,6 +466,10 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
     if (KB.screen !== 'hud') return
     const t = Math.floor(m.tm)
     $('hudTime').textContent = m.ph === 'count' ? '' : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
+    { const sw = m.sw === 1
+      if ($('specBar').hidden === sw) $('specBar').hidden = !sw
+      document.body.classList.toggle('spec', sw)
+      if (sw && m.spec >= 0) { const nm = m.spec === 0 ? myName() : NAMES[m.spec]; if ($('specName').textContent !== nm) $('specName').textContent = nm } }
     const me = m.k.find(k => k.i === 0)
     if (me) {
       // 2026-11-25 本人「左上に残り回転数みたいなの出すのやめて」: 数字は出さない。回転は名札の細い線とコマの揺れで見せる
@@ -562,14 +566,14 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   let resTok = 0
   function result(m) {
     if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock()
-    Snd.loop('bgm', null)
-    Snd.hush(0.25)   // 鳴っている効果音を消してから結果の音
+    Snd.hush(0.25)   // BGM は止めない（タイトル・試合・結果とつながって鳴り続ける）
+   // 鳴っている効果音を消してから結果の音
     Snd.play(m.win ? 'win' : 'lose', { vol: 0.9 })
     const big = $('rsBig')
     big.textContent = m.win ? '勝ち' : '負け'
     big.className = 'rs-big ' + (m.win ? 'win' : 'lose')
     $('rsWhy').textContent = m.win ? '最後まで回り切った' : m.why === 'out' ? '場外に落ちた' : m.why === 'pit' ? '穴に落ちた' : '回転が尽きた'
-    $('rsLine').textContent = `${Math.floor(m.time)}秒　削った回転 ${Math.round(m.dealt)}　上からの一撃 ${m.aerial}回　必殺 ${m.specials}回`
+    $('rsLine').textContent = `${m.rank ? m.rank + '位／' + m.of + '人　' : ''}${Math.floor(m.time)}秒　削った回転 ${Math.round(m.dealt)}　上からの一撃 ${m.aerial}回　必殺 ${m.specials}回`
     $('onoma').classList.remove('on'); $('banner').classList.remove('on')
     // 経験値: 勝てば多い。相手が多いほど・上から当てた回数・必殺の回数で少し増える
     const gain = (m.win ? 70 + 30 * nCpu : 25 + 10 * nCpu) + Math.min(40, m.aerial * 8) + Math.min(30, m.specials * 10)
@@ -610,6 +614,19 @@ const UI_V = (() => { try { return new URL(document.currentScript.src).searchPar
   $('btnParts').onclick = () => { Snd.play('ui', { vol: 0.4 }); resTok++; toHub('gear') }
   $('btnHome').onclick = () => { Snd.play('ui', { vol: 0.4 }); resTok++; toHub('home') }
 
+  // 観戦: 入力は「誰を見るか」だけ（Unity へ spec 系の命令を送る）。左右キー・ボタン・画面のクリックで切り替え、結果へで抜ける
+  $('specPrev').onclick = () => { Snd.play('ui', { vol: 0.3 }); send('specnext|-1') }
+  $('specNext').onclick = () => { Snd.play('ui', { vol: 0.3 }); send('specnext|1') }
+  $('specExit').onclick = () => { Snd.play('ui', { vol: 0.4 }); send('specexit') }
+  addEventListener('keydown', e => { if (KB.state && KB.state.sw === 1) { if (e.code === 'ArrowLeft') { send('specnext|-1'); e.preventDefault() } else if (e.code === 'ArrowRight') { send('specnext|1'); e.preventDefault() } } })
+  canvas.addEventListener('pointerdown', e => { if (KB.state && KB.state.sw === 1 && !isTouch && e.button === 0) send('specnext|1') })
+  // ---------- BGM（2026-11-28 本人「コマのゲームは最初から BGM 流しといて」） ----------
+  // ブラウザは最初の操作まで音を出せないので、最初の操作（タップ・クリック・キー・読み込み中でも）の1回で鳴らし始める。
+  // 同じ曲が鳴っていれば二重に始めない。ミュートは Snd.setMute（保存済みの設定）で守る。試合・結果をまたいでも止めない
+  const BGM_URL = 'TemplateData/snd/gyro_ragnarok_bgm.mp3'
+  function ensureBgm() { const l = Snd.loops.bgm; if (l && l.url === BGM_URL) return; Snd.loop('bgm', BGM_URL, 0.55) }
+  { const first = () => { for (const t of ['pointerdown', 'keydown', 'touchstart', 'mousedown']) document.removeEventListener(t, first, true); Snd.init(); ensureBgm() }
+    for (const t of ['pointerdown', 'keydown', 'touchstart', 'mousedown']) document.addEventListener(t, first, true) }
   // ---------- 音 ----------
   const S = n => 'TemplateData/snd/' + n + '.mp3'
   Snd.sfxGain = 1   // 2026-11-26 本人「効果音じゃなくて BGM を上げて」: 効果音は元の1.0倍。BGM は 0.3→0.55。出口のコンプレッサーは BGM+効果音の合算が割れないよう残す

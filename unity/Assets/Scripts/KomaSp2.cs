@@ -71,6 +71,7 @@ public partial class KomaBoot
             Vector3 dir = h.sqrMagnitude > 0.04f ? h.normalized : Vector3.forward;
             if (k.isPlayer && !autoPlayer) { var ad = AssistDir(k, dir); dir = new Vector3(ad.x, 0, ad.z).normalized; }
             k.arrowDir = dir; k.arrowFrom = k.pos; k.arrowT = 0; k.arrowRings = 0; k.specialPhase = 30;
+            k.arrowLen = ArrowReach(k.pos, dir);   // 2026-11-28 本人「場外になるまで進むことはないように。端で耐えるくらいまでは入っていい」: 縁・穴の手前までに切る
             k.vel = new Vector3(0, Mathf.Min(k.vel.y, 0f), 0);
             EmitEv("special", k, 6); SpecialFx(k, 1.0f);
             return;
@@ -104,13 +105,13 @@ public partial class KomaBoot
         {
             // 輪が順に開く（読み合い: この間に横へ逃げれば当たらない）。撃った本人は向きを変えられない
             k.arrowT += dt; k.vel = new Vector3(k.vel.x * 0.5f, k.vel.y, k.vel.z * 0.5f);
-            int want = Mathf.Min(5, Mathf.FloorToInt((k.arrowT - 0.05f) / 0.17f) + 1);
+            int want = Mathf.Min(Mathf.Clamp(Mathf.FloorToInt(k.arrowLen / 2.8f), 0, 5), Mathf.FloorToInt((k.arrowT - 0.05f) / 0.17f) + 1);
             while (k.arrowRings < want) { SpawnArrowRing(k, k.arrowRings); k.arrowRings++; }
             if (k.isPlayer) shake = Mathf.Max(shake, 0.06f);
             if (Random.value < 0.8f) Fleck(k.Center + Random.insideUnitSphere * 0.7f, Vector3.up * 1.2f, IceW, 0.14f, 0.5f, true);
             if (k.arrowT >= ArrowTeleSec)
             {
-                k.specialPhase = 31; k.arrowDashT = ArrowDashSec; k.dashT = ArrowDashSec + 0.05f; k.dashes++; k.grounded = k.grounded;
+                k.specialPhase = 31; k.arrowDashT = k.arrowLen / ArrowSpeed; k.dashT = k.arrowDashT + 0.05f; k.dashes++; k.grounded = k.grounded;
                 k.vel = new Vector3(k.arrowDir.x * ArrowSpeed, k.vel.y, k.arrowDir.z * ArrowSpeed);
                 EmitEv("arrowgo", k, 0);
                 Wave(k.pos, 4f); Pulse(k.pos, SpColors[6], 10f, 16f); IceBurst(k.Center, 40, 1.3f);
@@ -124,7 +125,7 @@ public partial class KomaBoot
             for (int i = 0; i < 3; i++) Fleck(k.Center + back * Random.Range(0f, 2.5f) + Random.insideUnitSphere * 0.4f, back * Random.Range(1f, 5f) + Random.insideUnitSphere * 1.5f, Random.value < 0.5f ? IceW : IceC, Random.Range(0.12f, 0.3f), Random.Range(0.3f, 0.6f), true);
             if (k.arrowDashT <= 0)
             {
-                k.specialPhase = 0; k.arrowDashT = 0; k.dashT = 0; k.vel = new Vector3(k.vel.x * 0.25f, k.vel.y, k.vel.z * 0.25f);
+                k.specialPhase = 0; k.arrowDashT = 0; k.dashT = 0; k.vel = new Vector3(k.vel.x * 0.1f, Mathf.Min(k.vel.y, 2f), k.vel.z * 0.1f);
                 IceBurst(k.Center, 24, 1f);
             }
         }
@@ -198,6 +199,20 @@ public partial class KomaBoot
         shake = Mathf.Max(shake, 1.2f * near * Mathf.Min(1.4f, pw)); fovKick = Mathf.Max(fovKick, 14f * near);
         var sp = cam.WorldToViewportPoint(at);
         Emit("{\"t\":\"e\",\"k\":\"boom\",\"s\":5,\"i\":" + k.idx + ",\"x\":" + F(sp.x) + ",\"y\":" + F(sp.y) + "}");
+    }
+
+    // 突進の長さ: 16m と、縁（床の終わり）・穴の手前 ArrowEdgeMargin までの短い方
+    const float ArrowMaxLen = 16f, ArrowEdgeMargin = 1.4f;
+    float ArrowReach(Vector3 from, Vector3 dir)
+    {
+        float lim = ArrowMaxLen;
+        for (float t = 0.5f; t <= ArrowMaxLen + 2f; t += 0.25f)
+        {
+            float qx = from.x + dir.x * t, qz = from.z + dir.z * t;
+            bool void_ = Arena.H(qx, qz) < -100 || (Arena.PitActive && new Vector2(qx, qz).magnitude < Arena.DipR + 0.3f);
+            if (void_) { lim = Mathf.Min(lim, t - ArrowEdgeMargin); break; }
+        }
+        return Mathf.Max(0f, lim);
     }
 
     // ---------- 氷の矢が当たった ----------

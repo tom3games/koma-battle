@@ -195,7 +195,7 @@ public partial class KomaBoot : MonoBehaviour
             case "title": phase = "title"; phaseT = 0; Showcase(); break;
             case "start":
                 if (nums.Length >= 6) pLeft = N(5) > 0; if (nums.Length >= 7) pPas = (int)N(6);
-                if (nums.Length >= 3) { pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); player.Rebuild(pTop, pCore, pLeg, mats, pLeft); }
+                if (nums.Length >= 3) { pTop = (int)N(0); pCore = (int)N(1); pLeg = (int)N(2); player.Rebuild(pTop, pCore, pLeg, mats, pLeft); if (pLeft) { player.spinMax *= LeftSpinMul; player.spin = player.spinMax; } }   // 2026-11-28 本人「左回転強すぎ。自分の回転数のデフォが少し下がるように」: 左回転を選んだ自分だけ回転の総量を下げる（割合の判定はそのまま）
                 if (nums.Length >= 4) nCpu = Mathf.Clamp((int)N(3), 1, 3);
                 if (nums.Length >= 5) pSp = Mathf.Clamp((int)N(4), 0, 7);
                 player.sp = pSp; player.pas = Mathf.Clamp(pPas, -1, 7);
@@ -205,6 +205,12 @@ public partial class KomaBoot : MonoBehaviour
             case "spfire": { var kk = komas[(int)N(0)]; TrySpecial(kk, new Vector3(N(1), kk.pos.y, N(2))); break; }   // 検査用: 指定のコマが必殺を撃つ（狙い=世界の点）
             case "dashat": { var kk = komas[(int)N(0)]; TryDash(kk, new Vector3(N(1), kk.pos.y, N(2))); break; }   // 検査用: 指定のコマがダッシュ
             case "frost": komas[(int)N(1)].frostT = N(0); break;
+            case "aimc": AimCycle(); break;   // 検査用: C キーと同じ
+            case "spec": SpectateSet((int)N(0)); break;   // 観戦: 誰を見るか
+            case "specnext": SpectateStep((int)N(0) >= 0 ? 1 : -1); break;
+            case "specexit": if (phase == "fight" && spectating) { phase = "end"; endT = EndHold - 0.001f; endWin = 0; endWhy = player.koWhy; endSubject = specTarget; spectating = false; } break;
+            case "recenter": RecenterHalf = N(0) > 0 ? N(0) : 1e9f; break;   // 検査用: 寄せる速さ（半減秒）。0以下で切る
+            case "leftmul": LeftSpinMul = N(0); break;   // 検査用
             case "runknock": RunHitKnock = N(0); break;
             case "cpusp": cpuSpMode = (int)N(0); break;   // 検査用: CPU の必殺を固定（-1 でランダム）
             case "setsp": komas[(int)N(1)].sp = (int)N(0); break;
@@ -231,10 +237,11 @@ public partial class KomaBoot : MonoBehaviour
             // 2026-11-25 本人「車のゲームみたいにマウスで視点変えたい」: 画面に固定したマウスの動きで向きと高さを変える
             case "mlock": mouseLook = N(0) > 0; break;
             case "look":
+                if (N(0) != 0 || N(1) != 0) camIdleT = 0f;
                 if (mouseLook) { camYaw += N(0) * 0.0032f; camElev = Mathf.Clamp(camElev + N(1) * 0.0026f, 0.1f, 0.95f); }
                 break;
             // スマホ: 画面のなぞりで視点を回す。なぞっている間と直後は、進む向きへの自動の追従を止める
-            case "tlook": camYaw += N(0) * 0.0075f; camElev = Mathf.Clamp(camElev + N(1) * 0.005f, 0.1f, 0.95f); touchLookT = 1.6f; break;
+            case "tlook": camIdleT = 0f; camYaw += N(0) * 0.0075f; camElev = Mathf.Clamp(camElev + N(1) * 0.005f, 0.1f, 0.95f); touchLookT = 1.6f; break;
             case "aimdir": touchAimOn = true; touchAimDir = new Vector2(N(0), N(1)); break;
             case "aimoff": touchAimOn = false; break;
             case "dashdir":
@@ -300,6 +307,7 @@ public partial class KomaBoot : MonoBehaviour
         phase = "count"; phaseT = 0; fightT = 0; sudden = false; endWin = -1; endT = 0;
         touchMove = Vector2.zero; touchAimOn = false; touchDash = false; touchSpecial = false;
         camInit = true; Arena.ResetCollapse(); boardAnnounced = false; fires.Clear(); ClearChains(); pitForced = false; suddenAt = -1f;
+        spectating = false; deathT = -1f; pAliveLast = true; specTarget = null; endSubject = null; camClose = 0f; placeAtDeath = 0; totalK = 1 + nCpu;
         pairCd.Clear();
         int n = 1 + nCpu;
         for (int i = 0; i < 4; i++)
@@ -403,6 +411,7 @@ public partial class KomaBoot : MonoBehaviour
                     else player.lastShiftT = Time.unscaledTime;
                 }
                 if (Input.GetKeyDown(KeyCode.Space)) player.jumpReq = true;
+                if (Input.GetKeyDown(KeyCode.C)) AimCycle();   // 2026-11-28 本人「C を押したら相手に照準が合う」
                 // WASD（矢印）を0.28秒以内に2回: その向きへ傾ける
                 for (int di = 0; di < 4; di++)
                 {
@@ -461,6 +470,7 @@ public partial class KomaBoot : MonoBehaviour
         {
             if (!k.root.activeSelf) continue;
             if (k.dashT > 0) k.dashT -= dt;
+            if (k.dashBrakeT > 0) k.dashBrakeT -= dt;
             if (k.dashCd > 0) k.dashCd -= dt;
             if (k.padCd > 0) k.padCd -= dt;
             if (k.boostCd > 0) k.boostCd -= dt;
@@ -499,7 +509,7 @@ public partial class KomaBoot : MonoBehaviour
             PassiveUpdate(k, dt);
             k.Visual(dt, realDt);
         }
-        UpdateStrikes(dt); UpdateClones(dt); UpdateArrowRings(realDt);
+        UpdateStrikes(dt); UpdateClones(dt); UpdateArrowRings(realDt); UpdateAimMark(realDt);
         keyBuf.Clear(); keyBuf.AddRange(pairCd.Keys);
         foreach (var key in keyBuf) { pairCd[key] -= dt; if (pairCd[key] <= 0) pairCd.Remove(key); }
 
@@ -508,23 +518,35 @@ public partial class KomaBoot : MonoBehaviour
         {
             int alive = 0; Koma last = null;
             foreach (var k in komas) if (k.root.activeSelf && k.alive) { alive++; last = k; }
-            if (!player.alive || alive <= 1)
+            // 2026-11-28 本人「ダウンしてから負けが出るまでが早い。余韻も無い。観戦できるように」:
+            // 自分がダウンしたらスロー＋カメラが寄って見送る。他のコマがまだ2体以上いれば観戦に入り、決着してから余韻（2.3秒）を置いて結果へ
+            if (pAliveLast && !player.alive)
+            {
+                pAliveLast = false; deathT = 0; placeAtDeath = alive + 1;
+                SlowFx(0.45f, 1.0f);
+            }
+            if (deathT >= 0) deathT += realDt;
+            if (alive <= 1)
             {
                 phase = "end"; endT = 0;
                 endWin = player.alive ? 1 : 0;
                 endWhy = player.alive ? "" : player.koWhy;
-                Slow(0.25f, 0.9f);
+                endSubject = last != null ? last : player; spectating = false;
+                if (player.alive) SlowFx(0.45f, 1.0f);
             }
+            else if (!player.alive && deathT > 1.4f && !spectating) { spectating = true; PickSpec(player.pos); }
+            if (spectating && (specTarget == null || !specTarget.alive)) PickSpec(specTarget != null ? specTarget.pos : player.pos);
         }
         else if (phase == "end")
         {
             endT += realDt;
-            if (endT > 1.6f && endT - realDt <= 1.6f)
+            if (endT > EndHold && endT - realDt <= EndHold)
             {
                 var sb = new StringBuilder();
                 sb.Append("{\"t\":\"e\",\"k\":\"end\",\"win\":").Append(endWin).Append(",\"why\":\"").Append(endWhy).Append("\",\"time\":").Append(F(fightT))
                   .Append(",\"dealt\":").Append(F(player.dealt)).Append(",\"aerial\":").Append(player.aerialHits).Append(",\"specials\":").Append(player.specials)
-                  .Append(",\"dashes\":").Append(player.dashes).Append(",\"spin\":").Append(F(player.SpinRatio)).Append("}");
+                  .Append(",\"dashes\":").Append(player.dashes).Append(",\"spin\":").Append(F(player.SpinRatio))
+                  .Append(",\"rank\":").Append(endWin == 1 ? 1 : Mathf.Max(2, placeAtDeath > 0 ? placeAtDeath : 2)).Append(",\"of\":").Append(totalK).Append("}");
                 Emit(sb.ToString());
             }
         }
@@ -546,6 +568,7 @@ public partial class KomaBoot : MonoBehaviour
         else if (!autoPlayer && mouseLook && ChaseOn) aimPoint = player.pos + new Vector3(Mathf.Sin(camYaw), 0, Mathf.Cos(camYaw)) * 6.5f;
         else if (!autoPlayer && !touchOnly && !touchMode && plane.Raycast(ray, out float d)) aimPoint = ray.GetPoint(d);
         if (autoPlayer) aimPoint = AimFor(player);
+        if (aimHoldT > 0 && aimTarget != null && aimTarget.alive) aimPoint = aimTarget.pos;
         // 2026-11-25 本人「スマホでやってる時コマから赤い線出てるの何」: 線をやめ、足元の短い山形の矢印（ダッシュの向き）にした。
         // スマホは右の指で狙っている間だけ。PC はマウスの位置に小さな印＋足元の矢印
         bool fight = phase == "fight" && player.alive && !autoPlayer;
@@ -648,6 +671,8 @@ public partial class KomaBoot : MonoBehaviour
 
     // 左クリックの連打で出し続けられないよう、ダッシュと急降下で同じ待ち時間を使う
     const float DashCdBase = 1.3f;
+    // 2026-11-28 本人「ダッシュの距離短くして」: 出だしの速さ（19）は変えず、続く時間を 0.32→DashSec に、速さの上限へ戻す減速を 3.2→DashBrake に
+    const float DashSec = 0.2f, DashBrake = 6f, DashCoastBrake = 3.0f, DashCoastSec = 0.6f;
 
     // 狙いの補助（かなり甘め）: 狙った向きから 18度以内・9m以内に相手がいる時だけ、その相手の向きへ 50% 寄せる（最大およそ9度）。
     // 範囲に誰もいなければ何もしない。カメラは動かさない
@@ -695,7 +720,7 @@ public partial class KomaBoot : MonoBehaviour
             float keep = stickDash ? 0f : 0.25f;   // スマホは倒した向きへまっすぐ（前の勢いを混ぜない）
             k.vel = new Vector3(dir.x * sp + k.vel.x * keep, k.vel.y, dir.z * sp + k.vel.z * keep);
             k.lockT = stickDash ? 0.2f : 0f;
-            k.dashT = 0.32f; k.dashCd = DashCdBase * k.st.dashCd;
+            k.dashT = DashSec; k.dashBrakeT = DashSec + DashCoastSec; k.dashCd = DashCdBase * k.st.dashCd;
             k.spin -= 1.2f; k.dashes++; k.lossDash += 1.2f;
             EmitEv("dash", k, 0);
             Dust(k.pos, 10);
@@ -1034,7 +1059,7 @@ public partial class KomaBoot : MonoBehaviour
         {
             Vector2 gr = Arena.Grad(p.x, p.z);
             if (gr.magnitude < 1.2f) { v.x -= gr.x * G * 0.5f * dt; v.z -= gr.y * G * 0.5f * dt; }
-            float fr = Mathf.Exp(-0.9f * k.st.grip * (k.anchorT > 0 ? 6f : 1f) * dt);
+            float fr = Mathf.Exp(-0.9f * k.st.grip * (k.anchorT > 0 ? 6f : (k.dashBrakeT > 0 && k.dashT <= 0 ? DashCoastBrake : 1f)) * dt);
             v.x *= fr; v.z *= fr;
             // 周回加速板: 矢印の向き（時計回り）に強く押され、帯に沿って1周流れる。回転数が少しだけ戻る
             // 2026-11-26 本人「降りられない・加速が矢印と反対」: 向きを矢印に合わせ、中央へ引き戻すのは外へはみ出した時だけ（内側へはハンドルで降りられる）
@@ -1053,7 +1078,7 @@ public partial class KomaBoot : MonoBehaviour
             float maxS = 9.5f * k.st.speed * (k.superT > 0 ? 2.3f : (k.isPlayer && sprint ? 1.35f : 1f)) * (k.frostT > 0 ? FrostSlow : 1f) * (k.anchorT > 0 ? 0.4f : 1f) * (k.chainTo != null ? 1.7f : 1f), hs = Mathf.Sqrt(v.x * v.x + v.z * v.z);
             if (hs > maxS && k.dashT <= 0 && k.boostCd < 0.35f && k.boardT <= 0)
             {
-                float f = Mathf.Max(maxS / hs, Mathf.Exp(-3.2f * dt));
+                float f = Mathf.Max(maxS / hs, Mathf.Exp(-DashBrake * dt));
                 v.x *= f; v.z *= f;
             }
         }
@@ -1154,6 +1179,7 @@ public partial class KomaBoot : MonoBehaviour
                 np.y = h;
                 Vector2 gr = Vector2.ClampMagnitude(Arena.Grad(np.x, np.z), 1.2f);
                 float newVy = gr.x * v.x + gr.y * v.z;
+                if (k.specialPhase == 31) newVy = Mathf.Clamp(newVy, -8f, 8f);   // 氷の矢は速いので、坂の傾きに乗って空へ飛び出さない
                 float hsp = Mathf.Sqrt(v.x * v.x + v.z * v.z);
                 // ジャンプ台（円い山）: 登ってきて頂上を越えた瞬間に大きく跳ぶ。どの向きから来ても同じ
                 bool onMound = Arena.MoundAt(np.x, np.z) >= 0;
@@ -1387,6 +1413,7 @@ public partial class KomaBoot : MonoBehaviour
         return f;
     }
 
+    public float LeftSpinMul = 0.9f;
     public float RunHitKnock = 1.05f; bool testMoveOn; Vector2 testMove;
     void Collide(float dt)
     {
@@ -1588,6 +1615,40 @@ public partial class KomaBoot : MonoBehaviour
         }
     }
 
+    Koma aimTarget; float camAimT, aimHoldT, aimMarkT, lastAimC = -9; int aimCycleN;
+    Transform aimMark; Material aimMarkMat;
+    // C: 一番近い生きている相手へ。押すたびに次に近い相手（3秒以内）。1回合わせるだけで、その後はマウスが優先
+    void AimCycle()
+    {
+        if (phase != "fight" || player == null || !player.alive) return;
+        var list = new List<Koma>();
+        foreach (var o in komas) if (o != player && o.alive && o.root.activeSelf) list.Add(o);
+        if (list.Count == 0) return;
+        list.Sort((a, b) => (a.pos - player.pos).sqrMagnitude.CompareTo((b.pos - player.pos).sqrMagnitude));
+        aimCycleN = Time.unscaledTime - lastAimC < 3f ? (aimCycleN + 1) % list.Count : 0;
+        lastAimC = Time.unscaledTime;
+        aimTarget = list[aimCycleN];
+        camAimT = 0.25f; aimHoldT = 0.3f; aimMarkT = 0.6f; camIdleT = -0.9f;
+        EmitEv("aimc", aimTarget, aimCycleN);
+    }
+    void UpdateAimMark(float realDt)
+    {
+        if (aimMark == null)
+        {
+            aimMark = MeshKit.Obj("AimMark", null, MeshKit.Frustum(0.02f, 0.42f, 0.5f, 3, false), mats.AddGlow(new Color(1f, 0.9f, 0.3f, 1f))).transform;
+            aimMark.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            aimMarkMat = aimMark.GetComponent<MeshRenderer>().material; aimMark.gameObject.SetActive(false);
+        }
+        if (aimHoldT > 0) aimHoldT -= realDt;
+        bool on = aimMarkT > 0 && aimTarget != null && aimTarget.alive && phase == "fight";
+        if (aimMarkT > 0) aimMarkT -= realDt;
+        aimMark.gameObject.SetActive(on);
+        if (!on) return;
+        aimMark.position = aimTarget.pos + Vector3.up * (2.1f + 0.12f * Mathf.Sin(Time.unscaledTime * 20f));
+        aimMark.rotation = Quaternion.Euler(0, Time.unscaledTime * 240f, 0);
+        aimMarkMat.SetColor("_TintColor", new Color(1f, 0.9f, 0.3f, 1f) * 0.9f * Mathf.Clamp01(aimMarkT / 0.2f));
+    }
+    float camIdleT; public float RecenterHalf = 1.0f; const float RecenterIdle = 0.6f, RecenterR = 0.68f;
     Vector3 camVel, camLook;
     float camYaw, camElev = 0.43f, fovKick, camFov = 60f; bool camInit, mouseLook, sprint; float touchLookT;
     // 操作の向きをカメラ基準にする（上＝カメラの向いている前）
@@ -1597,14 +1658,44 @@ public partial class KomaBoot : MonoBehaviour
         float s = Mathf.Sin(camYaw), c = Mathf.Cos(camYaw);
         return new Vector2(v.x * c + v.y * s, -v.x * s + v.y * c);
     }
-    bool ChaseOn => player != null && player.alive && (phase == "count" || phase == "fight" || phase == "end");
+    bool ChaseOn => player != null && (phase == "count" || phase == "fight" || phase == "end");
+    // ---------- 観戦（誰を見るか だけが入力。2026-11-28） ----------
+    // 将来オンラインで他人の試合を観る時も、SpectateSet(idx) と CamSubject() だけで同じ画面が使える
+    Koma specTarget, endSubject; bool spectating, pAliveLast = true; float deathT = -1f, camClose; int placeAtDeath, totalK;
+    const float EndHold = 2.3f;
+    public Koma CamSubject()
+    {
+        if (phase == "end" && endSubject != null) return endSubject;
+        if (player.alive) return player;
+        if (spectating && specTarget != null && specTarget.alive) return specTarget;
+        return player;
+    }
+    void SpectateSet(int idx) { if (idx >= 0 && idx < komas.Count && komas[idx] != player && komas[idx].alive && komas[idx].root.activeSelf) specTarget = komas[idx]; }
+    void PickSpec(Vector3 near)
+    {
+        Koma best = null; float bd = 1e9f;
+        foreach (var o in komas) { if (o == player || !o.alive || !o.root.activeSelf) continue; float d = (o.pos - near).sqrMagnitude; if (d < bd) { bd = d; best = o; } }
+        specTarget = best;
+    }
+    void SpectateStep(int dir)
+    {
+        var list = new List<Koma>(); foreach (var o in komas) if (o != player && o.alive && o.root.activeSelf) list.Add(o);
+        if (list.Count == 0) return;
+        int i = specTarget != null ? list.IndexOf(specTarget) : -1;
+        specTarget = list[((i + (dir >= 0 ? 1 : -1)) % list.Count + list.Count) % list.Count];
+    }
+    // 本人のダウン・勝ちの余韻用のスロー（決着の演出だけ。ふだんの当たりでは使わない）
+    void SlowFx(float scale, float dur) { slowScale = scale; slowUntil = Time.unscaledTime + dur; }
 
     // 2026-11-25 本人「臨場感が欲しいから、車のゲームみたいな感じで視点を変えて」: 自分のコマの後ろ・低めから追う。
     // 向きは進む向きにゆっくり付いていく（ぶつかって跳ね返った時は振り回さない）
     void ChaseCamera(float realDt)
     {
-        Vector3 p = player.pos;
-        Vector2 hv = new Vector2(player.vel.x, player.vel.z);
+        var subj = CamSubject();
+        Vector3 p = subj.pos;
+        Vector2 hv = new Vector2(subj.vel.x, subj.vel.z);
+        bool closeWant = (!player.alive && deathT >= 0 && deathT < 1.6f && !spectating) || phase == "end";
+        camClose = Mathf.MoveTowards(camClose, closeWant ? 1f : 0f, realDt * 2.2f);
         bool snap = camInit;
         if (camInit)
         {
@@ -1625,10 +1716,35 @@ public partial class KomaBoot : MonoBehaviour
                 camYaw += diff * (1 - Mathf.Exp(-rate * realDt));
             }
         }
+        // C で合わせる: 0.25秒で滑らかに相手の方へ（毎フレーム相手の今の位置を見る）
+        if (camAimT > 0)
+        {
+            camAimT -= realDt;
+            if (aimTarget != null && aimTarget.alive)
+            {
+                Vector3 dd = aimTarget.pos - p; float wantA = Mathf.Atan2(dd.x, dd.z);
+                float dA = Mathf.DeltaAngle(camYaw * Mathf.Rad2Deg, wantA * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+                camYaw += dA * Mathf.Clamp01(realDt / Mathf.Max(camAimT + realDt, 0.02f));
+            }
+            camIdleT = Mathf.Min(camIdleT, -0.9f);
+        }
+        // 2026-11-28 本人「一番外側にいてカメラを止めた時、ゆっくりステージ中央にカメラが合わさる」: 外周付近（半径の68%以上）で、
+        // マウス・指でカメラを0.6秒動かしていない時、向きだけ中心へ寄せる（半分寄るのに約1秒・上下は触らない）。狙っている間・必殺中・自動追従中は寄せない
+        camIdleT += realDt;
+        {
+            float rp = new Vector2(p.x, p.z).magnitude;
+            bool followNow = phase == "fight" && !mouseLook && hv.magnitude > 2.5f && touchLookT <= 0 && !touchAimOn;
+            if (phase == "fight" && camIdleT > RecenterIdle && rp >= Arena.R * RecenterR && !touchAimOn && !followNow && player.specialPhase == 0 && !snap && subj == player)
+            {
+                float wantC = Mathf.Atan2(-p.x, -p.z);
+                float dC = Mathf.DeltaAngle(camYaw * Mathf.Rad2Deg, wantC * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+                camYaw += dC * (1f - Mathf.Exp(-0.693f / RecenterHalf * realDt));
+            }
+        }
         Vector3 fwd = new Vector3(Mathf.Sin(camYaw), 0, Mathf.Cos(camYaw));
         float portrait = cam.aspect < 1.2f ? Mathf.Lerp(1.45f, 1f, Mathf.InverseLerp(0.45f, 1.2f, cam.aspect)) : 1f;
         float baseY = Mathf.Max(p.y, -3f);
-        const float camD = 7.9f;
+        float camD = 7.9f * Mathf.Lerp(1f, 0.62f, camClose);
         Vector3 want3 = new Vector3(p.x, baseY, p.z) + (-fwd * Mathf.Cos(camElev) + Vector3.up * Mathf.Sin(camElev)) * camD * portrait;
         float fh = Arena.H(want3.x, want3.z);
         if (fh > -100 && want3.y < fh + 1.4f) want3.y = fh + 1.4f;
@@ -1688,7 +1804,7 @@ public partial class KomaBoot : MonoBehaviour
         emitT = 0.1f;
         var sb = sbState; sb.Length = 0;
         sb.Append("{\"t\":\"s\",\"ph\":\"").Append(phase).Append("\",\"tm\":").Append(F(fightT)).Append(",\"sd\":").Append(sudden ? 1 : 0)
-          .Append(",\"pz\":").Append(paused ? 1 : 0).Append(",\"ts\":").Append(F(Time.timeScale)).Append(",\"k\":[");
+          .Append(",\"sw\":").Append(spectating ? 1 : 0).Append(",\"spec\":").Append(spectating && specTarget != null ? specTarget.idx : -1).Append(",\"pz\":").Append(paused ? 1 : 0).Append(",\"ts\":").Append(F(Time.timeScale)).Append(",\"k\":[");
         bool first = true;
         foreach (var k in komas)
         {

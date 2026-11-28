@@ -393,3 +393,14 @@ body.shk #fx{animation:shk .32s linear}
 @keyframes spdeny{20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
 #spChip.deny{animation-name:spdenyc}
 @keyframes spdenyc{20%{transform:translateX(calc(-50% - 7px))}40%{transform:translateX(calc(-50% + 7px))}60%{transform:translateX(calc(-50% - 5px))}80%{transform:translateX(calc(-50% + 5px))}}
+
+/* 2026-11-28 観戦（ダウンした後、ほかのコマが戦っている間）: 小さく「観戦中」・見る相手の切り替え・結果へ */
+#specBar{position:absolute;left:50%;top:calc(46px + env(safe-area-inset-top,0px));transform:translateX(-50%);display:flex;align-items:center;gap:6px;max-width:calc(100vw - 24px);padding:6px 8px;background:rgba(12,13,17,.78);clip-path:var(--cut);z-index:8;pointer-events:auto}
+#specBar[hidden]{display:none}
+#specBar .sp-lbl{font-weight:800;font-size:12px;letter-spacing:.14em;color:var(--gold);white-space:nowrap}
+#specBar b{font-size:13px;font-weight:900;min-width:5em;max-width:9em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#specBar button{height:36px;min-width:36px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font-weight:800;font-size:13px;padding:0 8px;border-radius:0}
+#specBar button:active{background:rgba(200,67,47,.5)}
+#specBar #specExit{background:var(--gold);color:#16130c;border-color:#fff;padding:0 10px;white-space:nowrap}
+body.spec #touch{display:none}
+@media (max-width:420px){#specBar{gap:4px;padding:5px 6px}#specBar b{min-width:4em;max-width:6.5em;font-size:12px}#specBar .sp-lbl{font-size:11px;letter-spacing:.08em}}

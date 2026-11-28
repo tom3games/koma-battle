@@ -14,7 +14,7 @@ public static class Arena
     public const float LipH = 2.0f, GapLipH = 0.5f, GapHalf = 0.1f;
     public static readonly float[] GapDeg = { 0, 90, 180, 270 };
     // ジャンプ台（円い山）と、その裾の加速板（輪）
-    public static readonly float[] MoundDeg = { 45, 225 };   // 2026-11-25 本人「ジャンプ台減らして」: 4→2
+    public static readonly float[] MoundDeg = { 45 };   // 2026-11-25 本人「ジャンプ台減らして」: 4→2 / 2026-11-28 本人「ジャンプ台を一個減らして」: 2→1（225度を消した）
     public const float MoundR = 13f, MoundBase = 3.6f, MoundH = 2.4f;
     public const float BoostR0 = MoundBase + 0.25f, BoostR1 = MoundBase + 1.55f;
     public static readonly Vector2[] Mounds = MakeRing(MoundDeg, MoundR);

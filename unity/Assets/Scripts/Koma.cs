@@ -56,7 +56,7 @@ public class Koma
     public float shieldT, tornadoT;
     // 2026-11-28 必殺4つ追加: アンカー（重くなる）・凍え・氷の矢の溜め/突進・鎖
     public Vector2 inputMv;   // いまの移動の入力（世界の向き。CPU は Think の move）
-    public float wallFxT; public float anchorT, frostT, arrowT, arrowDashT, chainSwing; public Vector3 arrowDir; public int arrowRings;
+    public float wallFxT, dashBrakeT, arrowLen; public float anchorT, frostT, arrowT, arrowDashT, chainSwing; public Vector3 arrowDir; public int arrowRings;
     public Koma chainTo, chainFrom; public float chainT; public Vector3 arrowFrom; public float lsPow, thrownT;
     public float superT, superCd, boardT, fireT, fireCd, hiT, burnSnd, lastShiftT = -9; public bool jumpReq; public Vector3 lastFire;
     public string koWhy = "";
@@ -400,7 +400,7 @@ public class Koma
         padCd = 0; hitFlash = 0; lastVy = 0; lastHitT = -99; specialT = 0;
         superT = 0; superCd = 0; boardT = 0; fireT = 0; fireCd = 0; hiT = 0; burnSnd = 0; lastShiftT = -9; jumpReq = false; lastFire = new Vector3(0, -999, 0);
         tilt.localRotation = Quaternion.identity; tilt.localScale = Vector3.one; landT = 99f; landAmp = 0; auraT = 0;
-        leanT = 0; leanCd = 0;
+        leanT = 0; leanCd = 0; dashBrakeT = 0;
         anchorT = 0; frostT = 0; arrowT = 0; arrowDashT = 0; arrowRings = 0; chainTo = null; chainFrom = null; chainT = 0; chainSwing = 0; thrownT = 0; lsPow = 0;
         clingT = 0; clingCd = 0; clingHit = false; cpuSaveAt = -1;
         rage = false; gutsUsed = false; guard = false; rescueSet = false; wasAir = false; stampN = 0; stampBy = null; hitsTaken = 0; pasCd = 0; st.atk = baseAtk;
